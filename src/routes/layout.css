@@ -1,0 +1,284 @@
+@import 'tailwindcss';
+
+/* Import Fonts */
+@import '@fontsource/instrument-serif/index.css';
+@import '@fontsource/bricolage-grotesque/index.css';
+@import '@fontsource/dm-sans/index.css';
+@import '@fontsource/jetbrains-mono/index.css';
+
+:root {
+  --brand-from: #E8593C;
+  --brand-to: #F2A623;
+  --surface: #FFFFFF;
+  --surface-2: #FFF8F5;
+  --surface-3: #FFF2EC;
+  --text-primary: #18120E;
+  --text-secondary: #6B5A52;
+  --border: rgba(232,89,60,0.12);
+  --scrollbar-thumb: rgba(232, 89, 60, 0.2);
+}
+
+.dark {
+  --brand-from: #E8593C;
+  --brand-to: #F2A623;
+  --surface: #1A1614;
+  --surface-2: #221E1B;
+  --surface-3: #2A2320;
+  --text-primary: #F5EDE8;
+  --text-secondary: #9E8A80;
+  --border: rgba(232,89,60,0.15);
+  --scrollbar-thumb: rgba(232, 89, 60, 0.4);
+}
+
+@theme {
+  --color-brand-from: var(--brand-from);
+  --color-brand-to: var(--brand-to);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-border-custom: var(--border);
+
+  --shadow-card: 0 1px 3px rgba(0,0,0,0.07), 0 4px 16px rgba(0,0,0,0.05);
+  --shadow-card-hover: 0 4px 12px rgba(232,89,60,0.12), 0 1px 3px rgba(0,0,0,0.06);
+  --shadow-cta: 0 4px 20px rgba(232,89,60,0.35);
+  --shadow-inner-custom: inset 0 1px 2px rgba(0,0,0,0.04);
+
+  --font-display: 'Instrument Serif', serif;
+  --font-heading: 'Bricolage Grotesque', sans-serif;
+  --font-body: 'DM Sans', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+}
+
+/* Base Styles */
+html, body {
+  margin: 0;
+  padding: 0;
+  background-color: var(--surface-2);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  transition: background-color 300ms ease, color 200ms ease;
+  overflow-x: hidden;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--surface-2);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--brand-from);
+}
+
+/* Hide scrollbar utility */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Subtle Animated Glow drift keyframes */
+@keyframes glow-drift-1 {
+  0% { transform: translate(0, 0) scale(1) rotate(0deg); }
+  33% { transform: translate(35px, -45px) scale(1.08) rotate(120deg); }
+  66% { transform: translate(-25px, 25px) scale(0.94) rotate(240deg); }
+  100% { transform: translate(0, 0) scale(1) rotate(360deg); }
+}
+
+@keyframes glow-drift-2 {
+  0% { transform: translate(0, 0) scale(1) rotate(360deg); }
+  33% { transform: translate(-45px, 35px) scale(0.92) rotate(240deg); }
+  66% { transform: translate(30px, -20px) scale(1.06) rotate(120deg); }
+  100% { transform: translate(0, 0) scale(1) rotate(0deg); }
+}
+
+@keyframes glow-drift-3 {
+  0% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(40px, 30px) scale(1.1); }
+  100% { transform: translate(0, 0) scale(1); }
+}
+
+.animate-glow-slow-1 {
+  animation: glow-drift-1 24s ease-in-out infinite;
+}
+
+.animate-glow-slow-2 {
+  animation: glow-drift-2 28s ease-in-out infinite;
+}
+
+.animate-glow-slow-3 {
+  animation: glow-drift-3 20s ease-in-out infinite;
+}
+
+/* Premium Blur Reveal Keyframes */
+@keyframes blur-reveal {
+  0% {
+    filter: blur(14px);
+    opacity: 0;
+    transform: translateY(15px);
+  }
+  100% {
+    filter: blur(0px);
+    opacity: 1;
+    transform: translateY(0px);
+  }
+}
+
+.animate-blur-reveal-1 {
+  opacity: 0;
+  animation: blur-reveal 1.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation-delay: 50ms;
+}
+
+.animate-blur-reveal-2 {
+  opacity: 0;
+  animation: blur-reveal 1.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation-delay: 200ms;
+}
+
+.animate-blur-reveal-3 {
+  opacity: 0;
+  animation: blur-reveal 1.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation-delay: 350ms;
+}
+
+/* --- Creative Spec Loop Carousel Animations --- */
+
+/* Infinite Marquee Loop */
+@keyframes marquee-scroll {
+  0% {
+    transform: translate3d(0, 0, 0);
+  }
+  100% {
+    transform: translate3d(-50%, 0, 0);
+  }
+}
+
+.animate-marquee-horizontal {
+  display: flex;
+  width: max-content;
+  animation: marquee-scroll 45s linear infinite;
+}
+
+.marquee-wrapper:hover .animate-marquee-horizontal {
+  animation-play-state: paused;
+}
+
+/* Blueprint Grid Patterns */
+.blueprint-grid {
+  background-size: 24px 24px;
+  background-image: 
+    linear-gradient(to right, rgba(232, 89, 60, 0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(232, 89, 60, 0.05) 1px, transparent 1px);
+}
+
+.dark .blueprint-grid {
+  background-image: 
+    linear-gradient(to right, rgba(232, 89, 60, 0.09) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(232, 89, 60, 0.09) 1px, transparent 1px);
+}
+
+.blueprint-grid-large {
+  background-size: 120px 120px;
+  background-image: 
+    linear-gradient(to right, rgba(232, 89, 60, 0.09) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(232, 89, 60, 0.09) 1px, transparent 1px);
+}
+
+.dark .blueprint-grid-large {
+  background-image: 
+    linear-gradient(to right, rgba(232, 89, 60, 0.15) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(232, 89, 60, 0.15) 1px, transparent 1px);
+}
+
+/* SVG Laser Stroke Outline Draw */
+@keyframes laser-stroke-draw {
+  0% {
+    stroke-dashoffset: 1200;
+  }
+  100% {
+    stroke-dashoffset: 0;
+  }
+}
+
+.animate-laser-stroke {
+  stroke-dasharray: 400 800;
+  animation: laser-stroke-draw 6s linear infinite;
+}
+
+/* Floating Monospace Code Particle Drift */
+@keyframes particle-drift-up {
+  0% {
+    transform: translate3d(0, 0, 0) scale(0.85);
+    opacity: 0;
+  }
+  15% {
+    opacity: 0.75;
+  }
+  85% {
+    opacity: 0.75;
+  }
+  100% {
+    transform: translate3d(var(--x-drift), -110px, 0) scale(1.05);
+    opacity: 0;
+  }
+}
+
+.animate-code-particle {
+  position: absolute;
+  pointer-events: none;
+  font-family: var(--font-mono);
+  animation: particle-drift-up 2.4s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+}
+
+/* Skeuomorphic pulse bulbs */
+@keyframes bulb-pulse {
+  0%, 100% { opacity: 0.4; filter: drop-shadow(0 0 1px rgba(232,89,60,0.2)); }
+  50% { opacity: 1; filter: drop-shadow(0 0 6px rgba(232,89,60,0.7)); }
+}
+
+.animate-bulb-pulse {
+  animation: bulb-pulse 1.5s ease-in-out infinite;
+}
+
+/* Subtle Scroll Entrance Reveal animations */
+.reveal-hidden {
+  opacity: 0;
+  transform: translateY(24px);
+  filter: blur(5px);
+  transition: opacity 1.2s cubic-bezier(0.16, 1, 0.3, 1),
+              transform 1.2s cubic-bezier(0.16, 1, 0.3, 1),
+              filter 1.2s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: transform, opacity, filter;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal-hidden {
+    transform: none !important;
+    filter: none !important;
+    transition: opacity 0.3s ease-in-out !important;
+  }
+}
+
+.reveal-visible {
+  opacity: 1;
+  transform: translateY(0);
+  filter: blur(0px);
+}
+
+
+
+
