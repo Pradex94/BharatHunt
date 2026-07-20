@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(docker version)",
+      "PowerShell(docker info 2>&1)"
+    ]
+  }
+}
