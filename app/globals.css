@@ -9,6 +9,8 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-sans);
   --font-mono: var(--font-geist-mono);
+  /* Headlines use Inter (bold) — no separate display face in this system. */
+  --font-display: var(--font-sans);
   --font-heading: var(--font-sans);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
@@ -39,93 +41,163 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
-  --radius-sm: calc(var(--radius) * 0.6);
-  --radius-md: calc(var(--radius) * 0.8);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) * 1.4);
-  --radius-2xl: calc(var(--radius) * 1.8);
-  --radius-3xl: calc(var(--radius) * 2.2);
-  --radius-4xl: calc(var(--radius) * 2.6);
+  /*
+   * Hierarchical radius per the Claude spec:
+   *   xs 4 · sm 6 · md 8 (buttons/inputs/tabs) · lg 12 (content + product cards)
+   *   xl 16 (hero container) · pill/full 9999
+   */
+  --radius-xs: 6px;
+  --radius-sm: 8px;
+  --radius-md: 12px;   /* buttons, inputs */
+  --radius-lg: 16px;   /* chips, small cards */
+  --radius-xl: 20px;
+  --radius-2xl: 24px;  /* product / feature cards — the reference's 24px */
+  --radius-3xl: 32px;  /* large section containers */
+  --radius-4xl: 40px;
 }
 
 @theme {
-  --color-primary: #2563EB;
-  --color-accent: #F97316;
-  --color-background: #FFFFFF;
-  --color-secondary-bg: #F8FAFC;
-  --color-text: #111827;
-  --color-border: #E5E7EB;
-  --color-success: #10B981;
-  --color-error: #EF4444;
+  /*
+   * BharatHunt — premium Product-Hunt-for-India system. Warm off-white canvas
+   * (#FFF9F5), white cards, one brand color (orange #FF6B1A → #FF8A3D gradient),
+   * and near-black surfaces for the "collections" + "community" bands. Orange
+   * is the only chromatic brand color — no blue, no green.
+   *
+   * `--color-primary` (orange) drives the shadcn `--primary` token below.
+   */
+  --color-primary: #ff6b1a;          /* brand orange — CTAs, accents, highlights */
+  --color-primary-2: #ff8a3d;        /* gradient end / secondary orange */
+  --color-primary-active: #e85d0f;   /* press / darker variant */
+  --color-primary-disabled: #ffd9c2; /* tinted disabled */
+  --color-brand-accent: #ff6b1a;     /* alias so bg-brand-accent = orange */
+
+  /* Icon-tile accents used on the feature cards (match the reference) */
+  --color-accent-teal: #ff6b1a;      /* remapped to orange (no teal in this theme) */
+  --color-accent-amber: #ff8a3d;
+  --color-accent-rose: #f43f5e;
+  --color-accent-violet: #8b5cf6;
+
+  /* Surface ladder — white canvas, soft peach band, white cards */
+  --color-background: #ffffff;         /* canvas — pure white */
+  --color-secondary-bg: #fdf2ea;       /* soft peach section band (visible on white) */
+  --color-surface-card: #ffffff;       /* white cards */
+  --color-surface-cream-strong: #fbe9dc; /* selected chip / emphasized surface */
+
+  /* Near-black surfaces for the dark bands (collections, community) */
+  --color-surface-dark: #0f0f10;
+  --color-surface-dark-elevated: #1c1c1f;
+  --color-surface-dark-soft: #161618;
+
+  /* Soft warm hairline borders — a touch more visible on pure white */
+  --color-border: #efe6dd;
+  --color-hairline-soft: #f4ede6;
+
+  /* Ink text ladder — near-black headlines, gray body */
+  --color-ink: #17140f;
+  --color-body-strong: #2b2620;
+  --color-body: #4b5563;
+  --color-muted: #6b7280;
+  --color-muted-soft: #9ca3af;
+  --color-on-dark: #ffffff;
+  --color-on-dark-soft: #a1a1aa;
+
+  /* Semantic */
+  --color-success: #16a34a;
+  --color-warning: #d97706;
+  --color-error: #dc2626;
+
+  /* Brand gradient + glow, referenced by buttons and accent surfaces */
+  --gradient-primary: linear-gradient(135deg, #ff6b1a 0%, #ff8a3d 100%);
+  --glow-primary: 0 8px 24px -6px rgb(255 107 26 / 0.45);
+
+  /*
+   * Very soft, slightly orange-tinted shadows — the premium "floating card"
+   * look from the reference. Cards rest on a whisper of shadow, lift on hover.
+   */
+  --shadow-xs: 0 1px 2px 0 rgb(23 20 15 / 0.04);
+  --shadow-sm: 0 2px 8px -2px rgb(23 20 15 / 0.06), 0 1px 2px 0 rgb(23 20 15 / 0.04);
+  --shadow-soft: 0 8px 30px -8px rgb(23 20 15 / 0.10), 0 2px 8px -4px rgb(23 20 15 / 0.06);
+  --shadow-hover: 0 24px 50px -12px rgb(255 107 26 / 0.18), 0 8px 20px -8px rgb(23 20 15 / 0.10);
 }
 
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  /*
+   * Pure white canvas with white cards (separated by soft borders + shadow) and
+   * near-black headline ink. Orange (#FF6B1A) is the brand accent on every CTA.
+   */
+  --background: #ffffff;
+  --foreground: #17140f;
+  --card: #ffffff;
+  --card-foreground: #17140f;
+  --popover: #ffffff;
+  --popover-foreground: #17140f;
+  /* Orange primary drives shadcn `--primary` so bg-primary = #ff6b1a */
+  --primary: #ff6b1a;
+  --primary-foreground: #ffffff;
+  --secondary: #fdf2ea;
+  --secondary-foreground: #17140f;
+  --muted: #fdf2ea;
+  --muted-foreground: #6b7280;
+  --accent: #fdf2ea;
+  --accent-foreground: #17140f;
+  --destructive: #dc2626;
+  --border: #efe6dd;
+  --input: #efe6dd;
+  --ring: #ff6b1a;            /* orange focus ring */
+  --chart-1: #ff6b1a;
+  --chart-2: #ff8a3d;
+  --chart-3: #8b5cf6;
+  --chart-4: #f43f5e;
+  --chart-5: #0f0f10;
+  --radius: 1rem;             /* 16px base */
+  --sidebar: #fff9f5;
+  --sidebar-foreground: #17140f;
+  --sidebar-primary: #ff6b1a;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #fff3ec;
+  --sidebar-accent-foreground: #17140f;
+  --sidebar-border: #f2e7dd;
+  --sidebar-ring: #ff6b1a;
 }
 
+/*
+ * Dark surfaces are applied deliberately per-band (the "collections" and
+ * "community" sections). The `.dark` class maps shadcn tokens onto the
+ * near-black surface so any component dropped inside reads correctly, with the
+ * orange accent preserved.
+ */
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --background: #0f0f10;
+  --foreground: #ffffff;
+  --card: #1c1c1f;
+  --card-foreground: #ffffff;
+  --popover: #1c1c1f;
+  --popover-foreground: #ffffff;
+  --primary: #ff6b1a;
+  --primary-foreground: #ffffff;
+  --secondary: #1c1c1f;
+  --secondary-foreground: #ffffff;
+  --muted: #161618;
+  --muted-foreground: #a1a1aa;
+  --accent: #1c1c1f;
+  --accent-foreground: #ffffff;
+  --destructive: #dc2626;
+  --border: rgb(255 255 255 / 8%);
+  --input: rgb(255 255 255 / 12%);
+  --ring: #ff6b1a;
+  --chart-1: #ff6b1a;
+  --chart-2: #ff8a3d;
+  --chart-3: #8b5cf6;
+  --chart-4: #f43f5e;
+  --chart-5: #ffffff;
+  --sidebar: #0f0f10;
+  --sidebar-foreground: #ffffff;
+  --sidebar-primary: #ff6b1a;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #1c1c1f;
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: rgb(255 255 255 / 8%);
+  --sidebar-ring: #ff6b1a;
 }
 
 @layer base {
@@ -138,4 +210,77 @@
   html {
     @apply font-sans;
   }
+  /*
+   * Modern-SaaS voice: Inter, bold headlines with tight tracking. Large and
+   * confident (Apple / Linear / Product Hunt).
+   */
+  h1, h2, h3, h4 {
+    font-family: var(--font-sans);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+  /*
+   * Tailwind v4's Preflight (and Base UI's button reset) drop the pointer
+   * cursor on <button>. Restore it for all non-disabled interactive controls
+   * so clickable elements read as clickable (UX: cursor-pointer).
+   */
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  label:has(> input[type="checkbox"]),
+  label:has(> input[type="radio"]) {
+    cursor: pointer;
+  }
+}
+
+/*
+ * Global reduced-motion guard. framer-motion's <MotionConfig reducedMotion="user">
+ * (see app/layout.tsx) handles JS-driven animation; this covers the plain CSS
+ * `transition-*` hover effects (card lift, border brighten, button hover) that
+ * Tailwind utilities don't disable on their own.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+@layer components {
+  /* The signature orange gradient CTA with a soft glow that intensifies on hover. */
+  .btn-gradient {
+    background-image: var(--gradient-primary);
+    color: #fff;
+    box-shadow: var(--glow-primary);
+    transition: box-shadow 200ms ease-out, transform 200ms ease-out, filter 200ms ease-out;
+  }
+  .btn-gradient:hover {
+    box-shadow: 0 12px 32px -6px rgb(255 107 26 / 0.55);
+    filter: brightness(1.03);
+  }
+  .btn-gradient:active {
+    transform: translateY(1px);
+  }
+
+  /* Soft radial glow used behind hero cards and the community map. */
+  .glow-orange {
+    background: radial-gradient(circle at center, rgb(255 138 61 / 0.35), transparent 70%);
+  }
+}
+
+/* Subtle float loop for the hero product card (respects reduced-motion above). */
+@keyframes bh-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+.animate-bh-float {
+  animation: bh-float 6s ease-in-out infinite;
 }

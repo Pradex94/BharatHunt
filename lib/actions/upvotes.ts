@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { auth } from "@clerk/nextjs/server";
 import { createClient } from "@/lib/supabase/server";
+import { ensureProfile } from "@/lib/ensure-profile";
 
 export type UpvoteActionState = { error?: string } | undefined;
 
@@ -33,6 +34,15 @@ export async function toggleUpvote(productId: string): Promise<UpvoteActionState
       .eq("user_id", userId);
     if (error) return { error: error.message };
   } else {
+    // profiles.id FK guard — the Clerk webhook may not have created this row.
+    try {
+      await ensureProfile();
+    } catch (profileError) {
+      return {
+        error:
+          profileError instanceof Error ? profileError.message : "Could not prepare your profile.",
+      };
+    }
     const { error } = await supabase
       .from("upvotes")
       .insert({ product_id: productId, user_id: userId });

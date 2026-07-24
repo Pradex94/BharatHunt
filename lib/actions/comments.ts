@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { auth } from "@clerk/nextjs/server";
 import { createClient } from "@/lib/supabase/server";
+import { ensureProfile } from "@/lib/ensure-profile";
 
 export type CommentFormState = { error?: string } | undefined;
 
@@ -28,6 +29,16 @@ export async function addComment(
   }
 
   const supabase = createClient();
+
+  // profiles.id FK guard — the Clerk webhook may not have created this row.
+  try {
+    await ensureProfile();
+  } catch (profileError) {
+    return {
+      error:
+        profileError instanceof Error ? profileError.message : "Could not prepare your profile.",
+    };
+  }
 
   const { error } = await supabase
     .from("comments")

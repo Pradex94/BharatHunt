@@ -2,23 +2,11 @@
 
 import { useActionState } from "react";
 import { createProduct, updateProduct, type ProductFormState } from "@/lib/actions/products";
+import { PRODUCT_CATEGORIES } from "@/lib/constants";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-
-const CATEGORIES = [
-  "Developer Tools",
-  "Productivity",
-  "Finance",
-  "Food & Drink",
-  "Design Tools",
-  "Marketing",
-  "Health & Fitness",
-  "Education",
-  "Social",
-  "Other",
-];
 
 const selectClassName =
   "h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30";
@@ -92,7 +80,7 @@ export function ProductForm({ product }: { product?: ExistingProduct }) {
           <option value="" disabled>
             Choose a category
           </option>
-          {CATEGORIES.map((category) => (
+          {PRODUCT_CATEGORIES.map((category) => (
             <option key={category} value={category}>
               {category}
             </option>

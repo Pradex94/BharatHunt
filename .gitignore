@@ -43,3 +43,9 @@ next-env.d.ts
 # claude code local settings
 .claude/settings.local.json
 supabase/.temp/
+
+# vendored AI-assistant skill packages (installed locally, not app code)
+.claude/skills/
+.agents/
+.hallmark/
+skills-lock.json

@@ -12,6 +12,12 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Vendored AI-assistant skill packages (installed via `uipro`/`skills add`).
+    // Not application source — their helper scripts use CommonJS and would
+    // otherwise fail our lint rules.
+    ".claude/**",
+    ".agents/**",
+    ".hallmark/**",
   ]),
 ]);
 

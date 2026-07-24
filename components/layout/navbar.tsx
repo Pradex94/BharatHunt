@@ -1,0 +1,254 @@
+"use client";
+
+/* Design system: design.md (Bharat Hunt — orange) · sticky glass top-nav
+ * Logo + menu + search + Log in + Launch Product (orange gradient).
+ */
+
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useClerk, useUser } from "@clerk/nextjs";
+import { MenuIcon, Search } from "lucide-react";
+
+import { cn } from "@/lib/utils";
+import { NAV_LINKS } from "@/lib/constants";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { Container } from "@/components/ui/container";
+import { Logo } from "@/components/layout/logo";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
+
+function getInitials(name: string) {
+  const initials = name
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("");
+  return initials || "?";
+}
+
+export function Navbar() {
+  const router = useRouter();
+  const [scrolled, setScrolled] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const { isLoaded, isSignedIn, user } = useUser();
+  const { signOut } = useClerk();
+
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 8);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  const displayName =
+    user?.fullName ?? user?.username ?? user?.primaryEmailAddress?.emailAddress ?? "Account";
+
+  function submitSearch(e: React.FormEvent) {
+    e.preventDefault();
+    const q = query.trim();
+    router.push(q ? `/marketplace?q=${encodeURIComponent(q)}` : "/marketplace");
+  }
+
+  return (
+    <header
+      className={cn(
+        "sticky top-0 z-40 w-full border-b border-white/10 bg-surface-dark transition-shadow duration-200 ease-out",
+        scrolled && "shadow-lg shadow-black/20",
+      )}
+    >
+      <Container>
+        <div className="flex h-16 items-center justify-between gap-4">
+          <Logo tone="dark" />
+
+          <nav aria-label="Primary" className="hidden items-center gap-6 lg:flex">
+            {NAV_LINKS.map((link) => (
+              <Link
+                key={link.href}
+                href={link.href}
+                className="text-sm font-medium text-white/70 transition-colors duration-200 hover:text-white"
+              >
+                {link.label}
+              </Link>
+            ))}
+          </nav>
+
+          <div className="hidden items-center gap-3 lg:flex">
+            <form onSubmit={submitSearch} className="relative hidden xl:block">
+              <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-white/40" />
+              <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search products..."
+                aria-label="Search products"
+                className="h-10 w-56 rounded-xl border border-white/15 bg-white/10 pr-9 pl-9 text-sm text-white outline-none transition-colors placeholder:text-white/40 focus-visible:border-primary/60"
+              />
+              <kbd className="absolute top-1/2 right-3 -translate-y-1/2 rounded border border-white/15 bg-white/10 px-1.5 text-xs text-white/50">
+                /
+              </kbd>
+            </form>
+
+            {!isLoaded ? (
+              <div className="flex items-center gap-2">
+                <Skeleton className="h-9 w-16 bg-white/10" />
+                <Skeleton className="h-9 w-32 bg-white/10" />
+              </div>
+            ) : isSignedIn ? (
+              <div className="flex items-center gap-3">
+                <Link href="/submit" className={buttonVariants({ size: "sm" })}>
+                  Launch Product
+                </Link>
+                <DropdownMenu>
+                  <DropdownMenuTrigger
+                    render={
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="gap-2 pl-1.5 text-white hover:bg-white/10 hover:text-white"
+                      />
+                    }
+                  >
+                    <Avatar size="sm">
+                      <AvatarFallback>{getInitials(displayName)}</AvatarFallback>
+                    </Avatar>
+                    <span className="max-w-24 truncate">{displayName}</span>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuLabel>{displayName}</DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      variant="destructive"
+                      onClick={() => signOut({ redirectUrl: "/" })}
+                    >
+                      Log out
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            ) : (
+              <div className="flex items-center gap-3">
+                <Link
+                  href="/login"
+                  className="rounded-xl border border-white/20 px-4 py-2 text-sm font-semibold text-white transition-colors duration-200 hover:bg-white/10"
+                >
+                  Log in
+                </Link>
+                <Link href="/submit" className={buttonVariants({ size: "sm" })}>
+                  Launch Product
+                </Link>
+              </div>
+            )}
+          </div>
+
+          <div className="flex items-center lg:hidden">
+            <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
+              <SheetTrigger
+                render={
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label="Open menu"
+                    className="text-white hover:bg-white/10 hover:text-white"
+                  />
+                }
+              >
+                <MenuIcon aria-hidden="true" />
+              </SheetTrigger>
+              <SheetContent side="right" className="w-full sm:max-w-xs">
+                <SheetHeader>
+                  <SheetTitle>Menu</SheetTitle>
+                </SheetHeader>
+
+                <div className="flex flex-col gap-4 px-4">
+                  <nav aria-label="Primary" className="flex flex-col gap-1">
+                    {NAV_LINKS.map((link) => (
+                      <Link
+                        key={link.href}
+                        href={link.href}
+                        onClick={() => setMobileOpen(false)}
+                        className="rounded-md px-3 py-2 text-sm font-medium text-body transition-colors duration-200 hover:bg-secondary-bg hover:text-ink"
+                      >
+                        {link.label}
+                      </Link>
+                    ))}
+                  </nav>
+                </div>
+
+                <div className="mt-auto flex flex-col gap-2 border-t border-border p-4">
+                  {!isLoaded ? (
+                    <>
+                      <Skeleton className="h-9 w-full" />
+                      <Skeleton className="h-9 w-full" />
+                    </>
+                  ) : isSignedIn ? (
+                    <>
+                      <div className="flex items-center gap-2 px-1 py-1">
+                        <Avatar size="sm">
+                          <AvatarFallback>{getInitials(displayName)}</AvatarFallback>
+                        </Avatar>
+                        <span className="truncate text-sm font-medium text-ink">
+                          {displayName}
+                        </span>
+                      </div>
+                      <Link
+                        href="/submit"
+                        onClick={() => setMobileOpen(false)}
+                        className={buttonVariants({ className: "w-full" })}
+                      >
+                        Launch Product
+                      </Link>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => {
+                          setMobileOpen(false);
+                          void signOut({ redirectUrl: "/" });
+                        }}
+                      >
+                        Log out
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <Link
+                        href="/login"
+                        onClick={() => setMobileOpen(false)}
+                        className={buttonVariants({ variant: "outline", className: "w-full" })}
+                      >
+                        Log in
+                      </Link>
+                      <Link
+                        href="/submit"
+                        onClick={() => setMobileOpen(false)}
+                        className={buttonVariants({ className: "w-full" })}
+                      >
+                        Launch Product
+                      </Link>
+                    </>
+                  )}
+                </div>
+              </SheetContent>
+            </Sheet>
+          </div>
+        </div>
+      </Container>
+    </header>
+  );
+}

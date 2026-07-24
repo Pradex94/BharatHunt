@@ -1,36 +1,112 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Bharat Hunt
 
-## Getting Started
+A curated marketplace for discovering, upvoting, and launching premium software — lifetime deals and tools built by founders, for founders. Products are submitted, ranked by a time-decayed trending score, filtered by category and pricing, and discussed in comments.
 
-First, run the development server:
+The interface runs a **warm editorial design system** (the Claude.com aesthetic): a cream canvas, a single coral accent, dark-navy surfaces for the footer and callouts, a serif display face paired with a humanist sans, and monospace reserved for numbers.
+
+## Tech stack
+
+- **[Next.js 16](https://nextjs.org)** (App Router, Server Components, Server Actions, Turbopack)
+- **[React 19](https://react.dev)** + **TypeScript** (strict)
+- **[Supabase](https://supabase.com)** — Postgres, Row-Level Security, PostgREST
+- **[Clerk](https://clerk.com)** — auth via third-party JWTs into Supabase
+- **[Tailwind CSS v4](https://tailwindcss.com)** with `@theme` tokens
+- **[shadcn/ui](https://ui.shadcn.com)** on **[Base UI](https://base-ui.com)** primitives
+- **[Framer Motion](https://www.framer.com/motion/)** — reduced-motion aware
+- **[Lucide](https://lucide.dev)** icons
+- Fonts (via `next/font`): **Fraunces** (serif display), **Inter** (body/UI), **JetBrains Mono** (code/numbers)
+
+## Getting started
+
+### 1. Install dependencies
+
+```bash
+npm install
+```
+
+### 2. Configure environment variables
+
+Create `.env.local` in the project root:
+
+```bash
+# Supabase
+NEXT_PUBLIC_SUPABASE_URL=https://<your-project>.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=<your-anon-key>
+SUPABASE_SERVICE_ROLE_KEY=<your-service-role-key>   # server-only; used by the Clerk webhook
+
+# Clerk
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=<your-clerk-publishable-key>
+CLERK_SECRET_KEY=<your-clerk-secret-key>
+CLERK_WEBHOOK_SIGNING_SECRET=<your-clerk-webhook-signing-secret>
+```
+
+Clerk is wired to Supabase as a [third-party auth provider](https://clerk.com/docs/integrations/databases/supabase): the browser/server Supabase clients attach the Clerk session token, and RLS policies authorize against the JWT's `sub` claim (see `supabase/migrations/`).
+
+### 3. Set up the database
+
+Apply the migrations in `supabase/migrations/` to your Supabase project (via the [Supabase CLI](https://supabase.com/docs/guides/cli) `supabase db push`, or by running the SQL in the dashboard). `supabase/seed.sql` contains demo products.
+
+### 4. Run the dev server
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+> **Profiles & the Clerk webhook:** new users get a `profiles` row from the Clerk `user.created` webhook (`app/api/webhooks/clerk/route.ts`). Because that webhook can't reach `localhost` without a tunnel, the app also self-heals — `lib/ensure-profile.ts` upserts the profile on first submit/upvote/comment, so those actions work locally without configuring the webhook.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Scripts
 
-## Learn More
+| Command | Description |
+| --- | --- |
+| `npm run dev` | Start the dev server (Turbopack) |
+| `npm run build` | Production build |
+| `npm run start` | Serve the production build |
+| `npm run lint` | Run ESLint |
 
-To learn more about Next.js, take a look at the following resources:
+Type-check with `npx tsc --noEmit`.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Routes
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+| Path | Description |
+| --- | --- |
+| `/` | Landing — featured / latest / by-category rails and a coral CTA |
+| `/marketplace` | Browse all products: sidebar filters (category, pricing), search, sort, "load more" |
+| `/products/[slug]` | Product detail — description, screenshots, upvotes, comments |
+| `/products/[slug]/edit` | Edit a product (creator only) |
+| `/submit` | Submit a new product |
+| `/categories`, `/categories/[slug]` | Category index + per-category listings (real taxonomy, live counts) |
+| `/collections`, `/collections/[slug]` | Curated editorial groupings that resolve to live product queries |
+| `/blog`, `/blog/[slug]` | Editorial blog |
+| `/login`, `/signup` | Clerk auth |
+| `/api/webhooks/clerk` | Syncs Clerk users into the `profiles` table |
 
-## Deploy on Vercel
+## Project structure
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```
+app/                 Routes (App Router)
+components/
+  layout/            Navbar, footer
+  marketplace/       Sidebar, sort pills, search, product list
+  products/          Product card, comment, upvote, forms
+  ui/                Design-system primitives (button, card, typography, …)
+lib/
+  actions/           Server Actions (products, comments, upvotes, marketplace)
+  supabase/          Server + browser Supabase clients
+  constants.ts       Category taxonomy, sorts, pricing types
+  collections.ts     Curated collection definitions
+  blog.ts            Blog post content
+  ensure-profile.ts  Self-healing profile upsert
+services/            Data-access layer (product queries)
+supabase/            Migrations + seed
+design.md            The locked design system (single source of truth)
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Design system
+
+`design.md` is the locked source of truth for the visual system — the cream/coral/navy trinity, the Fraunces + Inter + JetBrains Mono type split, spacing, radius, and motion rules. The tokens are implemented natively in `app/globals.css` (Tailwind `@theme` + shadcn CSS variables). Read `design.md` before making visual changes.
+
+## Deploy
+
+Deploys cleanly to [Vercel](https://vercel.com/new). Set the same environment variables in the project settings, point the Clerk webhook at `https://<your-domain>/api/webhooks/clerk`, and apply the Supabase migrations to your production database.

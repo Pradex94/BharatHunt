@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { auth } from "@clerk/nextjs/server";
 import { createClient } from "@/lib/supabase/server";
+import { ensureProfile } from "@/lib/ensure-profile";
 
 export type ProductFormState = { error?: string } | undefined;
 
@@ -94,6 +95,19 @@ export async function createProduct(
   }
   const { name, tagline, description, category, pricingType, websiteUrl, githubUrl, heroImageUrl, tags } =
     parsed.fields;
+
+  // Make sure the creator has a profile row before inserting — products.creator_id
+  // has a FK to profiles.id, and the Clerk webhook may not have run for this user.
+  try {
+    await ensureProfile();
+  } catch (profileError) {
+    return {
+      error:
+        profileError instanceof Error
+          ? profileError.message
+          : "Could not prepare your profile. Please try again.",
+    };
+  }
 
   const baseSlug = slugify(name);
   let slug = baseSlug;
@@ -189,5 +203,5 @@ export async function deleteProduct(productId: string) {
 
   await supabase.from("products").delete().eq("id", productId).eq("creator_id", userId);
 
-  redirect("/");
+  redirect("/marketplace");
 }
