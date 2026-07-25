@@ -29,6 +29,12 @@ export const metadata: Metadata = {
   description:
     "A curated marketplace of lifetime deals and premium tools, built by founders for founders. Discover, upvote, and launch the products worth your attention.",
   keywords: ["marketplace", "software deals", "lifetime deals", "product launch", "founders", "India"],
+  // Brand icon → favicon + Apple touch icon (served from public/brand-icon.png).
+  icons: {
+    icon: "/brand-icon.png",
+    shortcut: "/brand-icon.png",
+    apple: "/brand-icon.png",
+  },
   openGraph: {
     title: "Bharat Hunt — Discover premium software before everyone else",
     description:

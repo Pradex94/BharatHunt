@@ -1,9 +1,24 @@
+"use client";
+
 import Link from "next/link";
-import { Flame } from "lucide-react";
+import { useEffect, useState } from "react";
 
 import { cn } from "@/lib/utils";
 
-/** Bharat Hunt wordmark: orange gradient square + flame, then the name. */
+/** Built-in fallback mark — always renders, never breaks. */
+function BrandMark() {
+  return (
+    <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary font-display text-lg font-bold leading-none text-white">
+      B
+    </span>
+  );
+}
+
+/**
+ * Bharat Hunt lockup. Shows the built-in "B" mark by default and upgrades to the
+ * custom icon at `public/brand-icon.png` automatically once that file exists —
+ * so a missing file never renders a broken image.
+ */
 export function Logo({
   href = "/",
   className,
@@ -13,6 +28,14 @@ export function Logo({
   className?: string;
   tone?: "light" | "dark";
 }) {
+  const [iconSrc, setIconSrc] = useState<string | null>(null);
+
+  useEffect(() => {
+    const img = new window.Image();
+    img.onload = () => setIconSrc("/brand-icon.png");
+    img.src = "/brand-icon.png";
+  }, []);
+
   return (
     <Link
       href={href}
@@ -22,11 +45,14 @@ export function Logo({
         className,
       )}
     >
-      <span className="flex size-8 items-center justify-center rounded-xl bg-gradient-to-br from-[#ff6b1a] to-[#ff8a3d] text-white shadow-[0_4px_12px_-2px_rgba(255,107,26,0.5)]">
-        <Flame className="size-[18px]" />
-      </span>
-      <span>
-        भारत <span className="font-extrabold">Hunt</span>
+      {iconSrc ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={iconSrc} alt="" className="size-8 shrink-0 rounded-lg object-cover" />
+      ) : (
+        <BrandMark />
+      )}
+      <span className="font-display text-xl font-bold tracking-tight">
+        भारत <span className="text-primary">Hunt</span>
       </span>
     </Link>
   );
