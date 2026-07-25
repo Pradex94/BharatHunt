@@ -103,17 +103,17 @@ export function Hero() {
               ))}
             </div>
 
-            <div className="mt-5 flex items-center gap-5 text-sm text-muted">
-              <span className="flex items-center gap-1.5">
-                <ChevronUp className="size-4 text-primary" />
+            <div className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm text-muted">
+              <span className="flex items-center gap-1 whitespace-nowrap">
+                <ChevronUp className="size-4 shrink-0 text-primary" />
                 <Numeric className="font-bold text-ink">523</Numeric> Upvotes
               </span>
-              <span className="flex items-center gap-1.5">
-                <MessageSquare className="size-4" />
+              <span className="flex items-center gap-1 whitespace-nowrap">
+                <MessageSquare className="size-4 shrink-0" />
                 <Numeric className="font-bold text-ink">86</Numeric> Comments
               </span>
-              <span className="flex items-center gap-1.5">
-                <Eye className="size-4" />
+              <span className="flex items-center gap-1 whitespace-nowrap">
+                <Eye className="size-4 shrink-0" />
                 <Numeric className="font-bold text-ink">9.4K</Numeric> Views
               </span>
             </div>
