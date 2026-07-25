@@ -13,6 +13,10 @@ import { FadeIn, FadeInStagger, FadeInItem } from "@/components/ui/motion";
 import { CATEGORIES } from "@/lib/constants";
 import { getCategoryCounts } from "@/services/products";
 
+// Fetches auth-scoped data via the Clerk-token Supabase client (uses headers),
+// so it must render dynamically, not be statically prerendered at build.
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "Categories",
   description:

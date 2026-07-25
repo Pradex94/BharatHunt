@@ -14,16 +14,15 @@ import { Display, Lead, Numeric } from "@/components/ui/typography";
 import { buttonVariants } from "@/components/ui/button";
 import { FadeIn, FadeInStagger, FadeInItem } from "@/components/ui/motion";
 import { ProductCard, type ProductCardProduct } from "@/components/products/product-card";
-import { CATEGORIES, categoryFromSlug } from "@/lib/constants";
+import { categoryFromSlug } from "@/lib/constants";
 import {
   getProductsByCategory,
   getCategoryCounts,
   getUpvotedProductIds,
 } from "@/services/products";
 
-export function generateStaticParams() {
-  return CATEGORIES.map((c) => ({ slug: c.slug }));
-}
+// Renders per-user (upvote state) via Clerk auth → dynamic, not prebuilt.
+export const dynamic = "force-dynamic";
 
 export async function generateMetadata({
   params,

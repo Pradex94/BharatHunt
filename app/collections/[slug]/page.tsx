@@ -13,13 +13,12 @@ import { Section } from "@/components/ui/section";
 import { Display, Lead, Numeric } from "@/components/ui/typography";
 import { FadeIn, FadeInStagger, FadeInItem } from "@/components/ui/motion";
 import { ProductCard, type ProductCardProduct } from "@/components/products/product-card";
-import { COLLECTIONS, collectionFromSlug } from "@/lib/collections";
+import { collectionFromSlug } from "@/lib/collections";
 import { slugForCategory } from "@/lib/constants";
 import { getProducts, getUpvotedProductIds } from "@/services/products";
 
-export function generateStaticParams() {
-  return COLLECTIONS.map((c) => ({ slug: c.slug }));
-}
+// Renders per-user (upvote state) via Clerk auth → dynamic, not prebuilt.
+export const dynamic = "force-dynamic";
 
 export async function generateMetadata({
   params,
