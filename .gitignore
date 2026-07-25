@@ -49,3 +49,6 @@ supabase/.temp/
 .agents/
 .hallmark/
 skills-lock.json
+
+.vercel
+.env*
