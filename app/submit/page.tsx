@@ -1,6 +1,12 @@
 import { redirect } from "next/navigation";
 import { auth } from "@clerk/nextjs/server";
 import { ProductForm } from "@/components/products/product-form";
+import { Container } from "@/components/ui/container";
+
+export const metadata = {
+  title: "Launch Your Product | Bharat Hunt",
+  description: "Share your product with the Bharat Hunt community.",
+};
 
 export default async function SubmitPage() {
   const { userId } = await auth();
@@ -10,12 +16,23 @@ export default async function SubmitPage() {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-lg flex-1 flex-col gap-4 px-4 py-10">
-      <h1 className="text-2xl font-semibold text-foreground">Submit a product</h1>
-      <p className="text-sm text-muted-foreground">
-        Share what you&apos;ve built with the community.
-      </p>
-      <ProductForm />
-    </div>
+    <main className="min-h-screen bg-background py-12 md:py-16">
+      <Container>
+        <div className="mx-auto w-full max-w-5xl">
+          {/* Header */}
+          <div className="mb-8 space-y-3">
+            <h1 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
+              Launch Your Product
+            </h1>
+            <p className="text-base text-body">
+              Share what you've built with the Bharat Hunt community. Fill in the details below and your product will be live instantly.
+            </p>
+          </div>
+
+          {/* Form */}
+          <ProductForm />
+        </div>
+      </Container>
+    </main>
   );
 }
