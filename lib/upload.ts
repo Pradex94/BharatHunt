@@ -1,1 +1,70 @@
-\"use client\";\n\nimport { createClient } from \"@supabase/supabase-js\";\nimport type { Database } from \"@/types/database\";\n\n/**\n * Create a Supabase client for storage operations\n * Uses public anon key for client-side uploads\n */\nfunction createStorageClient() {\n  return createClient<Database>(\n    process.env.NEXT_PUBLIC_SUPABASE_URL!,\n    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!\n  );\n}\n\n/**\n * Upload a product image to Supabase Storage\n * @param file - The image file to upload\n * @returns The public URL of the uploaded image\n */\nexport async function uploadProductImage(file: File): Promise<string> {\n  // Validate file\n  if (!file.type.startsWith(\"image/\")) {\n    throw new Error(\"File must be an image\");\n  }\n\n  if (file.size > 5 * 1024 * 1024) {\n    throw new Error(\"File size must be less than 5MB\");\n  }\n\n  const supabase = createStorageClient();\n\n  // Generate a unique filename\n  const timestamp = Date.now();\n  const random = Math.random().toString(36).substring(2, 8);\n  const ext = file.name.split(\".\").pop()?.toLowerCase() || \"jpg\";\n  const filename = `${timestamp}-${random}.${ext}`;\n  const filepath = `product-images/${filename}`;\n\n  try {\n    // Check if bucket exists, if not create it\n    const { data: buckets } = await supabase.storage.listBuckets();\n    const bucketExists = buckets?.some((b) => b.name === \"products\");\n\n    if (!bucketExists) {\n      // Bucket doesn't exist, we'll try to upload anyway\n      // Supabase will handle the error\n    }\n\n    // Upload to Supabase Storage\n    const { data, error } = await supabase.storage\n      .from(\"products\")\n      .upload(filepath, file, {\n        cacheControl: \"3600\",\n        upsert: false,\n      });\n\n    if (error) {\n      throw new Error(`Upload failed: ${error.message}`);\n    }\n\n    // Get the public URL\n    const { data: publicUrlData } = supabase.storage\n      .from(\"products\")\n      .getPublicUrl(filepath);\n\n    if (!publicUrlData?.publicUrl) {\n      throw new Error(\"Failed to generate public URL\");\n    }\n\n    return publicUrlData.publicUrl;\n  } catch (error) {\n    console.error(\"Image upload error:\", error);\n    throw new Error(\n      error instanceof Error ? error.message : \"Failed to upload image\"\n    );\n  }\n}\n"
+"use client";
+
+import { createClient } from "@supabase/supabase-js";
+import type { Database } from "@/types/database";
+
+/**
+ * Create a Supabase client for storage operations
+ * Uses public anon key for client-side uploads
+ */
+function createStorageClient() {
+  return createClient<Database>(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
+}
+
+/**
+ * Upload a product image to Supabase Storage
+ * @param file - The image file to upload
+ * @returns The public URL of the uploaded image
+ */
+export async function uploadProductImage(file: File): Promise<string> {
+  // Validate file
+  if (!file.type.startsWith("image/")) {
+    throw new Error("File must be an image");
+  }
+
+  if (file.size > 5 * 1024 * 1024) {
+    throw new Error("File size must be less than 5MB");
+  }
+
+  const supabase = createStorageClient();
+
+  // Generate a unique filename
+  const timestamp = Date.now();
+  const random = Math.random().toString(36).substring(2, 8);
+  const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
+  const filename = `${timestamp}-${random}.${ext}`;
+  const filepath = `product-images/${filename}`;
+
+  try {
+    // Upload to Supabase Storage
+    const { data, error } = await supabase.storage
+      .from("products")
+      .upload(filepath, file, {
+        cacheControl: "3600",
+        upsert: false,
+      });
+
+    if (error) {
+      throw new Error(`Upload failed: ${error.message}`);
+    }
+
+    // Get the public URL
+    const { data: publicUrlData } = supabase.storage
+      .from("products")
+      .getPublicUrl(filepath);
+
+    if (!publicUrlData?.publicUrl) {
+      throw new Error("Failed to generate public URL");
+    }
+
+    return publicUrlData.publicUrl;
+  } catch (error) {
+    console.error("Image upload error:", error);
+    throw new Error(
+      error instanceof Error ? error.message : "Failed to upload image"
+    );
+  }
+}
