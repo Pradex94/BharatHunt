@@ -1,16 +1,16 @@
-# Product Image Upload Feature
+# Product Image Upload Feature (Cloudinary)
 
 ## Overview
 
-This document describes the new product image upload functionality added to BharatHunt. Founders can now upload product images directly instead of only providing image URLs.
+This document describes the product image upload functionality added to BharatHunt using **Cloudinary**. Founders can now upload product images directly instead of only providing image URLs.
 
 ## Features
 
 ### 1. **Direct Image Upload**
 - Founders can select and upload images directly from their computer
-- Supported formats: All common image types (JPEG, PNG, WebP, GIF, etc.)
+- Images are stored securely in Cloudinary
 - Maximum file size: 5MB
-- Images are stored in Supabase Storage with public access
+- Automatic image optimization and delivery via Cloudinary CDN
 
 ### 2. **Image Preview**
 - Real-time preview of the selected image before submission
@@ -38,63 +38,40 @@ Updated the ProductForm component with:
 - Image selection handler with validation
 - Upload state management
 - Error display
-- Integration with the upload utility
+- Integration with the Cloudinary upload utility
 
-#### 2. **lib/upload.ts** (New)
-Created a new utility module for image uploads:
-- `uploadProductImage()` function that handles file uploads to Supabase Storage
-- Generates unique filenames to prevent collisions
-- Returns the public URL of the uploaded image
-- Includes client-side validation
-
-#### 3. **supabase/migrations/20260727000000_setup_product_images_storage.sql** (New)
-Database migration that:
-- Creates the `products` storage bucket in Supabase
-- Sets up Row-Level Security (RLS) policies for the bucket
-- Allows authenticated users to upload images
-- Allows public read access to images
-- Allows users to delete their own images
+#### 2. **lib/upload.ts**
+Updated utility module for Cloudinary uploads:
+- `uploadProductImage()` function that handles file uploads to Cloudinary API
+- Uses unsigned upload presets for client-side security
+- Returns the secure URL of the uploaded image
 
 ### Data Flow
 
 1. **User selects image** → `handleImageSelect()` validates and creates preview
-2. **User submits form** → `handleFormSubmit()` uploads image to Supabase Storage
-3. **Upload completes** → Public URL is set in `heroImageUrl` form field
-4. **Form submission** → Server action processes the form with the uploaded image URL
-5. **Product created/updated** → `hero_image_url` field stores the Supabase public URL
-
-### Storage Structure
-
-Images are stored in Supabase Storage under:
-```
-products/
-  product-images/
-    {timestamp}-{random}.{ext}
-```
-
-Example: `products/product-images/1706000000000-a1b2c3.jpg`
+2. **User submits form** → `handleFormSubmit()` uploads image to Cloudinary
+3. **Upload completes** → Secure URL is set in `heroImageUrl` form field
+4. **Form submission** → Server action processes the form with the Cloudinary URL
+5. **Product created/updated** → `hero_image_url` field stores the Cloudinary secure URL
 
 ## Setup Instructions
 
-### 1. Apply Database Migration
+### 1. Cloudinary Account Setup
 
-Run the new migration to set up the storage bucket:
+1. Create a free account at [Cloudinary](https://cloudinary.com/)
+2. Go to **Settings** > **Upload**
+3. Add a new **Upload Preset**:
+   - Name it (e.g., `bharathunt_products`)
+   - Set **Signing Mode** to **Unsigned**
+   - (Optional) Set a folder for uploads (e.g., `products`)
+
+### 2. Configure Environment Variables
+
+Add the following to your `.env.local`:
 
 ```bash
-# Using Supabase CLI
-supabase db push
-
-# Or manually in Supabase dashboard:
-# Copy the SQL from supabase/migrations/20260727000000_setup_product_images_storage.sql
-# and run it in the SQL editor
-```
-
-### 2. Verify Supabase Configuration
-
-Ensure your `.env.local` has:
-```bash
-NEXT_PUBLIC_SUPABASE_URL=https://<your-project>.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=<your-anon-key>
+NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME=your_cloud_name
+NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET=your_unsigned_upload_preset
 ```
 
 ### 3. Test the Feature
@@ -105,124 +82,54 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=<your-anon-key>
    - Select a valid image file
    - Verify preview appears
    - Submit the form
-   - Confirm product is created with the uploaded image
-
-## User Experience
-
-### Product Submission Form
-
-The updated form now includes:
-
-```
-Product Image
-├── Image Preview (if selected)
-│   └── [Remove button]
-├── File Input
-│   └── "Choose image file"
-├── File Info (if selected)
-│   └── "Selected: filename.jpg (123.4 KB)"
-└── Fallback URL Input
-    └── "Or paste image URL: https://..."
-```
-
-### Validation Messages
-
-- "Please select an image file" - Non-image file selected
-- "Image must be smaller than 5MB" - File exceeds size limit
-- "Upload failed: [error details]" - Upload to Supabase failed
-
-## Browser Compatibility
-
-- Works in all modern browsers supporting:
-  - File API
-  - FileReader API
-  - Fetch API
-- Tested on: Chrome, Firefox, Safari, Edge
+   - Confirm product is created with the Cloudinary image URL
 
 ## Performance Considerations
 
-- **Client-side validation**: Prevents invalid uploads before sending to server
-- **Unique filenames**: Prevents collisions and allows parallel uploads
-- **Public bucket**: Images are cached by CDN for fast delivery
-- **File size limit**: 5MB limit prevents excessive storage usage
+- **Cloudinary CDN**: Images are automatically optimized and served via a global CDN
+- **On-the-fly Transformations**: Cloudinary allows for dynamic resizing and formatting by modifying the URL
+- **Client-side validation**: Prevents invalid uploads before sending to Cloudinary
 
 ## Security
 
-### RLS Policies
-
-1. **Upload**: Only authenticated users can upload
-2. **Read**: Public read access (no authentication required)
-3. **Delete**: Only the uploader can delete their images
-
-### File Validation
-
-- MIME type checking (must start with `image/`)
-- File size validation (max 5MB)
-- Filename sanitization (timestamp + random string)
+- **Unsigned Uploads**: Uses restricted upload presets to allow client-side uploads without exposing sensitive API secrets
+- **File Validation**: MIME type and size checking performed before upload
 
 ## Future Enhancements
 
-1. **Image Optimization**
-   - Automatic image resizing/compression
-   - Multiple image formats (WebP, AVIF)
-   - Responsive image generation
+1. **Cloudinary Transformations**
+   - Automatic resizing to specific dimensions
+   - Automatic format selection (WebP/AVIF) based on browser support
+   - Adding watermarks or overlays
 
 2. **Multiple Images**
-   - Support for multiple product images/screenshots
-   - Gallery view on product detail page
-   - Drag-and-drop reordering
-
-3. **Image Editing**
-   - Crop/rotate before upload
-   - Add filters or effects
-   - Resize in browser
-
-4. **Advanced Features**
-   - Image optimization pipeline
-   - Automatic alt-text generation
-   - Image analytics (views, engagement)
+   - Support for multiple screenshots using Cloudinary's bulk upload capabilities
 
 ## Troubleshooting
 
-### Upload fails with "bucket not found"
+### Upload fails with "Invalid cloud name"
 
-**Solution**: Ensure the migration has been applied and the `products` bucket exists in Supabase Storage.
+**Solution**: Verify `NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME` matches your Cloudinary dashboard.
 
-### Upload fails with "permission denied"
+### Upload fails with "Upload preset not found"
 
-**Solution**: Check that:
-- User is authenticated
-- RLS policies are correctly set up
-- Supabase anon key has storage permissions
+**Solution**: Ensure you've created an **Unsigned** upload preset in Cloudinary and correctly set `NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET`.
 
 ### Image preview doesn't appear
 
-**Solution**: Check browser console for errors. Ensure:
-- File is a valid image
-- Browser supports FileReader API
-- JavaScript is enabled
-
-### Uploaded image URL is broken
-
-**Solution**: Verify:
-- Supabase project is active
-- Storage bucket is public
-- Image file wasn't deleted from storage
+**Solution**: Check browser console for errors. Ensure the file is a valid image and the browser supports FileReader API.
 
 ## API Reference
 
 ### `uploadProductImage(file: File): Promise<string>`
 
-Uploads an image file to Supabase Storage and returns the public URL.
+Uploads an image file to Cloudinary and returns the secure URL.
 
 **Parameters:**
 - `file` (File): The image file to upload
 
 **Returns:**
-- Promise<string>: Public URL of the uploaded image
-
-**Throws:**
-- Error: If file is invalid, upload fails, or URL generation fails
+- Promise<string>: Secure URL of the uploaded image
 
 **Example:**
 ```typescript
@@ -230,27 +137,5 @@ import { uploadProductImage } from '@/lib/upload';
 
 const file = event.target.files[0];
 const url = await uploadProductImage(file);
-console.log('Uploaded to:', url);
+console.log('Uploaded to Cloudinary:', url);
 ```
-
-## Testing Checklist
-
-- [ ] Upload valid image (JPEG, PNG, WebP)
-- [ ] Verify preview appears
-- [ ] Check file info displays correctly
-- [ ] Remove image and re-select
-- [ ] Submit form with uploaded image
-- [ ] Verify product created with image
-- [ ] Test with oversized file (>5MB)
-- [ ] Test with non-image file
-- [ ] Verify fallback URL input works
-- [ ] Test on mobile device
-- [ ] Test on different browsers
-
-## Support
-
-For issues or questions:
-1. Check the troubleshooting section above
-2. Review browser console for error messages
-3. Verify Supabase configuration
-4. Check RLS policies in Supabase dashboard

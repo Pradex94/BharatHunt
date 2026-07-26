@@ -1,21 +1,7 @@
 "use client";
 
-import { createClient } from "@supabase/supabase-js";
-import type { Database } from "@/types/database";
-
 /**
- * Create a Supabase client for storage operations
- * Uses public anon key for client-side uploads
- */
-function createStorageClient() {
-  return createClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
-}
-
-/**
- * Upload a product image to Supabase Storage
+ * Upload a product image to Cloudinary
  * @param file - The image file to upload
  * @returns The public URL of the uploaded image
  */
@@ -29,38 +15,33 @@ export async function uploadProductImage(file: File): Promise<string> {
     throw new Error("File size must be less than 5MB");
   }
 
-  const supabase = createStorageClient();
-
-  // Generate a unique filename
-  const timestamp = Date.now();
-  const random = Math.random().toString(36).substring(2, 8);
-  const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
-  const filename = `${timestamp}-${random}.${ext}`;
-  const filepath = `product-images/${filename}`;
-
   try {
-    // Upload to Supabase Storage
-    const { data, error } = await supabase.storage
-      .from("products")
-      .upload(filepath, file, {
-        cacheControl: "3600",
-        upsert: false,
-      });
+    // Create FormData for multipart upload
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("upload_preset", process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET!);
 
-    if (error) {
-      throw new Error(`Upload failed: ${error.message}`);
+    // Upload to Cloudinary
+    const response = await fetch(
+      `https://api.cloudinary.com/v1_1/${process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME}/image/upload`,
+      {
+        method: "POST",
+        body: formData,
+      }
+    );
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(`Upload failed: ${error.error?.message || "Unknown error"}`);
     }
 
-    // Get the public URL
-    const { data: publicUrlData } = supabase.storage
-      .from("products")
-      .getPublicUrl(filepath);
+    const data = await response.json();
 
-    if (!publicUrlData?.publicUrl) {
-      throw new Error("Failed to generate public URL");
+    if (!data.secure_url) {
+      throw new Error("Failed to get image URL from Cloudinary");
     }
 
-    return publicUrlData.publicUrl;
+    return data.secure_url;
   } catch (error) {
     console.error("Image upload error:", error);
     throw new Error(
