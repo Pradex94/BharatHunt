@@ -56,14 +56,15 @@ Updated utility module for Cloudinary uploads:
 
 ## Setup Instructions
 
-### 1. Cloudinary Account Setup
+### 1. Cloudinary Account Setup (CRITICAL)
 
 1. Create a free account at [Cloudinary](https://cloudinary.com/)
-2. Go to **Settings** > **Upload**
-3. Add a new **Upload Preset**:
-   - Name it (e.g., `bharathunt_products`)
-   - Set **Signing Mode** to **Unsigned**
-   - (Optional) Set a folder for uploads (e.g., `products`)
+2. Go to **Settings** (gear icon) > **Upload**
+3. Scroll down to **Upload presets** and click **Add upload preset**.
+4. **IMPORTANT**: Change **Signing Mode** from `Signed` to `Unsigned`. 
+   - If you don't do this, you will get the error: *"Upload preset must be whitelisted for unsigned uploads"*.
+5. Copy the **Upload preset name** (it will be a random string or the name you gave it).
+6. Click **Save** at the top right.
 
 ### 2. Configure Environment Variables
 

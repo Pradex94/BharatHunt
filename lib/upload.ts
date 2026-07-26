@@ -32,7 +32,11 @@ export async function uploadProductImage(file: File): Promise<string> {
 
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(`Upload failed: ${error.error?.message || "Unknown error"}`);
+      const message = error.error?.message || "Unknown error";
+      if (message.includes("Upload preset must be whitelisted")) {
+        throw new Error("Cloudinary Error: Your upload preset must be set to 'Unsigned' in Cloudinary settings.");
+      }
+      throw new Error(`Upload failed: ${message}`);
     }
 
     const data = await response.json();
