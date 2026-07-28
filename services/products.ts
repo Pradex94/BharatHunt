@@ -157,6 +157,33 @@ export async function getProductsByCategory(
   return (data ?? []) as ProductCardProduct[];
 }
 
+/**
+ * Real, honest platform totals for the /advertise page — never fabricated.
+ * Derived entirely from published products (publicly readable), so no reliance
+ * on `profiles`/`upvotes` RLS: makers = distinct creators, upvotes = summed
+ * denormalized counts.
+ */
+export async function getPlatformStats(): Promise<{
+  products: number;
+  makers: number;
+  upvotes: number;
+}> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("products")
+    .select("creator_id, upvote_count")
+    .eq("status", "published");
+
+  if (error) {
+    return { products: 0, makers: 0, upvotes: 0 };
+  }
+
+  const rows = data ?? [];
+  const makers = new Set(rows.map((row) => row.creator_id)).size;
+  const upvotes = rows.reduce((sum, row) => sum + (row.upvote_count ?? 0), 0);
+  return { products: rows.length, makers, upvotes };
+}
+
 /** Total published-product count per category, for the marketplace sidebar. */
 export async function getCategoryCounts(): Promise<Record<string, number>> {
   const supabase = createClient();

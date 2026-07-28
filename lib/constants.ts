@@ -21,9 +21,9 @@ export const NAV_LINKS: NavLink[] = [
   { label: "Home", href: "/" },
   { label: "Products", href: "/marketplace" },
   { label: "Launches", href: "/marketplace?sort=newest" },
-  { label: "Collections", href: "/collections" },
   { label: "People", href: "/categories" },
   { label: "Resources", href: "/blog" },
+  { label: "Advertise", href: "/advertise" },
 ];
 
 /**

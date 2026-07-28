@@ -29,6 +29,7 @@ type ParsedProductForm = {
   websiteUrl: string | null;
   githubUrl: string | null;
   heroImageUrl: string | null;
+  screenshotUrls: string[];
   tags: string[];
 };
 
@@ -41,6 +42,12 @@ function parseProductForm(formData: FormData): { error: string } | { fields: Par
   const websiteUrl = String(formData.get("websiteUrl") ?? "").trim();
   const githubUrl = String(formData.get("githubUrl") ?? "").trim();
   const heroImageUrl = String(formData.get("heroImageUrl") ?? "").trim();
+  const screenshotUrls = formData
+    .getAll("screenshotUrls")
+    .map((value) => String(value).trim())
+    .filter((value) => /^https?:\/\//i.test(value))
+    .filter((value, index, all) => all.indexOf(value) === index)
+    .slice(0, 8);
   const tagsRaw = String(formData.get("tags") ?? "");
 
   if (!name || name.length > 60) {
@@ -72,6 +79,7 @@ function parseProductForm(formData: FormData): { error: string } | { fields: Par
       websiteUrl: websiteUrl || null,
       githubUrl: githubUrl || null,
       heroImageUrl: heroImageUrl || null,
+      screenshotUrls,
       tags,
     },
   };
@@ -93,8 +101,18 @@ export async function createProduct(
   if ("error" in parsed) {
     return parsed;
   }
-  const { name, tagline, description, category, pricingType, websiteUrl, githubUrl, heroImageUrl, tags } =
-    parsed.fields;
+  const {
+    name,
+    tagline,
+    description,
+    category,
+    pricingType,
+    websiteUrl,
+    githubUrl,
+    heroImageUrl,
+    screenshotUrls,
+    tags,
+  } = parsed.fields;
 
   // Make sure the creator has a profile row before inserting — products.creator_id
   // has a FK to profiles.id, and the Clerk webhook may not have run for this user.
@@ -134,6 +152,7 @@ export async function createProduct(
       website_url: websiteUrl,
       github_url: githubUrl,
       hero_image_url: heroImageUrl,
+      screenshot_urls: screenshotUrls,
       tags,
       status: "published",
       published_at: new Date().toISOString(),
@@ -166,8 +185,18 @@ export async function updateProduct(
   if ("error" in parsed) {
     return parsed;
   }
-  const { name, tagline, description, category, pricingType, websiteUrl, githubUrl, heroImageUrl, tags } =
-    parsed.fields;
+  const {
+    name,
+    tagline,
+    description,
+    category,
+    pricingType,
+    websiteUrl,
+    githubUrl,
+    heroImageUrl,
+    screenshotUrls,
+    tags,
+  } = parsed.fields;
 
   const { error } = await supabase
     .from("products")
@@ -180,6 +209,7 @@ export async function updateProduct(
       website_url: websiteUrl,
       github_url: githubUrl,
       hero_image_url: heroImageUrl,
+      screenshot_urls: screenshotUrls,
       tags,
     })
     .eq("id", productId)

@@ -1,34 +1,74 @@
 import Link from "next/link";
-import { ChevronUp, Eye, LayoutGrid, MessageSquare, Star, Trophy } from "lucide-react";
+import { ArrowRight, ChevronUp, Eye, MessageSquare, Star } from "lucide-react";
 
-import { cn } from "@/lib/utils";
 import { buttonVariants } from "@/components/ui/button";
 import { Display, Numeric } from "@/components/ui/typography";
 import { FadeIn } from "@/components/ui/motion";
-import { TOP_PRODUCTS, AVATARS } from "@/components/landing/data";
+import { AVATARS } from "@/components/landing/data";
+
+const HERO_STATS = [
+  { icon: ChevronUp, value: "2,450", label: "Upvotes" },
+  { icon: MessageSquare, value: "180", label: "Comments" },
+  { icon: Eye, value: "15k", label: "Views" },
+] as const;
+
+const HERO_TAGS = ["#productivity", "#taskmanagement", "#ai-powered", "#saas", "#workflow"];
 
 export function Hero() {
   return (
-    <section className="relative overflow-hidden bg-background">
-      {/* Disciplined warm glows */}
-      <div aria-hidden className="pointer-events-none absolute inset-0">
-        <div className="absolute -top-24 right-0 size-[520px] rounded-full bg-[radial-gradient(circle,rgba(255,90,31,0.10),transparent_62%)]" />
-        <div className="absolute top-40 -left-32 size-[420px] rounded-full bg-[radial-gradient(circle,rgba(255,90,31,0.06),transparent_62%)]" />
+    <section className="relative isolate overflow-hidden">
+      {/* ── Backdrop: cool light gradient that resolves to the page's white so
+          the sections below blend seamlessly. ── */}
+      <div
+        aria-hidden
+        className="absolute inset-0 -z-20 bg-[linear-gradient(180deg,#e9edf3_0%,#f2f5f9_42%,#ffffff_100%)]"
+      />
+      <div
+        aria-hidden
+        className="absolute inset-0 -z-20 bg-[radial-gradient(120%_75%_at_50%_28%,rgba(255,255,255,0.9),transparent_60%)]"
+      />
+
+      {/* ── Orbital light ring sweeping around the card ── */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute top-[54%] left-1/2 -z-10 h-[560px] w-[1080px] -translate-x-1/2 -translate-y-1/2 rotate-[-14deg] sm:h-[640px] sm:w-[1240px]"
+      >
+        <div className="absolute inset-0 rounded-[50%] border-2 border-primary/20 blur-[1px] [box-shadow:0_0_70px_12px_rgba(255,138,61,0.16),inset_0_0_70px_12px_rgba(255,138,61,0.08)]" />
+        <div className="absolute top-[12%] right-[7%] size-44 rounded-full bg-[radial-gradient(circle,rgba(255,138,61,0.55),transparent_60%)] blur-2xl" />
+        <div className="absolute bottom-[8%] left-[9%] size-40 rounded-full bg-[radial-gradient(circle,rgba(255,138,61,0.4),transparent_60%)] blur-2xl" />
       </div>
 
-      <div className="relative mx-auto grid w-full max-w-[1400px] items-center gap-14 px-4 py-16 sm:px-6 md:py-24 lg:grid-cols-[1fr_1.05fr] lg:px-8">
-        {/* LEFT — editorial copy */}
-        <FadeIn className="flex flex-col items-start gap-7">
+      {/* Warm glow directly behind the card */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute top-[58%] left-1/2 -z-10 size-[540px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[radial-gradient(circle,rgba(255,138,61,0.26),transparent_65%)] blur-2xl"
+      />
+
+      {/* ── Floating decorative shapes (orange + neutral only) ── */}
+      <div aria-hidden className="pointer-events-none absolute inset-0 -z-10 hidden lg:block">
+        <div className="animate-bh-float absolute top-[24%] left-[9%] size-24 rounded-[38%] border border-white/70 bg-white/60 shadow-soft backdrop-blur-sm" />
+        <div className="animate-bh-float absolute top-[20%] right-[11%] size-16 rounded-full bg-gradient-to-br from-[#ff8a3d] to-[#ff6b1a] shadow-lg shadow-primary/40 [animation-delay:-2s]" />
+        <div className="absolute top-[31%] right-[9%] h-7 w-16 rounded-full border border-white/70 bg-white/70 shadow-sm backdrop-blur-sm" />
+        <div className="animate-bh-float absolute top-[56%] left-[13%] size-10 rotate-45 rounded-lg bg-gradient-to-br from-[#ffb184] to-[#ff8a3d] shadow-md shadow-primary/30 [animation-delay:-4s]" />
+        <div className="absolute top-[42%] left-[7%] h-px w-16 rotate-45 bg-gradient-to-r from-primary/60 to-transparent" />
+        <div className="absolute right-[16%] bottom-[20%] size-3 rounded-full bg-primary" />
+        <Star className="absolute right-[21%] bottom-[24%] size-6 fill-white/80 text-white/80" />
+      </div>
+
+      {/* ── Content ── */}
+      <div className="relative mx-auto flex w-full max-w-[1100px] flex-col items-center gap-8 px-4 py-20 text-center sm:px-6 md:py-28 lg:py-32">
+        <FadeIn className="flex flex-col items-center gap-7">
           <span className="flex items-center gap-3 text-xs font-semibold tracking-[0.22em] text-primary uppercase">
             <span className="h-px w-8 bg-primary" />
             Made in India · Loved worldwide
+            <span className="h-px w-8 bg-primary" />
           </span>
 
-          <Display className="max-w-[14ch] md:text-7xl">
+          <Display className="max-w-[15ch] md:text-7xl lg:text-[80px]">
             Discover India&rsquo;s next <span className="text-primary">big</span> thing.
           </Display>
 
-          <p className="max-w-md text-lg leading-relaxed text-body">
+          <p className="max-w-xl text-lg leading-relaxed text-body">
             Bharat Hunt is where makers launch their products and the community
             discovers, supports and helps them grow.
           </p>
@@ -45,7 +85,7 @@ export function Hero() {
             </Link>
           </div>
 
-          <div className="flex items-center gap-4 pt-2">
+          <div className="flex items-center gap-4 pt-1">
             <div className="flex -space-x-2.5">
               {AVATARS.map((src) => (
                 // eslint-disable-next-line @next/next/no-img-element
@@ -53,11 +93,11 @@ export function Hero() {
                   key={src}
                   src={src}
                   alt=""
-                  className="size-8 rounded-full border-2 border-background object-cover"
+                  className="size-8 rounded-full border-2 border-white object-cover"
                 />
               ))}
             </div>
-            <div className="flex flex-col gap-0.5">
+            <div className="flex flex-col items-start gap-0.5">
               <div className="flex items-center gap-0.5 text-primary">
                 {Array.from({ length: 5 }).map((_, i) => (
                   <Star key={i} className="size-3.5 fill-current" />
@@ -68,96 +108,63 @@ export function Hero() {
           </div>
         </FadeIn>
 
-        {/* RIGHT — layered floating cards. A flex row with a fixed negative-margin
-            overlap keeps the leaderboard content clear of the white card at every
-            width (the earlier absolute version clipped the title around 1280px). */}
-        <FadeIn delay={0.1} className="flex justify-center xl:justify-end">
-          {/* Product card — front */}
-          <div className="relative z-10 w-full max-w-[380px] shrink-0 rounded-2xl border border-border bg-card p-6 shadow-soft">
-            <div className="mb-5 flex items-start justify-between">
-              <span
-                className={cn(
-                  "flex size-12 items-center justify-center rounded-xl text-white",
-                  "bg-ink",
-                )}
-              >
-                <LayoutGrid className="size-6" />
-              </span>
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
-                <Trophy className="size-3.5" />
-                #1 Product of the Day
-              </span>
-            </div>
+        {/* ── The showpiece: a large glassmorphic product card ── */}
+        <FadeIn delay={0.15} className="w-full max-w-2xl">
+          <div className="animate-bh-float relative">
+            {/* stacked panel behind, for depth */}
+            <div
+              aria-hidden
+              className="absolute -inset-x-6 top-6 -bottom-6 -z-10 rounded-[2.25rem] border border-white/50 bg-white/25 backdrop-blur-md"
+            />
 
-            <h3 className="font-sans text-2xl font-bold tracking-tight text-ink">ZenTask</h3>
-            <p className="mt-1 text-sm text-body">Task management, reimagined for modern teams.</p>
-
-            <div className="mt-4 flex flex-wrap gap-2">
-              {["SaaS", "Productivity", "Developer Tools"].map((tag) => (
-                <span
-                  key={tag}
-                  className="rounded-full border border-border px-3 py-1 text-xs font-medium text-body"
-                >
-                  {tag}
+            <div className="rounded-[2rem] border border-white/70 bg-white/60 p-8 shadow-[0_40px_100px_-24px_rgba(23,20,15,0.3)] backdrop-blur-2xl sm:p-10">
+              {/* header */}
+              <div className="flex items-center justify-center gap-4">
+                <span className="flex size-16 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[#ff6b1a] to-[#ff8a3d] text-3xl font-bold text-white shadow-lg shadow-primary/40">
+                  Z
                 </span>
-              ))}
-            </div>
+                <span className="text-4xl font-bold tracking-tight text-ink sm:text-5xl">
+                  ZenTask
+                </span>
+              </div>
 
-            <div className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm text-muted">
-              <span className="flex items-center gap-1 whitespace-nowrap">
-                <ChevronUp className="size-4 shrink-0 text-primary" />
-                <Numeric className="font-bold text-ink">523</Numeric> Upvotes
-              </span>
-              <span className="flex items-center gap-1 whitespace-nowrap">
-                <MessageSquare className="size-4 shrink-0" />
-                <Numeric className="font-bold text-ink">86</Numeric> Comments
-              </span>
-              <span className="flex items-center gap-1 whitespace-nowrap">
-                <Eye className="size-4 shrink-0" />
-                <Numeric className="font-bold text-ink">9.4K</Numeric> Views
-              </span>
-            </div>
+              <p className="mt-4 text-center text-lg text-body sm:text-xl">
+                Streamline your productivity, naturally.
+              </p>
 
-            <div className="mt-5 flex items-center gap-3">
+              {/* stat tiles */}
+              <div className="mt-8 grid grid-cols-3 gap-3 sm:gap-4">
+                {HERO_STATS.map(({ icon: Icon, value, label }) => (
+                  <div
+                    key={label}
+                    className="rounded-2xl border border-white/70 bg-white/55 p-4 text-center backdrop-blur-sm"
+                  >
+                    <div className="flex items-center justify-center gap-1 text-ink">
+                      <Icon className="size-5 shrink-0 text-primary" />
+                      <Numeric className="text-2xl font-bold sm:text-3xl">{value}</Numeric>
+                    </div>
+                    <p className="mt-1 text-sm text-muted">{label}</p>
+                  </div>
+                ))}
+              </div>
+
+              {/* tags */}
+              <div className="mt-6 flex flex-wrap justify-center gap-x-3 gap-y-1.5 text-sm font-medium">
+                {HERO_TAGS.map((tag) => (
+                  <span key={tag} className="text-body">
+                    {tag}
+                  </span>
+                ))}
+              </div>
+
+              {/* CTA */}
               <Link
                 href="/marketplace"
-                className="flex h-11 flex-1 items-center justify-center rounded-md bg-ink text-sm font-semibold text-white transition-colors hover:bg-ink/90"
+                className="btn-gradient mt-8 flex h-14 w-full items-center justify-center gap-2 rounded-2xl text-base font-semibold"
               >
-                View Product
+                Visit ZenTask <ArrowRight className="size-5" />
               </Link>
-              <button
-                type="button"
-                aria-label="Upvote"
-                className="flex size-11 items-center justify-center rounded-md border border-border text-ink transition-colors hover:border-primary/50 hover:text-primary"
-              >
-                <ChevronUp className="size-5" />
-              </button>
             </div>
-          </div>
-
-          {/* Leaderboard — behind-right (xl only). The -ml overlap tucks its left
-              gutter under the white card; pl-14 keeps the title/rows fully clear. */}
-          <div className="relative z-0 -ml-10 mt-8 hidden w-[300px] shrink-0 rounded-2xl border border-white/10 bg-surface-dark py-5 pr-5 pl-14 xl:block">
-            <div className="mb-4 flex items-center justify-between gap-2">
-              <span className="text-sm font-semibold whitespace-nowrap text-white">
-                Top Products Today
-              </span>
-              <span className="text-xs font-semibold whitespace-nowrap text-primary">
-                View all →
-              </span>
-            </div>
-            <ul className="flex flex-col gap-3.5">
-              {TOP_PRODUCTS.map((p) => (
-                <li key={p.name} className="flex items-center gap-3">
-                  <Numeric className="w-3 text-xs font-semibold text-white/40">{p.rank}</Numeric>
-                  <span className="flex-1 truncate text-sm font-medium text-white">{p.name}</span>
-                  <span className="flex items-center gap-1 text-xs font-bold text-primary">
-                    <ChevronUp className="size-3" />
-                    <Numeric>{p.upvotes}</Numeric>
-                  </span>
-                </li>
-              ))}
-            </ul>
           </div>
         </FadeIn>
       </div>

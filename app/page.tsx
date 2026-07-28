@@ -6,7 +6,6 @@
 import { Hero } from "@/components/landing/hero";
 import { FeatureSection } from "@/components/landing/feature-section";
 import { TopProducts } from "@/components/landing/top-products";
-import { CollectionsSection } from "@/components/landing/collections-section";
 import { CommunitySection } from "@/components/landing/community-section";
 import { Newsletter } from "@/components/landing/newsletter";
 
@@ -16,7 +15,6 @@ export default function Home() {
       <Hero />
       <FeatureSection />
       <TopProducts />
-      <CollectionsSection />
       <CommunitySection />
       <Newsletter />
     </>

@@ -14,6 +14,36 @@ export type Database = {
   }
   public: {
     Tables: {
+      ad_inquiries: {
+        Row: {
+          company: string | null
+          created_at: string
+          email: string
+          id: string
+          message: string | null
+          name: string
+          package: string | null
+        }
+        Insert: {
+          company?: string | null
+          created_at?: string
+          email: string
+          id?: string
+          message?: string | null
+          name: string
+          package?: string | null
+        }
+        Update: {
+          company?: string | null
+          created_at?: string
+          email?: string
+          id?: string
+          message?: string | null
+          name?: string
+          package?: string | null
+        }
+        Relationships: []
+      }
       bookmarks: {
         Row: {
           created_at: string | null

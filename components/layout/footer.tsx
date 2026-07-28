@@ -53,7 +53,6 @@ const FOOTER_COLUMNS = [
     links: [
       { label: "All Products", href: "/marketplace" },
       { label: "Top Launches", href: "/marketplace?sort=newest" },
-      { label: "Collections", href: "/collections" },
       { label: "Leaderboard", href: "/marketplace?sort=top-rated" },
     ],
   },
@@ -70,8 +69,10 @@ const FOOTER_COLUMNS = [
     title: "Company",
     links: [
       { label: "About Us", href: "/blog/why-cream-not-white" },
+      { label: "Advertise", href: "/advertise" },
       { label: "Contact", href: "mailto:hello@bharathunt.com" },
       { label: "Privacy Policy", href: "/privacy" },
+      { label: "Cookies", href: "/cookies" },
       { label: "Terms", href: "/terms" },
     ],
   },

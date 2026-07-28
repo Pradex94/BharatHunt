@@ -69,7 +69,11 @@ export default async function MarketplacePage({
       <div className="flex flex-col gap-5">
         <h1 className="text-3xl sm:text-4xl">The marketplace</h1>
 
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        {/* Sticky just under the sticky navbar (h-16 = 64px, z-40) so the
+            search + sort controls stay reachable while the list scrolls.
+            Opaque bg + padding lets product cards scroll cleanly underneath;
+            the hairline marks the toolbar edge once it detaches. */}
+        <div className="sticky top-16 z-30 flex flex-col gap-3 border-b border-border bg-background py-3 sm:flex-row sm:items-center">
           <SearchInput />
           <div className="flex items-center gap-2">
             <SortPills />

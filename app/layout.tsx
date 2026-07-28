@@ -4,6 +4,8 @@ import { ClerkProvider } from "@clerk/nextjs";
 import { MotionConfig } from "framer-motion";
 import { Navbar } from "@/components/layout/navbar";
 import { Footer } from "@/components/layout/footer";
+import { CookieConsent } from "@/components/layout/cookie-consent";
+import { ChatWidget } from "@/components/chat/chat-widget";
 import "./globals.css";
 
 // Inter is the whole voice here — bold headlines, regular body, medium labels.
@@ -64,6 +66,8 @@ export default function RootLayout({
             <Navbar />
             <main className="flex flex-1 flex-col">{children}</main>
             <Footer />
+            <CookieConsent />
+            <ChatWidget />
           </MotionConfig>
         </body>
       </html>

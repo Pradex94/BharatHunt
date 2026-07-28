@@ -3,6 +3,7 @@
  */
 
 import Link from "next/link";
+import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { ExternalLink } from "lucide-react";
 import { auth } from "@clerk/nextjs/server";
@@ -11,6 +12,8 @@ import { UpvoteButton } from "@/components/products/upvote-button";
 import { CommentForm } from "@/components/products/comment-form";
 import { CommentItem, type CommentItemData } from "@/components/products/comment-item";
 import { DeleteProductButton } from "@/components/products/delete-product-button";
+import { ProductGallery } from "@/components/products/product-gallery";
+import { ProductReach } from "@/components/products/product-reach";
 import { H1, H2, Numeric } from "@/components/ui/typography";
 import { FadeIn } from "@/components/ui/motion";
 import { buttonVariants } from "@/components/ui/button";
@@ -71,6 +74,14 @@ export default async function ProductPage({
   ]);
 
   await supabase.rpc("increment_view_count", { target_product_id: product.id });
+
+  // Absolute URL for share links + the embeddable badge.
+  const requestHeaders = await headers();
+  const host = requestHeaders.get("host") ?? "bharat-hunt.vercel.app";
+  const proto =
+    requestHeaders.get("x-forwarded-proto") ??
+    (host.startsWith("localhost") || host.startsWith("127.") ? "http" : "https");
+  const productUrl = `${proto}://${host}/products/${product.slug}`;
 
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-8 px-4 py-12 md:py-16">
@@ -149,6 +160,8 @@ export default async function ProductPage({
           )}
         </div>
 
+        <ProductGallery images={(product.screenshot_urls as string[] | null) ?? []} />
+
         {product.description && (
           <p className="max-w-[65ch] text-base leading-[1.65] whitespace-pre-wrap text-body">
             {product.description}
@@ -167,21 +180,13 @@ export default async function ProductPage({
             ))}
           </div>
         )}
-
-        {product.screenshot_urls && product.screenshot_urls.length > 0 && (
-          <div className="grid grid-cols-2 gap-3">
-            {product.screenshot_urls.map((url) => (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                key={url}
-                src={url}
-                alt=""
-                className="aspect-video w-full rounded-lg border border-border object-cover"
-              />
-            ))}
-          </div>
-        )}
       </FadeIn>
+
+      <ProductReach
+        productUrl={productUrl}
+        name={product.name}
+        isOwner={userId === product.creator_id}
+      />
 
       <div className="flex flex-col gap-4 border-t border-border pt-8">
         <H2 className="text-2xl sm:text-2xl">

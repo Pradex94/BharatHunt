@@ -8,11 +8,6 @@ import {
   FileText,
   Package,
   Type,
-  Cloud,
-  Sparkles,
-  Code2,
-  IndianRupee,
-  Palette,
   type LucideIcon,
 } from "lucide-react";
 
@@ -124,21 +119,6 @@ export const FEATURES: Feature[] = [
     icon: Zap,
     tone: "amber",
   },
-];
-
-export type Collection = {
-  name: string;
-  count: string;
-  icon: LucideIcon;
-  tone: IconTone;
-};
-
-export const COLLECTIONS: Collection[] = [
-  { name: "SaaS", count: "1.2K products", icon: Cloud, tone: "violet" },
-  { name: "AI Tools", count: "842 products", icon: Sparkles, tone: "orange" },
-  { name: "Developer Tools", count: "1.1K products", icon: Code2, tone: "dark" },
-  { name: "Fintech", count: "623 products", icon: IndianRupee, tone: "amber" },
-  { name: "Design Tools", count: "487 products", icon: Palette, tone: "rose" },
 ];
 
 export type Stat = { value: string; label: string };
