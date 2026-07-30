@@ -4,6 +4,7 @@ import { ArrowRight, ChevronUp, Eye, MessageSquare, Star } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { Display, Numeric } from "@/components/ui/typography";
 import { FadeIn } from "@/components/ui/motion";
+import { IndiaFlag } from "@/components/ui/india-flag";
 import { AVATARS } from "@/components/landing/data";
 
 const HERO_STATS = [
@@ -60,6 +61,7 @@ export function Hero() {
         <FadeIn className="flex flex-col items-center gap-7">
           <span className="flex items-center gap-3 text-xs font-semibold tracking-[0.22em] text-primary uppercase">
             <span className="h-px w-8 bg-primary" />
+            <IndiaFlag className="h-3.5 w-auto shrink-0 rounded-[3px] shadow-sm" />
             Made in India · Loved worldwide
             <span className="h-px w-8 bg-primary" />
           </span>

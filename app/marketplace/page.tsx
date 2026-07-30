@@ -20,6 +20,13 @@ import {
 } from "@/services/products";
 import { PRODUCT_CATEGORIES, PRODUCT_SORTS, type ProductSort } from "@/lib/constants";
 
+export const metadata = {
+  title: "Marketplace",
+  description:
+    "Browse and discover the latest software, tools, and lifetime deals launched by founders on Bharat Hunt. Filter by category, pricing, and popularity.",
+  alternates: { canonical: "/marketplace" },
+};
+
 type MarketplaceSearchParams = Promise<{
   category?: string;
   sort?: string;

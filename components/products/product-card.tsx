@@ -1,7 +1,9 @@
 import Link from "next/link";
-import { Star } from "lucide-react";
+import { Code2, Globe, MessageSquare } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { absoluteUrl } from "@/lib/seo";
 import { UpvoteButton } from "@/components/products/upvote-button";
+import { ShareMenu } from "@/components/products/share-menu";
 import { Numeric } from "@/components/ui/typography";
 import { cardInteractiveClassName } from "@/components/ui/card";
 
@@ -29,6 +31,9 @@ export type ProductCardProduct = {
   upvote_count: number | null;
   comment_count: number | null;
   hero_image_url: string | null;
+  tags: string[] | null;
+  website_url: string | null;
+  github_url: string | null;
   creator: { display_name: string; username: string } | null;
 };
 
@@ -43,71 +48,123 @@ export function ProductCard({
   isLoggedIn: boolean;
   headingLevel?: "h2" | "h3";
 }) {
+  const productPath = `/products/${product.slug}`;
+  const platforms = [
+    product.website_url ? { key: "web", label: "Web", Icon: Globe } : null,
+    product.github_url ? { key: "code", label: "Code", Icon: Code2 } : null,
+  ].filter((p): p is { key: string; label: string; Icon: typeof Globe } => p !== null);
+  const tags = (product.tags ?? []).filter(Boolean).slice(0, 3);
+  const makerInitial = product.creator?.display_name?.slice(0, 1).toUpperCase() ?? "?";
+
   return (
     <article
       className={cn(
-        "group flex gap-4 rounded-lg border border-border bg-card p-5",
+        "group flex gap-4 rounded-xl border border-border bg-card p-4 sm:p-5",
         cardInteractiveClassName,
       )}
     >
-      <div className="flex size-14 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-surface-cream-strong text-lg font-semibold text-muted">
-        {product.hero_image_url ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={product.hero_image_url}
-            alt=""
-            className="size-full object-cover"
-          />
-        ) : (
-          product.name.slice(0, 1).toUpperCase()
-        )}
-      </div>
-
-      <div className="flex min-w-0 flex-1 flex-col gap-1">
-        <div className="flex items-start justify-between gap-2">
-          <HeadingTag className="truncate font-sans text-base font-semibold tracking-normal text-ink">
-            <Link
-              href={`/products/${product.slug}`}
-              className="transition-colors duration-200 group-hover:text-primary"
-            >
-              {product.name}
-            </Link>
-          </HeadingTag>
-          <span
-            className={cn(
-              "shrink-0 rounded-full px-2 py-0.5 text-xs font-medium",
-              PRICING_BADGE[product.pricing_type] ?? "bg-muted text-muted",
-            )}
-          >
-            {PRICING_LABEL[product.pricing_type] ?? product.pricing_type}
-          </span>
-        </div>
-        <p className="truncate text-sm text-body">{product.tagline}</p>
-        <div className="mt-2 flex flex-wrap items-center gap-x-3.5 gap-y-1 text-xs text-muted">
-          <span className="rounded-full bg-secondary-bg px-2 py-0.5 font-medium whitespace-nowrap">
-            {product.category}
-          </span>
-          {product.creator && <span className="whitespace-nowrap">by {product.creator.display_name}</span>}
-          {typeof product.avg_rating === "number" && (
-            <span className="flex items-center gap-1 whitespace-nowrap">
-              <Star className="size-3.5 fill-accent-amber text-accent-amber" />
-              <Numeric>{product.avg_rating.toFixed(1)}</Numeric>
-            </span>
-          )}
-          <span className="whitespace-nowrap">
-            <Numeric>{product.comment_count ?? 0}</Numeric> comments
-          </span>
-        </div>
-      </div>
-
+      {/* Upvote pillar (left) */}
       <UpvoteButton
         productId={product.id}
         initialCount={product.upvote_count ?? 0}
         initialUpvoted={isUpvoted}
         isLoggedIn={isLoggedIn}
         variant="boxed"
-        className="self-center"
+        className="self-start"
       />
+
+      {/* Logo */}
+      <Link
+        href={productPath}
+        className="flex size-14 shrink-0 items-center justify-center self-start overflow-hidden rounded-xl bg-surface-cream-strong text-lg font-semibold text-muted"
+      >
+        {product.hero_image_url ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={product.hero_image_url}
+            alt=""
+            loading="lazy"
+            className="size-full object-cover"
+          />
+        ) : (
+          product.name.slice(0, 1).toUpperCase()
+        )}
+      </Link>
+
+      {/* Content stack */}
+      <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+            <HeadingTag className="min-w-0 font-sans text-base font-semibold tracking-normal text-ink">
+              <Link
+                href={productPath}
+                className="truncate transition-colors duration-200 group-hover:text-primary"
+              >
+                {product.name}
+              </Link>
+            </HeadingTag>
+            <span className="shrink-0 rounded-full bg-secondary-bg px-2 py-0.5 text-xs font-medium whitespace-nowrap text-muted">
+              {product.category}
+            </span>
+            <span
+              className={cn(
+                "shrink-0 rounded-full px-2 py-0.5 text-xs font-medium whitespace-nowrap",
+                PRICING_BADGE[product.pricing_type] ?? "bg-muted text-muted",
+              )}
+            >
+              {PRICING_LABEL[product.pricing_type] ?? product.pricing_type}
+            </span>
+          </div>
+        </div>
+
+        <p className="line-clamp-1 text-sm text-body">{product.tagline}</p>
+
+        {/* Platforms + tech pills */}
+        {(platforms.length > 0 || tags.length > 0) && (
+          <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs">
+            {platforms.map(({ key, label, Icon }) => (
+              <span
+                key={key}
+                className="inline-flex items-center gap-1 rounded-md border border-border px-1.5 py-0.5 text-[11px] font-medium text-muted"
+              >
+                <Icon className="size-3" aria-hidden="true" />
+                {label}
+              </span>
+            ))}
+            {tags.map((tag) => (
+              <span key={tag} className="rounded-md bg-secondary-bg px-1.5 py-0.5 text-[11px] text-muted">
+                {tag}
+              </span>
+            ))}
+          </div>
+        )}
+
+        {/* Footer: maker · comments · share */}
+        <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-muted">
+          {product.creator && (
+            <span className="flex items-center gap-1.5 whitespace-nowrap">
+              <span className="flex size-5 items-center justify-center rounded-full bg-primary/10 text-[10px] font-semibold text-primary">
+                {makerInitial}
+              </span>
+              {product.creator.display_name}
+            </span>
+          )}
+          <Link
+            href={`${productPath}#comments`}
+            className="flex items-center gap-1 whitespace-nowrap transition-colors duration-150 hover:text-primary"
+          >
+            <MessageSquare className="size-3.5" aria-hidden="true" />
+            <Numeric>{product.comment_count ?? 0}</Numeric> comments
+          </Link>
+          <div className="ml-auto">
+            <ShareMenu
+              url={absoluteUrl(productPath)}
+              name={product.name}
+              tagline={product.tagline}
+            />
+          </div>
+        </div>
+      </div>
     </article>
   );
 }

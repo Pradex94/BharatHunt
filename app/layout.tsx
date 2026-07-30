@@ -6,6 +6,9 @@ import { Navbar } from "@/components/layout/navbar";
 import { Footer } from "@/components/layout/footer";
 import { CookieConsent } from "@/components/layout/cookie-consent";
 import { ChatWidget } from "@/components/chat/chat-widget";
+import { JsonLd } from "@/components/seo/json-ld";
+import { organizationSchema, websiteSchema } from "@/lib/seo";
+import { SITE_NAME, SITE_URL } from "@/lib/constants";
 import "./globals.css";
 
 // Inter is the whole voice here — bold headlines, regular body, medium labels.
@@ -24,24 +27,35 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
+  // Absolute-URL base for canonical links, OG/Twitter images, and JSON-LD.
+  metadataBase: new URL(SITE_URL),
   title: {
     default: "Bharat Hunt — Discover premium software before everyone else",
-    template: "%s · Bharat Hunt",
+    template: `%s · ${SITE_NAME}`,
   },
   description:
     "A curated marketplace of lifetime deals and premium tools, built by founders for founders. Discover, upvote, and launch the products worth your attention.",
-  keywords: ["marketplace", "software deals", "lifetime deals", "product launch", "founders", "India"],
-  // Brand icon → favicon + Apple touch icon (served from public/brand-icon.png).
-  icons: {
-    icon: "/brand-icon.png",
-    shortcut: "/brand-icon.png",
-    apple: "/brand-icon.png",
+  keywords: [
+    "marketplace",
+    "software deals",
+    "lifetime deals",
+    "product launch",
+    "dofollow backlink",
+    "founders",
+    "India",
+  ],
+  alternates: {
+    canonical: "/",
   },
+  // Favicon + Apple touch icon come from app/icon.tsx and app/apple-icon.tsx
+  // (generated), and the default share card from app/opengraph-image.tsx.
   openGraph: {
     title: "Bharat Hunt — Discover premium software before everyone else",
     description:
       "A curated marketplace of lifetime deals and premium tools, built by founders for founders.",
-    siteName: "Bharat Hunt",
+    siteName: SITE_NAME,
+    url: SITE_URL,
+    locale: "en_IN",
     type: "website",
   },
   twitter: {
@@ -62,6 +76,7 @@ export default function RootLayout({
     <ClerkProvider>
       <html lang="en" className={`${fontVariables} antialiased`}>
         <body className="flex min-h-dvh flex-col">
+          <JsonLd data={[organizationSchema(), websiteSchema()]} />
           <MotionConfig reducedMotion="user" transition={{ duration: 0.2, ease: "easeOut" }}>
             <Navbar />
             <main className="flex flex-1 flex-col">{children}</main>

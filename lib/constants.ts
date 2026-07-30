@@ -26,6 +26,36 @@ export const NAV_LINKS: NavLink[] = [
   { label: "Advertise", href: "/advertise" },
 ];
 
+/** A single maker may launch at most this many products. */
+export const MAX_PRODUCTS_PER_USER = 3;
+
+/**
+ * Canonical public origin — the single source of truth for absolute URLs used
+ * by metadata (`metadataBase`), the sitemap, robots.txt, and JSON-LD. Override
+ * per-environment with `NEXT_PUBLIC_SITE_URL` (e.g. a preview or custom domain);
+ * the trailing slash is stripped so callers can safely concatenate paths.
+ */
+export const SITE_URL = (
+  process.env.NEXT_PUBLIC_SITE_URL ?? "https://bharat-hunt.vercel.app"
+).replace(/\/+$/, "");
+
+/** The human-facing site name, reused across metadata and structured data. */
+export const SITE_NAME = "Bharat Hunt";
+
+/**
+ * Platform admins, by email (case-insensitive). Admins bypass the launch limit
+ * and can moderate (edit/delete) any product; server-side checks are the real
+ * gate (`lib/admin.ts`) — the client only uses this to show/hide the Admin link.
+ * Override with a comma-separated `NEXT_PUBLIC_ADMIN_EMAILS` env var (defaults to
+ * the project owner so admin access works with zero config).
+ */
+export const ADMIN_EMAILS = (
+  process.env.NEXT_PUBLIC_ADMIN_EMAILS ?? "bislapardeep007@gmail.com"
+)
+  .split(",")
+  .map((email) => email.trim().toLowerCase())
+  .filter(Boolean);
+
 /**
  * The real taxonomy products are submitted under (see product-form.tsx's
  * category select). This is the only list that matches actual `category`
@@ -46,6 +76,23 @@ export const PRODUCT_CATEGORIES = [
 ] as const;
 
 export type ProductCategory = (typeof PRODUCT_CATEGORIES)[number];
+
+/**
+ * Multi-platform availability matrix (stored in `products.platform_links` jsonb,
+ * keyed by `key`). Website + GitHub keep their own dedicated columns; this covers
+ * the app-store / marketplace links. Shared by the submit form and the product
+ * detail page so both stay in lockstep.
+ */
+export const PRODUCT_PLATFORMS = [
+  { key: "ios", label: "iOS App Store", placeholder: "https://apps.apple.com/app/…" },
+  { key: "android", label: "Google Play", placeholder: "https://play.google.com/store/apps/…" },
+  { key: "chrome", label: "Chrome Web Store", placeholder: "https://chromewebstore.google.com/…" },
+  { key: "figma", label: "Figma Community", placeholder: "https://figma.com/community/…" },
+  { key: "producthunt", label: "Product Hunt", placeholder: "https://producthunt.com/products/…" },
+  { key: "appsumo", label: "AppSumo", placeholder: "https://appsumo.com/products/…" },
+] as const;
+
+export type ProductPlatformKey = (typeof PRODUCT_PLATFORMS)[number]["key"];
 
 export const PRODUCT_SORTS = ["trending", "newest", "price-low", "price-high", "top-rated"] as const;
 export type ProductSort = (typeof PRODUCT_SORTS)[number];

@@ -3,11 +3,28 @@
 import { redirect } from "next/navigation";
 import { auth } from "@clerk/nextjs/server";
 import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
+import { isMissingColumnError } from "@/lib/supabase/errors";
+import { getIsAdmin } from "@/lib/admin";
 import { ensureProfile } from "@/lib/ensure-profile";
+import { getUserProductCount } from "@/services/products";
+import { MAX_PRODUCTS_PER_USER, PRODUCT_PLATFORMS } from "@/lib/constants";
 
 export type ProductFormState = { error?: string } | undefined;
 
 const PRICING_TYPES = ["free", "freemium", "paid"];
+
+/** Trim a form value and keep it only if it's an http(s) URL, else null. */
+function cleanUrl(value: FormDataEntryValue | null): string | null {
+  const raw = String(value ?? "").trim();
+  return /^https?:\/\//i.test(raw) ? raw : null;
+}
+
+/** Trim and cap a free-text field, returning null when empty. */
+function cleanText(value: FormDataEntryValue | null, max: number): string | null {
+  const raw = String(value ?? "").trim();
+  return raw ? raw.slice(0, max) : null;
+}
 
 function slugify(input: string): string {
   return (
@@ -31,6 +48,18 @@ type ParsedProductForm = {
   heroImageUrl: string | null;
   screenshotUrls: string[];
   tags: string[];
+  // Phase 2 launch fields
+  ctaText: string | null;
+  ctaUrl: string | null;
+  platformLinks: Record<string, string>;
+  techStack: string[];
+  couponCode: string | null;
+  offerDescription: string | null;
+  offerExpiresAt: string | null;
+  roadmapUrl: string | null;
+  changelogUrl: string | null;
+  availableForHire: boolean;
+  hirePitch: string | null;
 };
 
 function parseProductForm(formData: FormData): { error: string } | { fields: ParsedProductForm } {
@@ -69,6 +98,27 @@ function parseProductForm(formData: FormData): { error: string } | { fields: Par
     .filter(Boolean)
     .slice(0, 5);
 
+  // Phase 2 launch fields
+  const platformLinks: Record<string, string> = {};
+  for (const platform of PRODUCT_PLATFORMS) {
+    const url = cleanUrl(formData.get(`platform_${platform.key}`));
+    if (url) platformLinks[platform.key] = url;
+  }
+
+  const techStack = String(formData.get("techStack") ?? "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean)
+    .filter((item, index, all) => all.indexOf(item) === index)
+    .slice(0, 12);
+
+  const offerExpiresRaw = String(formData.get("offerExpiresAt") ?? "").trim();
+  let offerExpiresAt: string | null = null;
+  if (offerExpiresRaw) {
+    const parsedDate = new Date(offerExpiresRaw);
+    offerExpiresAt = Number.isNaN(parsedDate.getTime()) ? null : parsedDate.toISOString();
+  }
+
   return {
     fields: {
       name,
@@ -81,6 +131,17 @@ function parseProductForm(formData: FormData): { error: string } | { fields: Par
       heroImageUrl: heroImageUrl || null,
       screenshotUrls,
       tags,
+      ctaText: cleanText(formData.get("ctaText"), 40),
+      ctaUrl: cleanUrl(formData.get("ctaUrl")),
+      platformLinks,
+      techStack,
+      couponCode: cleanText(formData.get("couponCode"), 40),
+      offerDescription: cleanText(formData.get("offerDescription"), 200),
+      offerExpiresAt,
+      roadmapUrl: cleanUrl(formData.get("roadmapUrl")),
+      changelogUrl: cleanUrl(formData.get("changelogUrl")),
+      availableForHire: formData.get("availableForHire") === "on",
+      hirePitch: cleanText(formData.get("hirePitch"), 300),
     },
   };
 }
@@ -97,6 +158,16 @@ export async function createProduct(
 
   const supabase = createClient();
 
+  // Enforce the per-maker launch limit before doing any work — admins are exempt.
+  if (!(await getIsAdmin())) {
+    const existingCount = await getUserProductCount(userId);
+    if (existingCount >= MAX_PRODUCTS_PER_USER) {
+      return {
+        error: `You've reached the ${MAX_PRODUCTS_PER_USER}-product launch limit. Delete an existing product to launch a new one.`,
+      };
+    }
+  }
+
   const parsed = parseProductForm(formData);
   if ("error" in parsed) {
     return parsed;
@@ -112,6 +183,17 @@ export async function createProduct(
     heroImageUrl,
     screenshotUrls,
     tags,
+    ctaText,
+    ctaUrl,
+    platformLinks,
+    techStack,
+    couponCode,
+    offerDescription,
+    offerExpiresAt,
+    roadmapUrl,
+    changelogUrl,
+    availableForHire,
+    hirePitch,
   } = parsed.fields;
 
   // Make sure the creator has a profile row before inserting — products.creator_id
@@ -139,29 +221,55 @@ export async function createProduct(
     slug = `${baseSlug}-${Math.random().toString(36).slice(2, 6)}`;
   }
 
-  const { data: product, error } = await supabase
+  const basePayload = {
+    creator_id: userId,
+    slug,
+    name,
+    tagline,
+    description,
+    category,
+    pricing_type: pricingType,
+    website_url: websiteUrl,
+    github_url: githubUrl,
+    hero_image_url: heroImageUrl,
+    screenshot_urls: screenshotUrls,
+    tags,
+    status: "published",
+    published_at: new Date().toISOString(),
+  };
+  const launchFields = {
+    cta_text: ctaText,
+    cta_url: ctaUrl,
+    platform_links: platformLinks,
+    tech_stack: techStack,
+    coupon_code: couponCode,
+    offer_description: offerDescription,
+    offer_expires_at: offerExpiresAt,
+    roadmap_url: roadmapUrl,
+    changelog_url: changelogUrl,
+    available_for_hire: availableForHire,
+    hire_pitch: hirePitch,
+  };
+
+  let { data: product, error } = await supabase
     .from("products")
-    .insert({
-      creator_id: userId,
-      slug,
-      name,
-      tagline,
-      description,
-      category,
-      pricing_type: pricingType,
-      website_url: websiteUrl,
-      github_url: githubUrl,
-      hero_image_url: heroImageUrl,
-      screenshot_urls: screenshotUrls,
-      tags,
-      status: "published",
-      published_at: new Date().toISOString(),
-    })
+    .insert({ ...basePayload, ...launchFields })
     .select("slug")
     .single();
 
-  if (error) {
-    return { error: error.message };
+  // If the Phase 2 launch columns aren't migrated yet, publish with the base
+  // fields so submitting never hard-fails (run db/product-launch-fields.sql to
+  // persist the launch fields).
+  if (error && isMissingColumnError(error)) {
+    ({ data: product, error } = await supabase
+      .from("products")
+      .insert(basePayload)
+      .select("slug")
+      .single());
+  }
+
+  if (error || !product) {
+    return { error: error?.message ?? "Could not publish your product. Please try again." };
   }
 
   redirect(`/products/${product.slug}`);
@@ -196,24 +304,63 @@ export async function updateProduct(
     heroImageUrl,
     screenshotUrls,
     tags,
+    ctaText,
+    ctaUrl,
+    platformLinks,
+    techStack,
+    couponCode,
+    offerDescription,
+    offerExpiresAt,
+    roadmapUrl,
+    changelogUrl,
+    availableForHire,
+    hirePitch,
   } = parsed.fields;
 
-  const { error } = await supabase
-    .from("products")
-    .update({
-      name,
-      tagline,
-      description,
-      category,
-      pricing_type: pricingType,
-      website_url: websiteUrl,
-      github_url: githubUrl,
-      hero_image_url: heroImageUrl,
-      screenshot_urls: screenshotUrls,
-      tags,
-    })
-    .eq("id", productId)
-    .eq("creator_id", userId);
+  // Admins may edit any product (service-role client bypasses RLS); everyone
+  // else is scoped to their own rows.
+  const isAdmin = await getIsAdmin();
+  const db = isAdmin ? createServiceClient() : supabase;
+
+  const basePayload = {
+    name,
+    tagline,
+    description,
+    category,
+    pricing_type: pricingType,
+    website_url: websiteUrl,
+    github_url: githubUrl,
+    hero_image_url: heroImageUrl,
+    screenshot_urls: screenshotUrls,
+    tags,
+  };
+  const launchFields = {
+    cta_text: ctaText,
+    cta_url: ctaUrl,
+    platform_links: platformLinks,
+    tech_stack: techStack,
+    coupon_code: couponCode,
+    offer_description: offerDescription,
+    offer_expires_at: offerExpiresAt,
+    roadmap_url: roadmapUrl,
+    changelog_url: changelogUrl,
+    available_for_hire: availableForHire,
+    hire_pitch: hirePitch,
+  };
+
+  const runUpdate = async (payload: typeof basePayload | (typeof basePayload & typeof launchFields)) => {
+    let query = db.from("products").update(payload).eq("id", productId);
+    if (!isAdmin) {
+      query = query.eq("creator_id", userId);
+    }
+    return query;
+  };
+
+  let { error } = await runUpdate({ ...basePayload, ...launchFields });
+  // Fall back to base fields if the Phase 2 launch columns aren't migrated yet.
+  if (error && isMissingColumnError(error)) {
+    ({ error } = await runUpdate(basePayload));
+  }
 
   if (error) {
     return { error: error.message };
@@ -231,7 +378,14 @@ export async function deleteProduct(productId: string) {
 
   const supabase = createClient();
 
-  await supabase.from("products").delete().eq("id", productId).eq("creator_id", userId);
+  // Admins may delete any product; everyone else only their own.
+  const isAdmin = await getIsAdmin();
+  const db = isAdmin ? createServiceClient() : supabase;
+  let query = db.from("products").delete().eq("id", productId);
+  if (!isAdmin) {
+    query = query.eq("creator_id", userId);
+  }
+  await query;
 
   redirect("/marketplace");
 }

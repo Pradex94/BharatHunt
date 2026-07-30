@@ -1,7 +1,14 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@clerk/nextjs/server";
+import { PackageCheck } from "lucide-react";
+
 import { ProductForm } from "@/components/products/product-form";
 import { Container } from "@/components/ui/container";
+import { buttonVariants } from "@/components/ui/button";
+import { MAX_PRODUCTS_PER_USER } from "@/lib/constants";
+import { getUserProductCount } from "@/services/products";
+import { getIsAdmin } from "@/lib/admin";
 
 export const metadata = {
   title: "Launch Your Product | Bharat Hunt",
@@ -15,6 +22,9 @@ export default async function SubmitPage() {
     redirect("/login");
   }
 
+  const [count, isAdmin] = await Promise.all([getUserProductCount(userId), getIsAdmin()]);
+  const atLimit = !isAdmin && count >= MAX_PRODUCTS_PER_USER;
+
   return (
     <main className="min-h-screen bg-background py-12 md:py-16">
       <Container>
@@ -25,12 +35,33 @@ export default async function SubmitPage() {
               Launch Your Product
             </h1>
             <p className="text-base text-body">
-              Share what you've built with the Bharat Hunt community. Fill in the details below and your product will be live instantly.
+              Share what you&apos;ve built with the Bharat Hunt community. Fill in the details below
+              and your product will be live instantly.
+            </p>
+            <p className="text-sm text-muted">
+              {isAdmin
+                ? `Admin — unlimited launches (you've launched ${count}).`
+                : `You've launched ${count} of ${MAX_PRODUCTS_PER_USER} products.`}
             </p>
           </div>
 
-          {/* Form */}
-          <ProductForm />
+          {atLimit ? (
+            <div className="mx-auto flex max-w-xl flex-col items-center gap-4 rounded-2xl border border-border bg-card p-10 text-center">
+              <span className="flex size-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+                <PackageCheck className="size-6" />
+              </span>
+              <h2 className="text-xl font-bold text-ink">You&apos;ve reached your launch limit</h2>
+              <p className="max-w-md text-sm text-body">
+                Each maker can launch up to {MAX_PRODUCTS_PER_USER} products on Bharat Hunt. To
+                launch a new one, delete an existing product from its page first.
+              </p>
+              <Link href="/marketplace" className={buttonVariants({ variant: "outline" })}>
+                Browse the marketplace
+              </Link>
+            </div>
+          ) : (
+            <ProductForm />
+          )}
         </div>
       </Container>
     </main>

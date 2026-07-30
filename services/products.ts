@@ -1,9 +1,85 @@
+import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
+import { isMissingColumnError } from "@/lib/supabase/errors";
 import type { ProductCardProduct } from "@/components/products/product-card";
 import { PRODUCT_CATEGORIES, type ProductCategory, type ProductSort } from "@/lib/constants";
 
+// Literal strings (not built dynamically) so the Supabase client can infer the
+// row type from the selected columns.
+const PRODUCT_PAGE_BASE_COLUMNS =
+  "id, slug, creator_id, name, tagline, description, hero_image_url, screenshot_urls, website_url, github_url, category, pricing_type, tags, view_count, upvote_count, comment_count, creator:profiles!products_creator_id_fkey(display_name, username)";
+
+const PRODUCT_PAGE_COLUMNS =
+  "id, slug, creator_id, name, tagline, description, hero_image_url, screenshot_urls, website_url, github_url, category, pricing_type, tags, view_count, upvote_count, comment_count, cta_text, cta_url, platform_links, tech_stack, coupon_code, offer_description, offer_expires_at, roadmap_url, changelog_url, available_for_hire, hire_pitch, creator:profiles!products_creator_id_fkey(display_name, username)";
+
+/**
+ * Single published product by slug. Wrapped in React `cache()` so the product
+ * page and its `generateMetadata` share one DB round-trip per request instead
+ * of querying twice. Returns `null` when the slug isn't a published product.
+ *
+ * Falls back to base columns if the Phase 2 launch columns aren't migrated yet
+ * (Postgres `undefined_column`), so a deploy that lands before
+ * `db/product-launch-fields.sql` is run degrades gracefully (extra sections
+ * hidden) instead of 500-ing every product page.
+ */
+export const getPublishedProductBySlug = cache(async (slug: string) => {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("products")
+    .select(PRODUCT_PAGE_COLUMNS)
+    .eq("slug", slug)
+    .eq("status", "published")
+    .maybeSingle();
+
+  if (!error) {
+    return data;
+  }
+
+  if (isMissingColumnError(error)) {
+    const fallback = await supabase
+      .from("products")
+      .select(PRODUCT_PAGE_BASE_COLUMNS)
+      .eq("slug", slug)
+      .eq("status", "published")
+      .maybeSingle();
+    if (fallback.error) {
+      throw new Error(`Failed to load product: ${fallback.error.message}`);
+    }
+    return fallback.data as unknown as typeof data;
+  }
+
+  throw new Error(`Failed to load product: ${error.message}`);
+});
+
+export type PublishedProduct = NonNullable<Awaited<ReturnType<typeof getPublishedProductBySlug>>>;
+
+/**
+ * Every published product's slug + last-modified timestamp, for the sitemap.
+ * Fails soft (empty list) so a transient DB error never 500s the sitemap route.
+ */
+export async function getAllPublishedProductSlugs(): Promise<
+  { slug: string; lastModified: string }[]
+> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("products")
+    .select("slug, updated_at, published_at, created_at")
+    .eq("status", "published")
+    .order("published_at", { ascending: false, nullsFirst: false })
+    .limit(5000);
+
+  if (error) {
+    return [];
+  }
+
+  return (data ?? []).map((row) => ({
+    slug: row.slug,
+    lastModified: row.updated_at ?? row.published_at ?? row.created_at ?? new Date().toISOString(),
+  }));
+}
+
 const PRODUCT_CARD_COLUMNS =
-  "id, slug, name, tagline, category, pricing_type, avg_rating, upvote_count, comment_count, hero_image_url, creator:profiles!products_creator_id_fkey(display_name, username)";
+  "id, slug, name, tagline, category, pricing_type, avg_rating, upvote_count, comment_count, hero_image_url, tags, website_url, github_url, creator:profiles!products_creator_id_fkey(display_name, username)";
 
 export async function getFeaturedProducts(limit = 6): Promise<ProductCardProduct[]> {
   const supabase = createClient();
@@ -182,6 +258,18 @@ export async function getPlatformStats(): Promise<{
   const makers = new Set(rows.map((row) => row.creator_id)).size;
   const upvotes = rows.reduce((sum, row) => sum + (row.upvote_count ?? 0), 0);
   return { products: rows.length, makers, upvotes };
+}
+
+/** How many products a given maker has launched — used to enforce the per-user limit. */
+export async function getUserProductCount(userId: string): Promise<number> {
+  const supabase = createClient();
+  const { count, error } = await supabase
+    .from("products")
+    .select("id", { count: "exact", head: true })
+    .eq("creator_id", userId);
+
+  if (error) return 0;
+  return count ?? 0;
 }
 
 /** Total published-product count per category, for the marketplace sidebar. */

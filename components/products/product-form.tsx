@@ -5,7 +5,8 @@ import { Eye, EyeOff, Loader2, Plus, Sparkles, Upload, X } from "lucide-react";
 
 import { createProduct, updateProduct, type ProductFormState } from "@/lib/actions/products";
 import { fetchUrlMetadata } from "@/lib/actions/fetch-metadata";
-import { PRODUCT_CATEGORIES, PRICING_TYPE_LABELS } from "@/lib/constants";
+import { PRODUCT_CATEGORIES, PRICING_TYPE_LABELS, PRODUCT_PLATFORMS } from "@/lib/constants";
+import type { Json } from "@/types/database";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -29,6 +30,18 @@ export type ExistingProduct = {
   hero_image_url: string | null;
   screenshot_urls: string[] | null;
   tags: string[] | null;
+  // Phase 2 launch fields
+  cta_text: string | null;
+  cta_url: string | null;
+  platform_links: Json;
+  tech_stack: string[] | null;
+  coupon_code: string | null;
+  offer_description: string | null;
+  offer_expires_at: string | null;
+  roadmap_url: string | null;
+  changelog_url: string | null;
+  available_for_hire: boolean | null;
+  hire_pitch: string | null;
 };
 
 /** Squeeze a long meta description down to a one-line tagline. */
@@ -60,7 +73,23 @@ export function ProductForm({ product }: { product?: ExistingProduct }) {
     githubUrl: product?.github_url ?? "",
     heroImageUrl: product?.hero_image_url ?? "",
     tags: product?.tags?.join(", ") ?? "",
+    // Phase 2 launch fields
+    ctaText: product?.cta_text ?? "",
+    ctaUrl: product?.cta_url ?? "",
+    techStack: product?.tech_stack?.join(", ") ?? "",
+    couponCode: product?.coupon_code ?? "",
+    offerDescription: product?.offer_description ?? "",
+    offerExpiresAt: product?.offer_expires_at ? product.offer_expires_at.slice(0, 10) : "",
+    roadmapUrl: product?.roadmap_url ?? "",
+    changelogUrl: product?.changelog_url ?? "",
+    hirePitch: product?.hire_pitch ?? "",
   });
+
+  // Multi-platform availability matrix + hire toggle (non-string state)
+  const [platformLinks, setPlatformLinks] = useState<Record<string, string>>(
+    () => (product?.platform_links as Record<string, string> | null) ?? {},
+  );
+  const [availableForHire, setAvailableForHire] = useState(product?.available_for_hire ?? false);
 
   const handleInputChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>,
@@ -526,6 +555,187 @@ export function ProductForm({ product }: { product?: ExistingProduct }) {
               {formData.tags.split(",").filter((t) => t.trim()).length}/5 tags
             </p>
           </div>
+        </div>
+
+        {/* Primary call-to-action */}
+        <div className="space-y-4 rounded-xl border border-border bg-card p-6">
+          <div>
+            <h2 className="text-lg font-semibold text-foreground">Primary call-to-action</h2>
+            <p className="text-xs text-muted-foreground">
+              The main button visitors see on your launch page.
+            </p>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="ctaText">Button text</Label>
+              <Input
+                id="ctaText"
+                name="ctaText"
+                maxLength={40}
+                value={formData.ctaText}
+                onChange={handleInputChange}
+                placeholder="Claim Lifetime Deal"
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="ctaUrl">Button link</Label>
+              <Input
+                id="ctaUrl"
+                name="ctaUrl"
+                type="url"
+                value={formData.ctaUrl}
+                onChange={handleInputChange}
+                placeholder="https://yourproduct.com/get"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Multi-platform availability */}
+        <div className="space-y-4 rounded-xl border border-border bg-card p-6">
+          <div>
+            <h2 className="text-lg font-semibold text-foreground">Where to get it</h2>
+            <p className="text-xs text-muted-foreground">
+              Add the platforms your product is available on (optional).
+            </p>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            {PRODUCT_PLATFORMS.map((platform) => (
+              <div key={platform.key} className="flex flex-col gap-1.5">
+                <Label htmlFor={`platform_${platform.key}`}>{platform.label}</Label>
+                <Input
+                  id={`platform_${platform.key}`}
+                  name={`platform_${platform.key}`}
+                  type="url"
+                  value={platformLinks[platform.key] ?? ""}
+                  onChange={(e) =>
+                    setPlatformLinks((prev) => ({ ...prev, [platform.key]: e.target.value }))
+                  }
+                  placeholder={platform.placeholder}
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Tech stack */}
+        <div className="space-y-4 rounded-xl border border-border bg-card p-6">
+          <h2 className="text-lg font-semibold text-foreground">Tech stack</h2>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="techStack">Built with</Label>
+            <Input
+              id="techStack"
+              name="techStack"
+              value={formData.techStack}
+              onChange={handleInputChange}
+              placeholder="Next.js, Supabase, OpenAI (comma separated)"
+            />
+            <p className="text-xs text-muted-foreground">Up to 12, comma separated.</p>
+          </div>
+        </div>
+
+        {/* Launch offer */}
+        <div className="space-y-4 rounded-xl border border-border bg-card p-6">
+          <div>
+            <h2 className="text-lg font-semibold text-foreground">Launch offer</h2>
+            <p className="text-xs text-muted-foreground">
+              Optional promo shown in a highlighted box on your page.
+            </p>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="couponCode">Coupon code</Label>
+              <Input
+                id="couponCode"
+                name="couponCode"
+                maxLength={40}
+                value={formData.couponCode}
+                onChange={handleInputChange}
+                placeholder="LAUNCH50"
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="offerExpiresAt">Expires</Label>
+              <Input
+                id="offerExpiresAt"
+                name="offerExpiresAt"
+                type="date"
+                value={formData.offerExpiresAt}
+                onChange={handleInputChange}
+              />
+            </div>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="offerDescription">Offer details</Label>
+            <Input
+              id="offerDescription"
+              name="offerDescription"
+              maxLength={200}
+              value={formData.offerDescription}
+              onChange={handleInputChange}
+              placeholder="50% off the first year for Bharat Hunt users"
+            />
+          </div>
+        </div>
+
+        {/* Roadmap & changelog */}
+        <div className="space-y-4 rounded-xl border border-border bg-card p-6">
+          <h2 className="text-lg font-semibold text-foreground">Roadmap &amp; changelog</h2>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="roadmapUrl">Roadmap URL</Label>
+              <Input
+                id="roadmapUrl"
+                name="roadmapUrl"
+                type="url"
+                value={formData.roadmapUrl}
+                onChange={handleInputChange}
+                placeholder="https://…/roadmap"
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="changelogUrl">Changelog URL</Label>
+              <Input
+                id="changelogUrl"
+                name="changelogUrl"
+                type="url"
+                value={formData.changelogUrl}
+                onChange={handleInputChange}
+                placeholder="https://…/changelog"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Available for services (hire us) */}
+        <div className="space-y-4 rounded-xl border border-border bg-card p-6">
+          <h2 className="text-lg font-semibold text-foreground">Available for services</h2>
+          <label className="flex items-center gap-2.5">
+            <input
+              type="checkbox"
+              name="availableForHire"
+              checked={availableForHire}
+              onChange={(e) => setAvailableForHire(e.target.checked)}
+              className="size-4 rounded border-input accent-primary"
+            />
+            <span className="text-sm text-foreground">
+              Show a &ldquo;Hire us&rdquo; badge on my product page
+            </span>
+          </label>
+          {availableForHire && (
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="hirePitch">Services pitch</Label>
+              <Textarea
+                id="hirePitch"
+                name="hirePitch"
+                rows={2}
+                maxLength={300}
+                value={formData.hirePitch}
+                onChange={handleInputChange}
+                placeholder="We build AI products for startups — available for consulting."
+              />
+            </div>
+          )}
         </div>
 
         {state?.error && (

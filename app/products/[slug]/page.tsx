@@ -2,22 +2,75 @@
  * Single-column reading flow; primary action row kept visible near the top.
  */
 
+import type { Metadata } from "next";
 import Link from "next/link";
 import { headers } from "next/headers";
 import { notFound } from "next/navigation";
-import { ExternalLink } from "lucide-react";
+import { Briefcase, ExternalLink, Map as RoadmapIcon, ScrollText } from "lucide-react";
 import { auth } from "@clerk/nextjs/server";
 import { createClient } from "@/lib/supabase/server";
+import { getIsAdmin } from "@/lib/admin";
+import { getPublishedProductBySlug } from "@/services/products";
 import { UpvoteButton } from "@/components/products/upvote-button";
 import { CommentForm } from "@/components/products/comment-form";
 import { CommentItem, type CommentItemData } from "@/components/products/comment-item";
 import { DeleteProductButton } from "@/components/products/delete-product-button";
 import { ProductGallery } from "@/components/products/product-gallery";
 import { ProductReach } from "@/components/products/product-reach";
+import { OfferBox } from "@/components/products/offer-box";
+import { JsonLd } from "@/components/seo/json-ld";
+import { PRODUCT_PLATFORMS } from "@/lib/constants";
+import { productBreadcrumbs, productSchema } from "@/lib/seo";
 import { H1, H2, Numeric } from "@/components/ui/typography";
 import { FadeIn } from "@/components/ui/motion";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+
+/** Pick the best available image for social cards (wide screenshot > icon). */
+function ogImageFor(product: {
+  screenshot_urls: string[] | null;
+  hero_image_url: string | null;
+}): string | null {
+  const screenshot = Array.isArray(product.screenshot_urls) ? product.screenshot_urls[0] : null;
+  return screenshot || product.hero_image_url || null;
+}
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}): Promise<Metadata> {
+  const { slug } = await params;
+  const product = await getPublishedProductBySlug(slug);
+
+  if (!product) {
+    return { title: "Product not found" };
+  }
+
+  const title = product.name;
+  const description = (product.description || product.tagline).slice(0, 160);
+  const canonical = `/products/${product.slug}`;
+
+  // og:image / twitter:image are supplied by the dynamic route
+  // app/products/[slug]/opengraph-image.tsx (branded card with the live
+  // upvote count), so we don't set `images` here.
+  return {
+    title,
+    description,
+    alternates: { canonical },
+    openGraph: {
+      title: `${product.name} — ${product.tagline}`,
+      description,
+      url: canonical,
+      type: "website",
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: `${product.name} — ${product.tagline}`,
+      description,
+    },
+  };
+}
 
 const PRICING_LABEL: Record<string, string> = {
   free: "Free",
@@ -41,21 +94,15 @@ export default async function ProductPage({
   const { userId } = await auth();
   const supabase = createClient();
 
-  const { data: product, error } = await supabase
-    .from("products")
-    .select(
-      "id, slug, creator_id, name, tagline, description, hero_image_url, screenshot_urls, website_url, github_url, category, pricing_type, tags, view_count, upvote_count, comment_count, creator:profiles!products_creator_id_fkey(display_name, username)",
-    )
-    .eq("slug", slug)
-    .eq("status", "published")
-    .maybeSingle();
-
-  if (error) {
-    throw new Error(`Failed to load product: ${error.message}`);
-  }
+  // Shared (React-cached) with generateMetadata — one DB round-trip per request.
+  const product = await getPublishedProductBySlug(slug);
   if (!product) {
     notFound();
   }
+
+  // Owners manage their own product; admins can moderate any product.
+  const isOwner = userId === product.creator_id;
+  const canManage = isOwner || (userId ? await getIsAdmin() : false);
 
   const [{ data: comments }, { data: upvote }] = await Promise.all([
     supabase
@@ -83,8 +130,35 @@ export default async function ProductPage({
     (host.startsWith("localhost") || host.startsWith("127.") ? "http" : "https");
   const productUrl = `${proto}://${host}/products/${product.slug}`;
 
+  // Phase 2 launch fields
+  const platformLinks = (product.platform_links as Record<string, string> | null) ?? {};
+  const availableOn: { label: string; url: string }[] = [];
+  for (const platform of PRODUCT_PLATFORMS) {
+    const url = platformLinks[platform.key];
+    if (url) availableOn.push({ label: platform.label, url });
+  }
+  const techStack = product.tech_stack ?? [];
+
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-8 px-4 py-12 md:py-16">
+      <JsonLd
+        data={[
+          productSchema({
+            name: product.name,
+            description: product.description,
+            tagline: product.tagline,
+            slug: product.slug,
+            category: product.category,
+            pricingType: product.pricing_type,
+            image: ogImageFor(product),
+          }),
+          productBreadcrumbs({
+            name: product.name,
+            slug: product.slug,
+            category: product.category,
+          }),
+        ]}
+      />
       <FadeIn className="flex flex-col gap-6">
         <div className="flex gap-5">
           <div className="flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-surface-cream-strong text-2xl font-semibold text-muted">
@@ -125,11 +199,25 @@ export default async function ProductPage({
             initialUpvoted={Boolean(upvote)}
             isLoggedIn={Boolean(userId)}
           />
+          {product.cta_url && (
+            // Primary conversion CTA (gradient) — the maker's own call-to-action.
+            <a
+              href={product.cta_url}
+              target="_blank"
+              rel="noopener"
+              className={buttonVariants({ size: "sm" })}
+            >
+              {product.cta_text || "Get it"}
+              <ExternalLink aria-hidden="true" />
+            </a>
+          )}
           {product.website_url && (
+            // Dofollow (no `nofollow`) so the maker earns a real backlink; no
+            // `noreferrer` so their analytics can attribute traffic to Bharat Hunt.
             <a
               href={product.website_url}
               target="_blank"
-              rel="noopener noreferrer"
+              rel="noopener"
               className={buttonVariants({ variant: "outline", size: "sm" })}
             >
               Visit website
@@ -147,8 +235,13 @@ export default async function ProductPage({
               <ExternalLink aria-hidden="true" />
             </a>
           )}
-          {userId === product.creator_id && (
+          {canManage && (
             <div className="ml-auto flex items-center gap-3">
+              {!isOwner && (
+                <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
+                  Admin
+                </span>
+              )}
               <Link
                 href={`/products/${product.slug}/edit`}
                 className="text-sm text-primary underline-offset-4 transition-colors duration-200 hover:underline"
@@ -159,6 +252,12 @@ export default async function ProductPage({
             </div>
           )}
         </div>
+
+        <OfferBox
+          code={product.coupon_code}
+          description={product.offer_description}
+          expiresAt={product.offer_expires_at}
+        />
 
         <ProductGallery images={(product.screenshot_urls as string[] | null) ?? []} />
 
@@ -180,15 +279,93 @@ export default async function ProductPage({
             ))}
           </div>
         )}
+
+        {techStack.length > 0 && (
+          <div className="flex flex-col gap-2">
+            <h2 className="text-sm font-semibold text-ink">Built with</h2>
+            <div className="flex flex-wrap gap-2">
+              {techStack.map((tech) => (
+                <span
+                  key={tech}
+                  className="rounded-md border border-border px-2 py-0.5 text-xs font-medium text-muted"
+                >
+                  {tech}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {availableOn.length > 0 && (
+          <div className="flex flex-col gap-2">
+            <h2 className="text-sm font-semibold text-ink">Available on</h2>
+            <div className="flex flex-wrap gap-2">
+              {availableOn.map((platform) => (
+                <a
+                  key={platform.label}
+                  href={platform.url}
+                  target="_blank"
+                  rel="noopener"
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-medium text-ink transition-colors duration-150 hover:border-primary/40 hover:text-primary"
+                >
+                  {platform.label}
+                  <ExternalLink className="size-3" aria-hidden="true" />
+                </a>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {(product.roadmap_url || product.changelog_url) && (
+          <div className="flex flex-wrap items-center gap-4 text-sm">
+            {product.roadmap_url && (
+              <a
+                href={product.roadmap_url}
+                target="_blank"
+                rel="noopener"
+                className="inline-flex items-center gap-1.5 text-primary underline-offset-4 hover:underline"
+              >
+                <RoadmapIcon className="size-4" aria-hidden="true" /> Roadmap
+              </a>
+            )}
+            {product.changelog_url && (
+              <a
+                href={product.changelog_url}
+                target="_blank"
+                rel="noopener"
+                className="inline-flex items-center gap-1.5 text-primary underline-offset-4 hover:underline"
+              >
+                <ScrollText className="size-4" aria-hidden="true" /> Changelog
+              </a>
+            )}
+          </div>
+        )}
+
+        {product.available_for_hire && (
+          <div className="flex items-start gap-3 rounded-xl border border-border bg-secondary-bg/50 p-4">
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+              <Briefcase className="size-5" />
+            </span>
+            <div>
+              <p className="text-sm font-semibold text-ink">Available for services</p>
+              <p className="text-sm text-body">
+                {product.hire_pitch ||
+                  `${product.creator?.display_name ?? "This maker"} is available for consulting and custom work.`}
+              </p>
+            </div>
+          </div>
+        )}
       </FadeIn>
 
       <ProductReach
         productUrl={productUrl}
         name={product.name}
+        tagline={product.tagline}
+        websiteUrl={product.website_url}
         isOwner={userId === product.creator_id}
       />
 
-      <div className="flex flex-col gap-4 border-t border-border pt-8">
+      <div id="comments" className="flex scroll-mt-24 flex-col gap-4 border-t border-border pt-8">
         <H2 className="text-2xl sm:text-2xl">
           Comments (<Numeric>{product.comment_count ?? 0}</Numeric>)
         </H2>

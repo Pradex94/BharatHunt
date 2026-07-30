@@ -11,7 +11,7 @@ import { useClerk, useUser } from "@clerk/nextjs";
 import { MenuIcon, Search } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-import { NAV_LINKS } from "@/lib/constants";
+import { ADMIN_EMAILS, NAV_LINKS } from "@/lib/constants";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Container } from "@/components/ui/container";
 import { Logo } from "@/components/layout/logo";
@@ -60,6 +60,11 @@ export function Navbar() {
 
   const displayName =
     user?.fullName ?? user?.username ?? user?.primaryEmailAddress?.emailAddress ?? "Account";
+
+  // Cosmetic only — the /admin page and admin actions enforce this server-side.
+  const isAdmin = (user?.emailAddresses ?? []).some((address) =>
+    ADMIN_EMAILS.includes(address.emailAddress.toLowerCase()),
+  );
 
   function submitSearch(e: React.FormEvent) {
     e.preventDefault();
@@ -133,6 +138,11 @@ export function Navbar() {
                   <DropdownMenuContent align="end">
                     <DropdownMenuLabel>{displayName}</DropdownMenuLabel>
                     <DropdownMenuSeparator />
+                    {isAdmin && (
+                      <DropdownMenuItem onClick={() => router.push("/admin")}>
+                        Admin dashboard
+                      </DropdownMenuItem>
+                    )}
                     <DropdownMenuItem
                       variant="destructive"
                       onClick={() => signOut({ redirectUrl: "/" })}
@@ -214,6 +224,15 @@ export function Navbar() {
                       >
                         Launch Product
                       </Link>
+                      {isAdmin && (
+                        <Link
+                          href="/admin"
+                          onClick={() => setMobileOpen(false)}
+                          className={buttonVariants({ variant: "outline", className: "w-full" })}
+                        >
+                          Admin dashboard
+                        </Link>
+                      )}
                       <Button
                         type="button"
                         variant="outline"

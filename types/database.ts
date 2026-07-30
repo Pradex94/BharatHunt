@@ -295,6 +295,17 @@ export type Database = {
           video_url: string | null
           view_count: number | null
           website_url: string | null
+          cta_text: string | null
+          cta_url: string | null
+          platform_links: Json
+          tech_stack: string[]
+          coupon_code: string | null
+          offer_description: string | null
+          offer_expires_at: string | null
+          roadmap_url: string | null
+          changelog_url: string | null
+          available_for_hire: boolean
+          hire_pitch: string | null
         }
         Insert: {
           avg_rating?: number | null
@@ -326,6 +337,17 @@ export type Database = {
           video_url?: string | null
           view_count?: number | null
           website_url?: string | null
+          cta_text?: string | null
+          cta_url?: string | null
+          platform_links?: Json
+          tech_stack?: string[]
+          coupon_code?: string | null
+          offer_description?: string | null
+          offer_expires_at?: string | null
+          roadmap_url?: string | null
+          changelog_url?: string | null
+          available_for_hire?: boolean
+          hire_pitch?: string | null
         }
         Update: {
           avg_rating?: number | null
@@ -357,6 +379,17 @@ export type Database = {
           video_url?: string | null
           view_count?: number | null
           website_url?: string | null
+          cta_text?: string | null
+          cta_url?: string | null
+          platform_links?: Json
+          tech_stack?: string[]
+          coupon_code?: string | null
+          offer_description?: string | null
+          offer_expires_at?: string | null
+          roadmap_url?: string | null
+          changelog_url?: string | null
+          available_for_hire?: boolean
+          hire_pitch?: string | null
         }
         Relationships: [
           {
