@@ -115,9 +115,9 @@ export const KB: KbEntry[] = [
     id: "contact",
     q: "How do I contact the team?",
     keywords: ["contact", "support", "help", "email", "reach", "team", "question for"],
-    a: "You can reach the team at hello@bharathunt.com, or read guides and updates on the blog.",
+    a: "You can reach the team at info@bharathunt.org, or read guides and updates on the blog.",
     links: [
-      { href: "mailto:hello@bharathunt.com", label: "Email us" },
+      { href: "mailto:info@bharathunt.org", label: "Email us" },
       { href: "/blog", label: "Read the blog" },
     ],
   },

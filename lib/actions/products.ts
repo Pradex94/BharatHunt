@@ -6,8 +6,9 @@ import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { isMissingColumnError } from "@/lib/supabase/errors";
 import { getIsAdmin } from "@/lib/admin";
+import { cacheInvalidatePrefix } from "@/lib/cache";
 import { ensureProfile } from "@/lib/ensure-profile";
-import { getUserProductCount } from "@/services/products";
+import { getUserProductCount, PRODUCTS_CACHE_PREFIX } from "@/services/products";
 import { MAX_PRODUCTS_PER_USER, PRODUCT_PLATFORMS } from "@/lib/constants";
 
 export type ProductFormState = { error?: string } | undefined;
@@ -45,6 +46,7 @@ type ParsedProductForm = {
   pricingType: string;
   websiteUrl: string | null;
   githubUrl: string | null;
+  videoUrl: string | null;
   heroImageUrl: string | null;
   screenshotUrls: string[];
   tags: string[];
@@ -128,6 +130,7 @@ function parseProductForm(formData: FormData): { error: string } | { fields: Par
       pricingType,
       websiteUrl: websiteUrl || null,
       githubUrl: githubUrl || null,
+      videoUrl: cleanUrl(formData.get("videoUrl")),
       heroImageUrl: heroImageUrl || null,
       screenshotUrls,
       tags,
@@ -180,6 +183,7 @@ export async function createProduct(
     pricingType,
     websiteUrl,
     githubUrl,
+    videoUrl,
     heroImageUrl,
     screenshotUrls,
     tags,
@@ -231,6 +235,7 @@ export async function createProduct(
     pricing_type: pricingType,
     website_url: websiteUrl,
     github_url: githubUrl,
+    video_url: videoUrl,
     hero_image_url: heroImageUrl,
     screenshot_urls: screenshotUrls,
     tags,
@@ -272,6 +277,9 @@ export async function createProduct(
     return { error: error?.message ?? "Could not publish your product. Please try again." };
   }
 
+  // A new product changes lists, featured, counts, stats and the sitemap.
+  await cacheInvalidatePrefix(PRODUCTS_CACHE_PREFIX);
+
   redirect(`/products/${product.slug}`);
 }
 
@@ -301,6 +309,7 @@ export async function updateProduct(
     pricingType,
     websiteUrl,
     githubUrl,
+    videoUrl,
     heroImageUrl,
     screenshotUrls,
     tags,
@@ -330,6 +339,7 @@ export async function updateProduct(
     pricing_type: pricingType,
     website_url: websiteUrl,
     github_url: githubUrl,
+    video_url: videoUrl,
     hero_image_url: heroImageUrl,
     screenshot_urls: screenshotUrls,
     tags,
@@ -366,6 +376,8 @@ export async function updateProduct(
     return { error: error.message };
   }
 
+  await cacheInvalidatePrefix(PRODUCTS_CACHE_PREFIX);
+
   redirect(`/products/${productSlug}`);
 }
 
@@ -386,6 +398,8 @@ export async function deleteProduct(productId: string) {
     query = query.eq("creator_id", userId);
   }
   await query;
+
+  await cacheInvalidatePrefix(PRODUCTS_CACHE_PREFIX);
 
   redirect("/marketplace");
 }

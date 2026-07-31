@@ -17,6 +17,7 @@ import { CommentItem, type CommentItemData } from "@/components/products/comment
 import { DeleteProductButton } from "@/components/products/delete-product-button";
 import { ProductGallery } from "@/components/products/product-gallery";
 import { ProductReach } from "@/components/products/product-reach";
+import { ProductVideo } from "@/components/products/product-video";
 import { OfferBox } from "@/components/products/offer-box";
 import { JsonLd } from "@/components/seo/json-ld";
 import { PRODUCT_PLATFORMS } from "@/lib/constants";
@@ -258,6 +259,8 @@ export default async function ProductPage({
           description={product.offer_description}
           expiresAt={product.offer_expires_at}
         />
+
+        <ProductVideo url={product.video_url} />
 
         <ProductGallery images={(product.screenshot_urls as string[] | null) ?? []} />
 
