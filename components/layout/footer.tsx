@@ -70,7 +70,7 @@ const FOOTER_COLUMNS = [
     links: [
       { label: "About Us", href: "/blog/why-cream-not-white" },
       { label: "Advertise", href: "/advertise" },
-      { label: "Contact", href: "mailto:hello@bharathunt.com" },
+      { label: "Contact", href: "mailto:info@bharathunt.org" },
       { label: "Privacy Policy", href: "/privacy" },
       { label: "Cookies", href: "/cookies" },
       { label: "Terms", href: "/terms" },
@@ -126,10 +126,10 @@ export function Footer() {
           <div className="flex flex-col gap-3">
             <h3 className="text-sm font-bold tracking-tight text-ink">Connect</h3>
             <a
-              href="mailto:hello@bharathunt.com"
+              href="mailto:info@bharathunt.org"
               className="text-sm text-body transition-colors duration-200 hover:text-primary"
             >
-              hello@bharathunt.com
+              info@bharathunt.org
             </a>
           </div>
         </div>

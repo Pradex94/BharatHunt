@@ -27,7 +27,7 @@ export default async function EditProductPage({
   let { data: product, error } = await supabase
     .from("products")
     .select(
-      "id, slug, creator_id, name, tagline, description, category, pricing_type, website_url, github_url, hero_image_url, screenshot_urls, tags, cta_text, cta_url, platform_links, tech_stack, coupon_code, offer_description, offer_expires_at, roadmap_url, changelog_url, available_for_hire, hire_pitch",
+      "id, slug, creator_id, name, tagline, description, category, pricing_type, website_url, github_url, video_url, hero_image_url, screenshot_urls, tags, cta_text, cta_url, platform_links, tech_stack, coupon_code, offer_description, offer_expires_at, roadmap_url, changelog_url, available_for_hire, hire_pitch",
     )
     .eq("slug", slug)
     .maybeSingle();
@@ -37,7 +37,7 @@ export default async function EditProductPage({
     const fallback = await supabase
       .from("products")
       .select(
-        "id, slug, creator_id, name, tagline, description, category, pricing_type, website_url, github_url, hero_image_url, screenshot_urls, tags",
+        "id, slug, creator_id, name, tagline, description, category, pricing_type, website_url, github_url, video_url, hero_image_url, screenshot_urls, tags",
       )
       .eq("slug", slug)
       .maybeSingle();

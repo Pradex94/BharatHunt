@@ -27,6 +27,7 @@ export type ExistingProduct = {
   pricing_type: string;
   website_url: string | null;
   github_url: string | null;
+  video_url: string | null;
   hero_image_url: string | null;
   screenshot_urls: string[] | null;
   tags: string[] | null;
@@ -71,6 +72,7 @@ export function ProductForm({ product }: { product?: ExistingProduct }) {
     pricingType: product?.pricing_type ?? "free",
     websiteUrl: product?.website_url ?? "",
     githubUrl: product?.github_url ?? "",
+    videoUrl: product?.video_url ?? "",
     heroImageUrl: product?.hero_image_url ?? "",
     tags: product?.tags?.join(", ") ?? "",
     // Phase 2 launch fields
@@ -535,6 +537,21 @@ export function ProductForm({ product }: { product?: ExistingProduct }) {
               onChange={handleInputChange}
               placeholder="https://github.com/you/repo"
             />
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="videoUrl">Demo video URL</Label>
+            <Input
+              id="videoUrl"
+              name="videoUrl"
+              type="url"
+              value={formData.videoUrl}
+              onChange={handleInputChange}
+              placeholder="YouTube, Loom, or Vimeo link"
+            />
+            <p className="text-xs text-muted-foreground">
+              Shown as an embedded player on your product page.
+            </p>
           </div>
         </div>
 

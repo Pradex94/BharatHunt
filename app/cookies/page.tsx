@@ -119,10 +119,10 @@ export default function CookiesPage() {
           <p className="leading-relaxed text-body">
             If you have any questions about our use of cookies, email us at{" "}
             <a
-              href="mailto:hello@bharathunt.com"
+              href="mailto:info@bharathunt.org"
               className="font-medium text-primary transition-colors hover:underline"
             >
-              hello@bharathunt.com
+              info@bharathunt.org
             </a>
             .
           </p>
