@@ -5,6 +5,7 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { isMissingColumnError } from "@/lib/supabase/errors";
 import { getIsAdmin } from "@/lib/admin";
 import { ProductForm } from "@/components/products/product-form";
+import { Container } from "@/components/ui/container";
 
 export default async function EditProductPage({
   params,
@@ -55,9 +56,20 @@ export default async function EditProductPage({
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-lg flex-1 flex-col gap-4 px-4 py-10">
-      <h1 className="text-2xl font-semibold text-foreground">Edit product</h1>
-      <ProductForm product={product} />
-    </div>
+    <main className="min-h-screen bg-background py-12 md:py-16">
+      <Container>
+        <div className="mx-auto w-full max-w-5xl">
+          <div className="mb-8 space-y-3">
+            <h1 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
+              Edit product
+            </h1>
+            <p className="text-base text-body">
+              Update your product&apos;s details below. Changes go live instantly.
+            </p>
+          </div>
+          <ProductForm product={product} />
+        </div>
+      </Container>
+    </main>
   );
 }

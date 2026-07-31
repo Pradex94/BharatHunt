@@ -193,36 +193,52 @@ function extractMetadata(html: string, baseUrl: string): ProductMetadata {
   const titleMatch = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
   const rawTitle = titleMatch ? decodeEntities(collapse(titleMatch[1])) : "";
 
-  let favicon = "";
   let appleIcon = "";
+  const iconHrefs: string[] = [];
   for (const tag of html.match(/<link\b[^>]*>/gi) ?? []) {
     const attrs = parseAttributes(tag);
     const rel = (attrs["rel"] ?? "").toLowerCase();
     const href = attrs["href"];
     if (!href) continue;
     if (rel.includes("apple-touch-icon")) appleIcon ||= href;
-    else if (rel.includes("icon")) favicon ||= href;
+    else if (rel.includes("icon")) iconHrefs.push(href);
   }
 
   const title = og["title"] || tw["title"] || rawTitle;
   const siteName = og["site_name"] || null;
   const description = collapse(og["description"] || tw["description"] || named["description"] || "").slice(0, 1000);
 
-  // Gallery: the social-preview image(s), absolute + deduped.
+  // Icon: the site's own branded logo. Prefer a real declared raster icon —
+  // apple-touch-icon, or a PNG/SVG/WebP <link rel="icon"> — so we keep the
+  // maker's actual logo. Fall back to Google's favicon service only when the
+  // site declares nothing usable, and to a bare .ico as the last resort.
+  const rasterIcon = iconHrefs.find((href) => /\.(png|svg|webp|jpe?g)(\?|#|$)/i.test(href));
+  const host = safeHostname(baseUrl);
+  const googleFavicon = host
+    ? `https://www.google.com/s2/favicons?sz=128&domain=${encodeURIComponent(host)}`
+    : null;
+  const icon =
+    toAbsolute(appleIcon, baseUrl) ||
+    toAbsolute(rasterIcon, baseUrl) ||
+    googleFavicon ||
+    toAbsolute(iconHrefs[0], baseUrl);
+
+  // Keep the logo/favicon out of the gallery: exclude every declared icon URL
+  // (and the chosen icon), so a site whose og:image *is* its logo doesn't
+  // duplicate it as a "screenshot".
+  const iconUrls = new Set<string>();
+  for (const href of [appleIcon, ...iconHrefs]) {
+    const abs = toAbsolute(href, baseUrl);
+    if (abs) iconUrls.add(abs);
+  }
+  if (icon) iconUrls.add(icon);
+
+  // Gallery: the social-preview image(s), absolute + deduped, minus the logo.
   const images: string[] = [];
   for (const raw of [og["image"], og["image:url"], og["image:secure_url"], tw["image"], tw["image:src"]]) {
     const abs = toAbsolute(raw, baseUrl);
-    if (abs && !images.includes(abs)) images.push(abs);
+    if (abs && !iconUrls.has(abs) && !images.includes(abs)) images.push(abs);
   }
-
-  // Icon: the site's branded logo. Prefer apple-touch-icon (usually 180px), then
-  // Google's favicon service (crisp 128px, near-always available), then whatever
-  // <link rel="icon"> declared (often a tiny .ico — last resort).
-  const host = safeHostname(baseUrl);
-  const icon =
-    toAbsolute(appleIcon, baseUrl) ||
-    (host ? `https://www.google.com/s2/favicons?sz=128&domain=${encodeURIComponent(host)}` : null) ||
-    toAbsolute(favicon, baseUrl);
 
   return {
     url: baseUrl,
