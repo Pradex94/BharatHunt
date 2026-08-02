@@ -39,15 +39,17 @@ NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=<your-clerk-publishable-key>
 CLERK_SECRET_KEY=<your-clerk-secret-key>
 CLERK_WEBHOOK_SIGNING_SECRET=<your-clerk-webhook-signing-secret>
 
-# Email — SMTP relay for advertising inquiry mail (lib/email.ts)
-SMTP_HOST=<your-smtp-relay-host>
-SMTP_PORT=587                                 # 465 = implicit TLS, else STARTTLS
-SMTP_USER=<your-smtp-username>
-SMTP_PASS=<your-smtp-password-or-key>
-EMAIL_FROM=Bharat Hunt <ads@bharathunt.org>   # must be a sender the relay accepts
+# Email — Sendgrove Unified API v2 for advertising inquiry mail (lib/email.ts)
+SENDGROVE_API_KEY=<keyId>:<keySecret>         # sent as the X-API-Key header
+EMAIL_FROM=Bharat Hunt <ads@bharathunt.org>   # must be a VERIFIED sender
+EMAIL_FALLBACK_FROM=Bharat Hunt <info@bharathunt.org>   # optional; see below
 ```
 
-Email is **optional and fail-open**: without the `SMTP_*` vars the /advertise form still stores the lead in Supabase and shows the success state — it just logs that no mail was sent. Add SPF/DKIM records for your relay to the `bharathunt.org` DNS so mail from `ads@bharathunt.org` delivers instead of landing in spam.
+Email is **optional and fail-open**: without `SENDGROVE_API_KEY` the /advertise form still stores the lead in Supabase and shows the success state — it just logs that no mail was sent.
+
+> **Verify the sender, not just the domain.** Sendgrove rejects an unverified `from` with `403 FORBIDDEN` even when the domain is authenticated: *"Authenticating the domain (bharathunt.org) alone is not enough."* Add the exact address under **Senders & Domains** and confirm the OTP it emails you.
+
+`EMAIL_FALLBACK_FROM` covers the gap while a new sender is still pending verification: if `EMAIL_FROM` comes back unverified, the send is retried once from the fallback and a warning is logged. Once the intended address is verified the fallback stops being used, and you can drop the variable.
 
 Clerk is wired to Supabase as a [third-party auth provider](https://clerk.com/docs/integrations/databases/supabase): the browser/server Supabase clients attach the Clerk session token, and RLS policies authorize against the JWT's `sub` claim (see `supabase/migrations/`).
 
