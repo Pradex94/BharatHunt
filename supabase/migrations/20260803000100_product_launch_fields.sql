@@ -1,10 +1,14 @@
 -- ===========================================================================
 -- Phase 2 schema for the "Product Launch Platform Upgrade" blueprint.
 -- Adds the rich creator-form fields, a makers/team table, and a pinned-comment
--- flag. Idempotent — safe to run more than once in the Supabase SQL editor.
+-- flag. Idempotent — safe to run more than once.
 --
--- Run this BEFORE deploying the Phase 2 form + landing-page detail layout;
--- until it's applied, those fields have nowhere to persist.
+-- Moved here from db/product-launch-fields.sql: outside supabase/migrations/ it
+-- was never applied by `supabase db push`, so every one of these columns was
+-- missing in production. The submit form collects them and the insert path
+-- silently drops them (see isMissingColumnError in lib/actions/products.ts),
+-- which means CTA, platform links, tech stack, offers, roadmap/changelog and
+-- the hire badge were all discarded on save.
 -- ===========================================================================
 
 -- ---------------------------------------------------------------------------

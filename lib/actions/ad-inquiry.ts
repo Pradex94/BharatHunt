@@ -4,7 +4,7 @@
  * Stores an "advertise with us" lead from the /advertise page, then emails both
  * sides: a confirmation to the advertiser and a notification to the ads mailbox.
  *
- * Requires the `ad_inquiries` table (see db/ad_inquiries.sql). Anyone — including
+ * Requires the `ad_inquiries` table (supabase/migrations/). Anyone — including
  * logged-out visitors — may submit, so the RLS insert policy is `with check
  * (true)`; there is no select policy, so inquiries are readable only via the
  * service role (e.g. the Supabase dashboard).
@@ -67,7 +67,7 @@ export async function submitAdInquiry(
   }
   if (!stored) {
     console.error(
-      "[ad-inquiry] lead delivered by email only — apply db/ad_inquiries.sql to restore storage.",
+      "[ad-inquiry] lead delivered by email only — run `supabase db push` to restore storage.",
     );
   }
 

@@ -57,6 +57,8 @@ Clerk is wired to Supabase as a [third-party auth provider](https://clerk.com/do
 
 Apply the migrations in `supabase/migrations/` to your Supabase project (via the [Supabase CLI](https://supabase.com/docs/guides/cli) `supabase db push`, or by running the SQL in the dashboard). `supabase/seed.sql` contains demo products.
 
+> **Every migration belongs in `supabase/migrations/`.** SQL kept anywhere else never reaches `db push`, and the app degrades quietly rather than failing loudly: a missing `ad_inquiries` table dropped advertising leads, and the missing Phase 2 columns made the launch form discard CTA, platform links, tech stack, offers and roadmap data on save. If a feature's fields aren't persisting, check the migrations ran before debugging the code.
+
 ### 4. Run the dev server
 
 ```bash

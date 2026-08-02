@@ -1,5 +1,8 @@
 -- Advertiser leads captured by the /advertise page (lib/actions/ad-inquiry.ts).
--- Run this once in the Supabase SQL editor.
+--
+-- Moved here from db/ad_inquiries.sql: sitting outside supabase/migrations/ it
+-- was never picked up by `supabase db push`, so the table was missing in
+-- production and every submitted lead was lost (PGRST205). Idempotent.
 
 create table if not exists public.ad_inquiries (
   id         uuid primary key default gen_random_uuid(),
