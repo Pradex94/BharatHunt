@@ -121,7 +121,13 @@ export default async function AdminPage() {
                           >
                             Edit
                           </Link>
-                          <DeleteProductButton productId={product.id} />
+                          {/* redirectTo={null} keeps the admin on this page —
+                              the revalidated table just drops the row. */}
+                          <DeleteProductButton
+                            productId={product.id}
+                            productName={product.name}
+                            redirectTo={null}
+                          />
                         </div>
                       </td>
                     </tr>

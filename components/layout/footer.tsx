@@ -7,6 +7,7 @@ import Link from "next/link";
 
 import { Container } from "@/components/ui/container";
 import { Logo } from "@/components/layout/logo";
+import { ADS_EMAIL } from "@/lib/constants";
 
 function XIcon(props: SVGProps<SVGSVGElement>) {
   return (
@@ -125,12 +126,24 @@ export function Footer() {
           {/* Connect column */}
           <div className="flex flex-col gap-3">
             <h3 className="text-sm font-bold tracking-tight text-ink">Connect</h3>
-            <a
-              href="mailto:info@bharathunt.org"
-              className="text-sm text-body transition-colors duration-200 hover:text-primary"
-            >
-              info@bharathunt.org
-            </a>
+            <div className="flex flex-col gap-0.5">
+              <span className="text-xs text-muted">General</span>
+              <a
+                href="mailto:info@bharathunt.org"
+                className="text-sm text-body transition-colors duration-200 hover:text-primary"
+              >
+                info@bharathunt.org
+              </a>
+            </div>
+            <div className="flex flex-col gap-0.5">
+              <span className="text-xs text-muted">Advertising</span>
+              <a
+                href={`mailto:${ADS_EMAIL}`}
+                className="text-sm text-body transition-colors duration-200 hover:text-primary"
+              >
+                {ADS_EMAIL}
+              </a>
+            </div>
           </div>
         </div>
 

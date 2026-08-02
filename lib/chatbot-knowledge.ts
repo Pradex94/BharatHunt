@@ -6,6 +6,8 @@
  * substring and weigh more). Framework-agnostic and safe to import anywhere.
  */
 
+import { ADS_EMAIL } from "@/lib/constants";
+
 export type ChatLink = { href: string; label: string };
 
 export type KbEntry = {
@@ -110,6 +112,29 @@ export const KB: KbEntry[] = [
     keywords: ["cookie", "cookies", "privacy", "data", "gdpr", "consent"],
     a: "We use essential cookies to keep you signed in and to remember your cookie choice, and we don't run third-party analytics today. You can review and change your choice any time on the Cookie Policy page.",
     links: [{ href: "/cookies", label: "Cookie Policy" }],
+  },
+  {
+    id: "advertise",
+    q: "How do I advertise on Bharat Hunt?",
+    keywords: [
+      "advertise",
+      "advertising",
+      "ads",
+      "sponsor",
+      "sponsorship",
+      "promote",
+      "promotion",
+      "featured",
+      "spotlight",
+      "newsletter",
+      "media kit",
+      "pricing for ads",
+    ],
+    a: `We offer featured listings, a homepage spotlight and newsletter features. Pick a package on the Advertise page and send us an inquiry, or email ${ADS_EMAIL} directly.`,
+    links: [
+      { href: "/advertise", label: "See ad packages" },
+      { href: `mailto:${ADS_EMAIL}`, label: "Email the ads team" },
+    ],
   },
   {
     id: "contact",

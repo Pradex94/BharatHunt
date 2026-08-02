@@ -1,11 +1,12 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { Eye, EyeOff, Loader2, Plus, Sparkles, Upload, X } from "lucide-react";
+import { Eye, EyeOff, Loader2, Plus, ShieldCheck, Sparkles, Upload, X } from "lucide-react";
 
 import { createProduct, updateProduct, type ProductFormState } from "@/lib/actions/products";
 import { fetchUrlMetadata } from "@/lib/actions/fetch-metadata";
 import { PRODUCT_CATEGORIES, PRICING_TYPE_LABELS, PRODUCT_PLATFORMS } from "@/lib/constants";
+import { moderateProduct, SUBMISSION_RULES } from "@/lib/moderation";
 import type { Json } from "@/types/database";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -52,6 +53,14 @@ function toTagline(description: string, max = 120): string {
   const cut = clean.slice(0, max - 1);
   const lastSpace = cut.lastIndexOf(" ");
   return `${(lastSpace > 40 ? cut.slice(0, lastSpace) : cut).trimEnd()}…`;
+}
+
+/** Comma-separated input → trimmed, non-empty entries. */
+function splitList(value: string): string[] {
+  return value
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
 }
 
 export function ProductForm({ product }: { product?: ExistingProduct }) {
@@ -124,6 +133,9 @@ export function ProductForm({ product }: { product?: ExistingProduct }) {
 
   // Live preview toggle
   const [showPreview, setShowPreview] = useState(false);
+
+  // Launch-rule failure caught before we hit the server (same rules, same module).
+  const [ruleError, setRuleError] = useState<string | null>(null);
 
   async function handleImport() {
     const url = importUrl.trim();
@@ -211,6 +223,32 @@ export function ProductForm({ product }: { product?: ExistingProduct }) {
   };
 
   const handleFormSubmit = async (submitData: FormData) => {
+    // Check the launch rules before uploading anything — the server re-runs the
+    // exact same check, this just saves a rejected round trip.
+    const check = moderateProduct({
+      name: formData.name,
+      tagline: formData.tagline,
+      description: formData.description,
+      tags: splitList(formData.tags),
+      techStack: splitList(formData.techStack),
+      websiteUrl: formData.websiteUrl,
+      githubUrl: formData.githubUrl,
+      videoUrl: formData.videoUrl,
+      ctaText: formData.ctaText,
+      ctaUrl: formData.ctaUrl,
+      platformLinks,
+      couponCode: formData.couponCode,
+      offerDescription: formData.offerDescription,
+      hirePitch: availableForHire ? formData.hirePitch : null,
+      heroImageUrl: imageFile ? null : formData.heroImageUrl,
+      screenshotUrls: gallery.filter(Boolean),
+    });
+    if (!check.ok) {
+      setRuleError(check.message);
+      return;
+    }
+    setRuleError(null);
+
     if (imageFile) {
       setUploadingImage(true);
       try {
@@ -238,6 +276,24 @@ export function ProductForm({ product }: { product?: ExistingProduct }) {
     <div className="grid gap-8 lg:grid-cols-3">
       {/* Form Section */}
       <form action={handleFormSubmit} className="flex flex-col gap-6 lg:col-span-2">
+        {/* Launch rules — enforced server-side in lib/moderation.ts */}
+        <div className="space-y-3 rounded-xl border border-border bg-card p-6">
+          <div className="flex items-center gap-2">
+            <ShieldCheck size={18} className="text-primary" aria-hidden="true" />
+            <h2 className="text-lg font-semibold text-foreground">Launch rules</h2>
+          </div>
+          <ul className="space-y-1.5 text-xs text-muted-foreground">
+            {SUBMISSION_RULES.map((rule) => (
+              <li key={rule} className="flex gap-2">
+                <span aria-hidden="true" className="text-primary">
+                  •
+                </span>
+                <span>{rule}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+
         {/* Import from URL — auto-fills the fields below, Product-Hunt style */}
         <div className="space-y-3 rounded-xl border border-border bg-secondary-bg/60 p-6">
           <div className="flex items-center gap-2">
@@ -755,9 +811,9 @@ export function ProductForm({ product }: { product?: ExistingProduct }) {
           )}
         </div>
 
-        {state?.error && (
-          <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4">
-            <p className="text-sm text-destructive">{state.error}</p>
+        {(ruleError || state?.error) && (
+          <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4" role="alert">
+            <p className="text-sm text-destructive">{ruleError ?? state?.error}</p>
           </div>
         )}
 

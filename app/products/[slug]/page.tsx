@@ -249,7 +249,7 @@ export default async function ProductPage({
               >
                 Edit
               </Link>
-              <DeleteProductButton productId={product.id} />
+              <DeleteProductButton productId={product.id} productName={product.name} />
             </div>
           )}
         </div>

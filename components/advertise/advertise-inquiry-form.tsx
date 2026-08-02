@@ -5,6 +5,7 @@ import { CheckCircle2 } from "lucide-react";
 
 import { submitAdInquiry, type AdInquiryState } from "@/lib/actions/ad-inquiry";
 import { AD_PACKAGES } from "@/lib/advertise";
+import { ADS_EMAIL } from "@/lib/constants";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -90,10 +91,10 @@ export function AdvertiseInquiryForm() {
         <p className="text-xs text-muted">
           Prefer email? Reach us at{" "}
           <a
-            href="mailto:ads@bharathunt.com"
+            href={`mailto:${ADS_EMAIL}`}
             className="font-medium text-primary hover:underline"
           >
-            ads@bharathunt.com
+            {ADS_EMAIL}
           </a>
           .
         </p>

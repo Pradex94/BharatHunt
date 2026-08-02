@@ -38,7 +38,13 @@ SUPABASE_SERVICE_ROLE_KEY=<your-service-role-key>   # server-only; used by the C
 NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=<your-clerk-publishable-key>
 CLERK_SECRET_KEY=<your-clerk-secret-key>
 CLERK_WEBHOOK_SIGNING_SECRET=<your-clerk-webhook-signing-secret>
+
+# Email (optional — advertising inquiry confirmations, lib/email.ts)
+RESEND_API_KEY=<your-resend-api-key>
+EMAIL_FROM=Bharat Hunt <ads@bharathunt.org>   # must be a Resend-verified sender
 ```
+
+Email is **optional and fail-open**: without `RESEND_API_KEY` the /advertise form still stores the lead in Supabase and shows the success state — it just logs that no mail was sent. To turn it on, verify the `bharathunt.org` domain in [Resend](https://resend.com/domains) (add its DKIM/SPF records to your DNS) so mail from `ads@bharathunt.org` delivers instead of landing in spam.
 
 Clerk is wired to Supabase as a [third-party auth provider](https://clerk.com/docs/integrations/databases/supabase): the browser/server Supabase clients attach the Clerk session token, and RLS policies authorize against the JWT's `sub` claim (see `supabase/migrations/`).
 

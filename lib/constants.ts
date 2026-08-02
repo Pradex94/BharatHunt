@@ -43,6 +43,13 @@ export const SITE_URL = (
 export const SITE_NAME = "Bharat Hunt";
 
 /**
+ * Where advertising inquiries go. Single source of truth for the /advertise
+ * form, the chatbot, and the fallback message shown when a lead can't be
+ * saved — keep the address here, not inline, so the two never drift apart.
+ */
+export const ADS_EMAIL = "ads@bharathunt.org";
+
+/**
  * Platform admins, by email (case-insensitive). Admins bypass the launch limit
  * and can moderate (edit/delete) any product; server-side checks are the real
  * gate (`lib/admin.ts`) — the client only uses this to show/hide the Admin link.

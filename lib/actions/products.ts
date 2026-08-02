@@ -1,6 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
 import { auth } from "@clerk/nextjs/server";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
@@ -10,6 +11,7 @@ import { cacheInvalidatePrefix } from "@/lib/cache";
 import { ensureProfile } from "@/lib/ensure-profile";
 import { getUserProductCount, PRODUCTS_CACHE_PREFIX } from "@/services/products";
 import { MAX_PRODUCTS_PER_USER, PRODUCT_PLATFORMS } from "@/lib/constants";
+import { hostnameOf, moderateProduct } from "@/lib/moderation";
 
 export type ProductFormState = { error?: string } | undefined;
 
@@ -149,6 +151,53 @@ function parseProductForm(formData: FormData): { error: string } | { fields: Par
   };
 }
 
+/** `\`, `%` and `_` are LIKE wildcards — escape them before building a pattern. */
+function escapeLike(value: string): string {
+  return value.replace(/[\\%_]/g, "\\$&");
+}
+
+/**
+ * Guards against the same product being listed twice — the cheapest signal
+ * that a launch is a duplicate or an impersonation of someone else's product.
+ * Matches on the exact name (case-insensitive) or the website's hostname, and
+ * returns a ready-to-show message (or null when the launch is unique).
+ */
+async function findDuplicateLaunch(
+  supabase: ReturnType<typeof createClient>,
+  { name, websiteUrl, excludeId }: { name: string; websiteUrl: string | null; excludeId?: string },
+): Promise<string | null> {
+  const host = websiteUrl ? hostnameOf(websiteUrl) : null;
+
+  const [byName, byHost] = await Promise.all([
+    supabase.from("products").select("id, name, website_url").ilike("name", escapeLike(name)).limit(5),
+    host
+      ? supabase
+          .from("products")
+          .select("id, name, website_url")
+          .ilike("website_url", `%${escapeLike(host)}%`)
+          .limit(10)
+      : null,
+  ]);
+
+  const nameClash = (byName.data ?? []).find((row) => row.id !== excludeId);
+  if (nameClash) {
+    return `A product called "${nameClash.name}" is already on Bharat Hunt. Pick a different name, or edit your existing launch.`;
+  }
+
+  if (host) {
+    // `ilike` only narrows the candidates — compare parsed hostnames so
+    // "notion.so" doesn't collide with "mynotion.social".
+    const hostClash = (byHost?.data ?? []).find(
+      (row) => row.id !== excludeId && row.website_url && hostnameOf(row.website_url) === host,
+    );
+    if (hostClash) {
+      return `"${hostClash.name}" has already been launched with that website. Each product can only be listed once.`;
+    }
+  }
+
+  return null;
+}
+
 export async function createProduct(
   _prevState: ProductFormState,
   formData: FormData,
@@ -175,6 +224,22 @@ export async function createProduct(
   if ("error" in parsed) {
     return parsed;
   }
+
+  // Launch rules: no adult/NSFW or fraudulent listings, and no fake launches
+  // (see lib/moderation.ts). Runs before anything is written.
+  const moderation = moderateProduct(parsed.fields);
+  if (!moderation.ok) {
+    return { error: moderation.message };
+  }
+
+  const duplicate = await findDuplicateLaunch(supabase, {
+    name: parsed.fields.name,
+    websiteUrl: parsed.fields.websiteUrl,
+  });
+  if (duplicate) {
+    return { error: duplicate };
+  }
+
   const {
     name,
     tagline,
@@ -301,6 +366,22 @@ export async function updateProduct(
   if ("error" in parsed) {
     return parsed;
   }
+
+  // Same launch rules as create — an edit can't smuggle in banned content.
+  const moderation = moderateProduct(parsed.fields);
+  if (!moderation.ok) {
+    return { error: moderation.message };
+  }
+
+  const duplicate = await findDuplicateLaunch(supabase, {
+    name: parsed.fields.name,
+    websiteUrl: parsed.fields.websiteUrl,
+    excludeId: productId,
+  });
+  if (duplicate) {
+    return { error: duplicate };
+  }
+
   const {
     name,
     tagline,
@@ -381,7 +462,20 @@ export async function updateProduct(
   redirect(`/products/${productSlug}`);
 }
 
-export async function deleteProduct(productId: string) {
+export type DeleteProductState = { error?: string } | undefined;
+
+/**
+ * Deletes a product and refreshes every view that listed it.
+ *
+ * `redirectTo` is where the caller lands afterwards: the product page passes
+ * "/marketplace" (the page it's on is about to 404), while the admin dashboard
+ * passes `null` to stay put — the revalidated table just drops the row. A
+ * failed delete returns an error instead of silently pretending it worked.
+ */
+export async function deleteProduct(
+  productId: string,
+  redirectTo: string | null = "/marketplace",
+): Promise<DeleteProductState> {
   const { userId } = await auth();
 
   if (!userId) {
@@ -397,9 +491,30 @@ export async function deleteProduct(productId: string) {
   if (!isAdmin) {
     query = query.eq("creator_id", userId);
   }
-  await query;
+  // `select()` makes the delete return the rows it removed, so we can tell a
+  // real deletion apart from one RLS silently matched nothing for.
+  const { data: deleted, error } = await query.select("slug");
+
+  if (error) {
+    return { error: `Couldn't delete that product: ${error.message}` };
+  }
+  if (!deleted || deleted.length === 0) {
+    return {
+      error: "That product no longer exists, or you don't have permission to delete it.",
+    };
+  }
 
   await cacheInvalidatePrefix(PRODUCTS_CACHE_PREFIX);
 
-  redirect("/marketplace");
+  // Drop the row from every cached render that showed it. Revalidating /admin
+  // is what lets the dashboard refresh in place instead of navigating away.
+  revalidatePath("/admin");
+  revalidatePath("/marketplace");
+  for (const { slug } of deleted) {
+    revalidatePath(`/products/${slug}`);
+  }
+
+  if (redirectTo) {
+    redirect(redirectTo);
+  }
 }
