@@ -37,6 +37,11 @@ const MAX_BYTES = 512 * 1024; // the <head> lives at the top; 512KB is plenty
 const MAX_REDIRECTS = 4;
 const BLOCKED_HOSTS = new Set(["localhost", "ip6-localhost", "metadata.google.internal"]);
 
+/** Icon resolution: how many candidates we'll actually HTTP-check, and how long each may take. */
+const MAX_ICON_PROBES = 6;
+const ICON_PROBE_TIMEOUT_MS = 4000;
+const IMAGE_EXTENSION = /\.(png|svg|webp|jpe?g|ico|avif|gif)(\?|#|$)/i;
+
 export async function fetchUrlMetadata(rawUrl: string): Promise<FetchMetadataResult> {
   const { userId } = await auth();
   if (!userId) return { ok: false, error: "Please sign in to import from a URL." };
@@ -50,10 +55,18 @@ export async function fetchUrlMetadata(rawUrl: string): Promise<FetchMetadataRes
 
   try {
     const { finalUrl, html } = await fetchHtml(normalized);
-    const data = extractMetadata(html, finalUrl);
+    const { iconCandidates, manifestUrl, ...data } = extractMetadata(html, finalUrl);
     if (!data.name && !data.description && data.images.length === 0) {
       return { ok: false, error: "Couldn't read any details from that page — fill the form in manually." };
     }
+
+    // The declared favicon is often missing, a dead link, or a bare .ico. Walk
+    // the candidates (manifest icons included) and keep the first that really
+    // serves an image, so makers get a logo instead of a broken avatar.
+    data.icon = await resolveIcon(iconCandidates, manifestUrl, finalUrl);
+    // Don't let the icon double as a "screenshot" if we fell back to og:image.
+    data.images = data.images.filter((image) => image !== data.icon);
+
     return { ok: true, data };
   } catch (error) {
     const message =
@@ -172,7 +185,26 @@ async function readCapped(res: Response, maxBytes: number): Promise<string> {
 
 // ── HTML metadata extraction ─────────────────────────────────────────────
 
-function extractMetadata(html: string, baseUrl: string): ProductMetadata {
+/** What `extractMetadata` knows before we've HTTP-checked anything. */
+type ExtractedMetadata = ProductMetadata & {
+  /** Ordered best-first; `resolveIcon` picks the first that actually loads. */
+  iconCandidates: string[];
+  /** `<link rel="manifest">`, where PWAs keep their big square icons. */
+  manifestUrl: string | null;
+};
+
+/** `sizes="180x180"` → 180, so we can prefer the biggest declared icon. */
+function parseIconSize(sizes: string | undefined): number {
+  if (!sizes) return 0;
+  const match = /(\d+)\s*[x×]\s*(\d+)/i.exec(sizes);
+  return match ? Number(match[1]) : 0;
+}
+
+function bySizeDesc(a: { size: number }, b: { size: number }): number {
+  return b.size - a.size;
+}
+
+function extractMetadata(html: string, baseUrl: string): ExtractedMetadata {
   const og: Record<string, string> = {};
   const tw: Record<string, string> = {};
   const named: Record<string, string> = {};
@@ -193,67 +225,165 @@ function extractMetadata(html: string, baseUrl: string): ProductMetadata {
   const titleMatch = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
   const rawTitle = titleMatch ? decodeEntities(collapse(titleMatch[1])) : "";
 
-  let appleIcon = "";
-  const iconHrefs: string[] = [];
+  const appleIcons: Array<{ href: string; size: number }> = [];
+  const linkIcons: Array<{ href: string; size: number }> = [];
+  let manifestHref = "";
   for (const tag of html.match(/<link\b[^>]*>/gi) ?? []) {
     const attrs = parseAttributes(tag);
     const rel = (attrs["rel"] ?? "").toLowerCase();
     const href = attrs["href"];
     if (!href) continue;
-    if (rel.includes("apple-touch-icon")) appleIcon ||= href;
-    else if (rel.includes("icon")) iconHrefs.push(href);
+    const size = parseIconSize(attrs["sizes"]);
+    if (rel.includes("apple-touch-icon")) appleIcons.push({ href, size });
+    else if (rel.includes("manifest")) manifestHref ||= href;
+    else if (rel.includes("icon")) linkIcons.push({ href, size });
   }
+  appleIcons.sort(bySizeDesc);
+  linkIcons.sort(bySizeDesc);
 
   const title = og["title"] || tw["title"] || rawTitle;
   const siteName = og["site_name"] || null;
   const description = collapse(og["description"] || tw["description"] || named["description"] || "").slice(0, 1000);
 
-  // Icon: the site's own branded logo. Prefer a real declared raster icon —
-  // apple-touch-icon, or a PNG/SVG/WebP <link rel="icon"> — so we keep the
-  // maker's actual logo. Fall back to Google's favicon service only when the
-  // site declares nothing usable, and to a bare .ico as the last resort.
-  const rasterIcon = iconHrefs.find((href) => /\.(png|svg|webp|jpe?g)(\?|#|$)/i.test(href));
-  const host = safeHostname(baseUrl);
-  const googleFavicon = host
-    ? `https://www.google.com/s2/favicons?sz=128&domain=${encodeURIComponent(host)}`
-    : null;
-  const icon =
-    toAbsolute(appleIcon, baseUrl) ||
-    toAbsolute(rasterIcon, baseUrl) ||
-    googleFavicon ||
-    toAbsolute(iconHrefs[0], baseUrl);
-
-  // Keep the logo/favicon out of the gallery: exclude every declared icon URL
-  // (and the chosen icon), so a site whose og:image *is* its logo doesn't
-  // duplicate it as a "screenshot".
-  const iconUrls = new Set<string>();
-  for (const href of [appleIcon, ...iconHrefs]) {
+  // Gallery: the social-preview image(s), absolute + deduped.
+  const declaredIcons = new Set<string>();
+  for (const { href } of [...appleIcons, ...linkIcons]) {
     const abs = toAbsolute(href, baseUrl);
-    if (abs) iconUrls.add(abs);
+    if (abs) declaredIcons.add(abs);
   }
-  if (icon) iconUrls.add(icon);
-
-  // Gallery: the social-preview image(s), absolute + deduped, minus the logo.
   const images: string[] = [];
   for (const raw of [og["image"], og["image:url"], og["image:secure_url"], tw["image"], tw["image:src"]]) {
     const abs = toAbsolute(raw, baseUrl);
-    if (abs && !iconUrls.has(abs) && !images.includes(abs)) images.push(abs);
+    if (abs && !declaredIcons.has(abs) && !images.includes(abs)) images.push(abs);
   }
+
+  // Icon candidates, best first. The maker's real square logo lives in the
+  // apple-touch-icon or the PWA manifest; a raster <link rel="icon"> is next.
+  // Only after all of those do we accept a bare .ico, then a social image as a
+  // stand-in logo — which is what "fetch some other image" means in practice.
+  const raster = linkIcons.filter(({ href }) => /\.(png|svg|webp|jpe?g|avif)(\?|#|$)/i.test(href));
+  const legacy = linkIcons.filter(({ href }) => !raster.some((r) => r.href === href));
+  const origin = safeOrigin(baseUrl);
+  const iconCandidates = [
+    ...appleIcons.map(({ href }) => href),
+    ...raster.map(({ href }) => href),
+    named["msapplication-tileimage"],
+    ...legacy.map(({ href }) => href),
+    og["logo"],
+    origin ? `${origin}/favicon.ico` : undefined, // undeclared but conventional
+    ...images,
+  ]
+    .map((href) => toAbsolute(href, baseUrl))
+    .filter((href): href is string => Boolean(href))
+    .filter((href, index, all) => all.indexOf(href) === index);
 
   return {
     url: baseUrl,
     name: (siteName || title || "").trim(),
     title: title.trim(),
     description,
-    icon,
+    icon: null, // resolved by resolveIcon() once we can make requests
     images,
     siteName,
+    iconCandidates,
+    manifestUrl: toAbsolute(manifestHref, baseUrl),
   };
+}
+
+/** Icons declared in a PWA manifest, largest first. */
+async function manifestIcons(manifestUrl: string): Promise<string[]> {
+  try {
+    const url = new URL(manifestUrl);
+    if (url.protocol !== "http:" && url.protocol !== "https:") return [];
+    await assertPublicHost(url.hostname);
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), ICON_PROBE_TIMEOUT_MS);
+    try {
+      const res = await fetch(manifestUrl, {
+        headers: { "User-Agent": "BharatHuntBot/1.0", Accept: "application/manifest+json, application/json" },
+        signal: controller.signal,
+      });
+      if (!res.ok) return [];
+      const json = (await res.json()) as { icons?: Array<{ src?: string; sizes?: string }> };
+      return (json.icons ?? [])
+        .map((entry) => ({ href: entry.src ?? "", size: parseIconSize(entry.sizes) }))
+        .filter(({ href }) => href)
+        .sort(bySizeDesc)
+        .map(({ href }) => toAbsolute(href, manifestUrl))
+        .filter((href): href is string => Boolean(href));
+    } finally {
+      clearTimeout(timer);
+    }
+  } catch {
+    return [];
+  }
+}
+
+/** True when `url` responds with an actual image. */
+async function isLiveImage(url: string): Promise<boolean> {
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return false;
+    await assertPublicHost(parsed.hostname);
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), ICON_PROBE_TIMEOUT_MS);
+    try {
+      const res = await fetch(url, {
+        headers: { "User-Agent": "BharatHuntBot/1.0", Accept: "image/*" },
+        signal: controller.signal,
+      });
+      // Read no further than the headers — we only care that it exists.
+      await res.body?.cancel();
+      if (!res.ok) return false;
+      const type = res.headers.get("content-type") ?? "";
+      if (type.startsWith("image/")) return true;
+      // Plenty of servers mislabel .ico as octet-stream; trust the extension.
+      return type.includes("octet-stream") && IMAGE_EXTENSION.test(url);
+    } finally {
+      clearTimeout(timer);
+    }
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Picks the first candidate that actually serves an image, pulling in manifest
+ * icons first. Falls back to Google's favicon service (which synthesises one
+ * for any domain) so the form always gets something.
+ */
+async function resolveIcon(
+  candidates: string[],
+  manifestUrl: string | null,
+  baseUrl: string,
+): Promise<string | null> {
+  const fromManifest = manifestUrl ? await manifestIcons(manifestUrl) : [];
+  // Manifest icons sit behind apple-touch-icon but ahead of everything else.
+  const ordered = [candidates[0], ...fromManifest, ...candidates.slice(1)]
+    .filter((href): href is string => Boolean(href))
+    .filter((href, index, all) => all.indexOf(href) === index);
+
+  for (const candidate of ordered.slice(0, MAX_ICON_PROBES)) {
+    if (await isLiveImage(candidate)) return candidate;
+  }
+
+  const host = safeHostname(baseUrl);
+  return host ? `https://www.google.com/s2/favicons?sz=128&domain=${encodeURIComponent(host)}` : null;
 }
 
 function safeHostname(url: string): string | null {
   try {
     return new URL(url).hostname;
+  } catch {
+    return null;
+  }
+}
+
+function safeOrigin(url: string): string | null {
+  try {
+    return new URL(url).origin;
   } catch {
     return null;
   }
