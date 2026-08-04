@@ -138,6 +138,9 @@ export function Navbar() {
                   <DropdownMenuContent align="end">
                     <DropdownMenuLabel>{displayName}</DropdownMenuLabel>
                     <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => router.push("/dashboard")}>
+                      Your products
+                    </DropdownMenuItem>
                     {isAdmin && (
                       <DropdownMenuItem onClick={() => router.push("/admin")}>
                         Admin dashboard
@@ -223,6 +226,13 @@ export function Navbar() {
                         className={buttonVariants({ className: "w-full" })}
                       >
                         Launch Product
+                      </Link>
+                      <Link
+                        href="/dashboard"
+                        onClick={() => setMobileOpen(false)}
+                        className={buttonVariants({ variant: "outline", className: "w-full" })}
+                      >
+                        Your products
                       </Link>
                       {isAdmin && (
                         <Link

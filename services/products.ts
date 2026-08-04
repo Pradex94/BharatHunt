@@ -291,6 +291,49 @@ export async function getPlatformStats(): Promise<{
   });
 }
 
+/** One row of the maker dashboard — what someone needs to judge and manage a launch. */
+export type MakerProduct = {
+  id: string;
+  slug: string;
+  name: string;
+  tagline: string;
+  hero_image_url: string | null;
+  category: string;
+  pricing_type: string;
+  status: string;
+  upvote_count: number | null;
+  comment_count: number | null;
+  view_count: number | null;
+  created_at: string | null;
+  published_at: string | null;
+};
+
+const MAKER_PRODUCT_COLUMNS =
+  "id, slug, name, tagline, hero_image_url, category, pricing_type, status, upvote_count, comment_count, view_count, created_at, published_at";
+
+/**
+ * Every product a maker owns, newest first — drafts and archived rows included,
+ * which the products RLS policy already exposes to their creator
+ * (`status = 'published' OR creator = caller`), so the plain user client is
+ * enough and RLS stays the backstop. Callers pass the *authenticated* user id.
+ *
+ * Deliberately uncached: this is per-person data behind a login, and a stale
+ * dashboard right after publishing or deleting is worse than one extra query.
+ */
+export async function getProductsByCreator(userId: string): Promise<MakerProduct[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("products")
+    .select(MAKER_PRODUCT_COLUMNS)
+    .eq("creator_id", userId)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    throw new Error(`Failed to load your products: ${error.message}`);
+  }
+  return (data ?? []) as MakerProduct[];
+}
+
 /** How many products a given maker has launched — used to enforce the per-user limit. */
 export async function getUserProductCount(userId: string): Promise<number> {
   const supabase = createClient();

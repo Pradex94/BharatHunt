@@ -41,7 +41,11 @@ export default async function SubmitPage() {
             <p className="text-sm text-muted">
               {isAdmin
                 ? `Admin — unlimited launches (you've launched ${count}).`
-                : `You've launched ${count} of ${MAX_PRODUCTS_PER_USER} products.`}
+                : `You've launched ${count} of ${MAX_PRODUCTS_PER_USER} products.`}{" "}
+              <Link href="/dashboard" className="text-primary hover:underline">
+                Manage them
+              </Link>
+              .
             </p>
           </div>
 
@@ -53,11 +57,16 @@ export default async function SubmitPage() {
               <h2 className="text-xl font-bold text-ink">You&apos;ve reached your launch limit</h2>
               <p className="max-w-md text-sm text-body">
                 Each maker can launch up to {MAX_PRODUCTS_PER_USER} products on Bharat Hunt. To
-                launch a new one, delete an existing product from its page first.
+                launch a new one, delete an existing product from your dashboard to free a slot.
               </p>
-              <Link href="/marketplace" className={buttonVariants({ variant: "outline" })}>
-                Browse the marketplace
-              </Link>
+              <div className="flex flex-wrap items-center justify-center gap-3">
+                <Link href="/dashboard" className={buttonVariants()}>
+                  Manage your products
+                </Link>
+                <Link href="/marketplace" className={buttonVariants({ variant: "outline" })}>
+                  Browse the marketplace
+                </Link>
+              </div>
             </div>
           ) : (
             <ProductForm />

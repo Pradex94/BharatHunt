@@ -344,6 +344,8 @@ export async function createProduct(
 
   // A new product changes lists, featured, counts, stats and the sitemap.
   await cacheInvalidatePrefix(PRODUCTS_CACHE_PREFIX);
+  // …and it's a new row on the maker's dashboard.
+  revalidatePath("/dashboard");
 
   redirect(`/products/${product.slug}`);
 }
@@ -458,6 +460,9 @@ export async function updateProduct(
   }
 
   await cacheInvalidatePrefix(PRODUCTS_CACHE_PREFIX);
+  // The dashboard shows name/tagline/status, so an edit changes it too.
+  revalidatePath("/dashboard");
+  revalidatePath("/admin");
 
   redirect(`/products/${productSlug}`);
 }
@@ -506,9 +511,10 @@ export async function deleteProduct(
 
   await cacheInvalidatePrefix(PRODUCTS_CACHE_PREFIX);
 
-  // Drop the row from every cached render that showed it. Revalidating /admin
-  // is what lets the dashboard refresh in place instead of navigating away.
+  // Drop the row from every cached render that showed it. Revalidating the two
+  // dashboards is what lets them refresh in place instead of navigating away.
   revalidatePath("/admin");
+  revalidatePath("/dashboard");
   revalidatePath("/marketplace");
   for (const { slug } of deleted) {
     revalidatePath(`/products/${slug}`);
