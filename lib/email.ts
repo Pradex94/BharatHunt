@@ -26,8 +26,22 @@ import { ADS_EMAIL, SITE_NAME } from "@/lib/constants";
 const SENDGROVE_ENDPOINT = "https://api.sendgrove.com/api/v2/emails";
 const SEND_TIMEOUT_MS = 15_000;
 
+/** U+FEFF. Shells and editors love to prepend one when a value is piped in. */
+const BOM = String.fromCharCode(0xfeff);
+
+/**
+ * Env values can arrive carrying a byte-order mark or stray whitespace — a
+ * `vercel env add` fed from a Windows pipe does exactly that. A leading BOM in
+ * an API key is invisible everywhere except the HTTP layer, where it throws
+ * "Cannot convert argument to a ByteString" and takes the whole send with it.
+ */
+function cleanEnv(value: string | undefined): string | undefined {
+  if (!value) return undefined;
+  return value.split(BOM).join("").trim() || undefined;
+}
+
 /** Default envelope sender — must be a verified sender on the account. */
-const DEFAULT_FROM = process.env.EMAIL_FROM ?? `${SITE_NAME} <${ADS_EMAIL}>`;
+const DEFAULT_FROM = cleanEnv(process.env.EMAIL_FROM) ?? `${SITE_NAME} <${ADS_EMAIL}>`;
 
 /**
  * Optional stand-in used only when `EMAIL_FROM` is rejected as unverified.
@@ -35,7 +49,7 @@ const DEFAULT_FROM = process.env.EMAIL_FROM ?? `${SITE_NAME} <${ADS_EMAIL}>`;
  * unanswered in the meantime — so we retry once from an address that is
  * already verified, and log loudly that we did.
  */
-const FALLBACK_FROM = process.env.EMAIL_FALLBACK_FROM;
+const FALLBACK_FROM = cleanEnv(process.env.EMAIL_FALLBACK_FROM);
 
 /** Sendgrove's 403 for a `from` address that hasn't completed OTP verification. */
 function isUnverifiedSender(error: string): boolean {
@@ -71,7 +85,7 @@ function parseSender(value: string): { email: string; name?: string } {
 
 /** Whether an email backend is configured (useful for diagnostics). */
 export function isEmailEnabled(): boolean {
-  return Boolean(process.env.SENDGROVE_API_KEY);
+  return Boolean(cleanEnv(process.env.SENDGROVE_API_KEY));
 }
 
 /** Pulls the human-readable message out of Sendgrove's error envelope. */
@@ -105,7 +119,7 @@ async function deliver(
   { to, subject, html, text, replyTo }: SendEmailInput,
   from: string,
 ): Promise<SendEmailResult> {
-  const apiKey = process.env.SENDGROVE_API_KEY;
+  const apiKey = cleanEnv(process.env.SENDGROVE_API_KEY);
   if (!apiKey) {
     // Not configured (local dev, preview builds) — say so instead of pretending.
     return { ok: false, error: "SENDGROVE_API_KEY is not set — email was not sent." };
@@ -167,7 +181,7 @@ async function deliver(
  * anything — handy for a health check or a setup script.
  */
 export async function verifyEmailTransport(): Promise<SendEmailResult> {
-  const apiKey = process.env.SENDGROVE_API_KEY;
+  const apiKey = cleanEnv(process.env.SENDGROVE_API_KEY);
   if (!apiKey) return { ok: false, error: "SENDGROVE_API_KEY is not set." };
   try {
     const response = await fetch("https://api.sendgrove.com/api/v2/account", {
