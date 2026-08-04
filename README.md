@@ -1,3 +1,5 @@
+changed by Aawej
+
 # Bharat Hunt
 
 A curated marketplace for discovering, upvoting, and launching premium software — lifetime deals and tools built by founders, for founders. Products are submitted, ranked by a time-decayed trending score, filtered by category and pricing, and discussed in comments.
