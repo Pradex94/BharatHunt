@@ -111,6 +111,35 @@ export async function getFeaturedProducts(limit = 6): Promise<ProductCardProduct
   });
 }
 
+/** A landing-page card: the usual product columns plus views for the hero. */
+export type LandingProduct = ProductCardProduct & { view_count: number | null };
+
+const LANDING_PRODUCT_COLUMNS =
+  "id, slug, name, tagline, category, pricing_type, avg_rating, upvote_count, comment_count, view_count, hero_image_url, tags, website_url, github_url, creator:profiles!products_creator_id_fkey(display_name, username)";
+
+/**
+ * Published products ranked by upvotes — the landing page's leaderboard, and
+ * the source of the hero's featured launch.
+ *
+ * Fails soft (empty list) rather than throwing: the home page is the front
+ * door, and it should still render its copy and CTAs if this query breaks.
+ */
+export async function getTopUpvotedProducts(limit = 6): Promise<LandingProduct[]> {
+  return cacheRemember(`${PRODUCTS_CACHE_PREFIX}top-upvoted:${limit}`, AGGREGATE_TTL, async () => {
+    const supabase = createClient();
+    const { data, error } = await supabase
+      .from("products")
+      .select(LANDING_PRODUCT_COLUMNS)
+      .eq("status", "published")
+      .order("upvote_count", { ascending: false, nullsFirst: false })
+      .order("published_at", { ascending: false, nullsFirst: false })
+      .limit(limit);
+
+    if (error) return [];
+    return (data ?? []) as LandingProduct[];
+  });
+}
+
 export async function getUpvotedProductIds(
   userId: string | null,
   productIds: string[],

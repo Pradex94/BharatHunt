@@ -4,6 +4,7 @@ import { cn } from "@/lib/utils";
 import { absoluteUrl } from "@/lib/seo";
 import { UpvoteButton } from "@/components/products/upvote-button";
 import { ShareMenu } from "@/components/products/share-menu";
+import { ProductLogo } from "@/components/products/product-logo";
 import { Numeric } from "@/components/ui/typography";
 import { cardInteractiveClassName } from "@/components/ui/card";
 
@@ -73,22 +74,15 @@ export function ProductCard({
         className="self-start"
       />
 
-      {/* Logo */}
-      <Link
-        href={productPath}
-        className="flex size-14 shrink-0 items-center justify-center self-start overflow-hidden rounded-xl bg-surface-cream-strong text-lg font-semibold text-muted"
-      >
-        {product.hero_image_url ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={product.hero_image_url}
-            alt=""
-            loading="lazy"
-            className="size-full object-cover"
-          />
-        ) : (
-          product.name.slice(0, 1).toUpperCase()
-        )}
+      {/* Logo — see components/products/product-logo.tsx for why it's a circle
+          on white with this much padding. */}
+      <Link href={productPath} className="self-start">
+        <ProductLogo
+          src={product.hero_image_url}
+          name={product.name}
+          size="md"
+          loading="lazy"
+        />
       </Link>
 
       {/* Content stack */}

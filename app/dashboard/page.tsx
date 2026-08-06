@@ -12,6 +12,7 @@ import { Container } from "@/components/ui/container";
 import { Numeric } from "@/components/ui/typography";
 import { buttonVariants } from "@/components/ui/button";
 import { DeleteProductButton } from "@/components/products/delete-product-button";
+import { ProductLogo } from "@/components/products/product-logo";
 import { getProductsByCreator, type MakerProduct } from "@/services/products";
 import { getIsAdmin } from "@/lib/admin";
 import { MAX_PRODUCTS_PER_USER, PRICING_TYPE_LABELS } from "@/lib/constants";
@@ -160,14 +161,7 @@ function ProductRow({ product }: { product: MakerProduct }) {
   return (
     <div className="flex flex-col gap-4 rounded-xl border border-border bg-card p-4 sm:flex-row sm:items-center">
       {/* Logo */}
-      <div className="flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-secondary-bg text-lg font-semibold text-muted">
-        {product.hero_image_url ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={product.hero_image_url} alt="" className="size-full object-cover" />
-        ) : (
-          product.name.slice(0, 1).toUpperCase()
-        )}
-      </div>
+      <ProductLogo src={product.hero_image_url} name={product.name} size="sm" />
 
       {/* Identity */}
       <div className="min-w-0 flex-1">

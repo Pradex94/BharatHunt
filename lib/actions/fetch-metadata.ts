@@ -16,26 +16,70 @@ import net from "node:net";
 
 import { auth } from "@clerk/nextjs/server";
 
-export type ProductMetadata = {
-  url: string;
-  name: string;
-  title: string;
-  description: string;
-  /** Square logo/favicon for the product avatar (→ hero_image_url). */
-  icon: string | null;
-  /** Wide preview image(s) for the product gallery (→ screenshot_urls). */
-  images: string[];
-  siteName: string | null;
-};
+import {
+  bySizeDesc,
+  extractMetadata,
+  nameFromHostname,
+  parseIconSize,
+  safeHostname,
+  toAbsolute,
+  type FetchMetadataResult,
+} from "@/lib/metadata-extract";
 
-export type FetchMetadataResult =
-  | { ok: true; data: ProductMetadata }
-  | { ok: false; error: string };
+// NOTE: this is a "use server" module — it may export async functions and
+// nothing else. Types live in @/lib/metadata-extract; re-exporting one from
+// here makes Turbopack emit a runtime re-export and the module throws
+// "ReferenceError: <Type> is not defined" on evaluation.
 
 const FETCH_TIMEOUT_MS = 7000;
 const MAX_BYTES = 512 * 1024; // the <head> lives at the top; 512KB is plenty
 const MAX_REDIRECTS = 4;
 const BLOCKED_HOSTS = new Set(["localhost", "ip6-localhost", "metadata.google.internal"]);
+
+/**
+ * Mozilla-compatible, but still says who we are — the same shape Slackbot,
+ * Twitterbot and Googlebot use. Plenty of CDNs and WAFs reject any User-Agent
+ * that doesn't start with "Mozilla/5.0", which is what made legitimate imports
+ * come back 403. We identify honestly rather than impersonating a browser.
+ */
+const USER_AGENT =
+  "Mozilla/5.0 (compatible; BharatHuntBot/1.0; +https://www.bharathunt.org)";
+
+/** A bare UA and Accept header reads as a scraper; real clients send these. */
+const BROWSER_HEADERS: Record<string, string> = {
+  "User-Agent": USER_AGENT,
+  Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+  "Accept-Language": "en-IN,en;q=0.9",
+  "Upgrade-Insecure-Requests": "1",
+};
+
+/** Carries the status code so the caller can explain what actually happened. */
+class HttpStatusError extends Error {
+  constructor(readonly status: number) {
+    super(`The site responded with ${status}.`);
+  }
+}
+
+/**
+ * Turns a status into something a maker can act on. "The site responded with
+ * 403" tells them nothing — and the fix is nearly always "type it in yourself",
+ * so say that.
+ */
+function describeHttpFailure(status: number): string {
+  if (status === 401 || status === 403) {
+    return "That site blocked our request, so we couldn't read its details automatically.";
+  }
+  if (status === 404 || status === 410) {
+    return "That page doesn't exist — check the URL.";
+  }
+  if (status === 429) {
+    return "That site is rate-limiting us right now.";
+  }
+  if (status >= 500) {
+    return "That site is having trouble right now.";
+  }
+  return "We couldn't read that page.";
+}
 
 /** Icon resolution: how many candidates we'll actually HTTP-check, and how long each may take. */
 const MAX_ICON_PROBES = 6;
@@ -57,7 +101,7 @@ export async function fetchUrlMetadata(rawUrl: string): Promise<FetchMetadataRes
     const { finalUrl, html } = await fetchHtml(normalized);
     const { iconCandidates, manifestUrl, ...data } = extractMetadata(html, finalUrl);
     if (!data.name && !data.description && data.images.length === 0) {
-      return { ok: false, error: "Couldn't read any details from that page — fill the form in manually." };
+      return minimalImport(normalized, "We couldn't read any details from that page.");
     }
 
     // The declared favicon is often missing, a dead link, or a bare .ico. Walk
@@ -69,10 +113,42 @@ export async function fetchUrlMetadata(rawUrl: string): Promise<FetchMetadataRes
 
     return { ok: true, data };
   } catch (error) {
+    // A site we can't read is not a reason to strand the maker on an empty
+    // form. We still know the URL, and the favicon service works off the
+    // domain alone — so hand back what we have and say what's missing.
+    if (error instanceof HttpStatusError) {
+      return minimalImport(normalized, describeHttpFailure(error.status));
+    }
     const message =
       error instanceof Error && error.message ? error.message : "Couldn't fetch that page.";
     return { ok: false, error: message };
   }
+}
+
+/**
+ * The best we can do without reading the page: the URL itself, a name guessed
+ * from the domain, and a favicon looked up by domain. The maker fills in the
+ * rest, which beats being told "403" and left with nothing.
+ */
+function minimalImport(url: string, reason: string): FetchMetadataResult {
+  const host = safeHostname(url);
+  if (!host) return { ok: false, error: reason };
+
+  return {
+    ok: true,
+    notice: `${reason} We've filled in your link and logo — add the name and description yourself.`,
+    data: {
+      url,
+      name: nameFromHostname(host),
+      title: "",
+      description: "",
+      tagline: "",
+      category: null,
+      icon: `https://www.google.com/s2/favicons?sz=128&domain=${encodeURIComponent(host)}`,
+      images: [],
+      siteName: null,
+    },
+  };
 }
 
 function normalizeUrl(input: string): string {
@@ -127,10 +203,7 @@ async function fetchHtml(startUrl: string): Promise<{ finalUrl: string; html: st
         method: "GET",
         redirect: "manual",
         signal: controller.signal,
-        headers: {
-          "User-Agent": "BharatHuntBot/1.0 (+https://bharat-hunt.vercel.app)",
-          Accept: "text/html,application/xhtml+xml",
-        },
+        headers: BROWSER_HEADERS,
       });
     } catch {
       throw new Error("Couldn't reach that site.");
@@ -145,7 +218,7 @@ async function fetchHtml(startUrl: string): Promise<{ finalUrl: string; html: st
       continue;
     }
 
-    if (!res.ok) throw new Error(`The site responded with ${res.status}.`);
+    if (!res.ok) throw new HttpStatusError(res.status);
 
     const contentType = res.headers.get("content-type") ?? "";
     if (contentType && !/text\/html|application\/xhtml/i.test(contentType)) {
@@ -183,113 +256,6 @@ async function readCapped(res: Response, maxBytes: number): Promise<string> {
   return Buffer.concat(chunks).toString("utf8");
 }
 
-// ── HTML metadata extraction ─────────────────────────────────────────────
-
-/** What `extractMetadata` knows before we've HTTP-checked anything. */
-type ExtractedMetadata = ProductMetadata & {
-  /** Ordered best-first; `resolveIcon` picks the first that actually loads. */
-  iconCandidates: string[];
-  /** `<link rel="manifest">`, where PWAs keep their big square icons. */
-  manifestUrl: string | null;
-};
-
-/** `sizes="180x180"` → 180, so we can prefer the biggest declared icon. */
-function parseIconSize(sizes: string | undefined): number {
-  if (!sizes) return 0;
-  const match = /(\d+)\s*[x×]\s*(\d+)/i.exec(sizes);
-  return match ? Number(match[1]) : 0;
-}
-
-function bySizeDesc(a: { size: number }, b: { size: number }): number {
-  return b.size - a.size;
-}
-
-function extractMetadata(html: string, baseUrl: string): ExtractedMetadata {
-  const og: Record<string, string> = {};
-  const tw: Record<string, string> = {};
-  const named: Record<string, string> = {};
-
-  for (const tag of html.match(/<meta\b[^>]*>/gi) ?? []) {
-    const attrs = parseAttributes(tag);
-    const content = attrs["content"];
-    if (content === undefined) continue;
-    const property = attrs["property"]?.toLowerCase();
-    const name = attrs["name"]?.toLowerCase();
-    const key = property ?? name;
-    if (!key) continue;
-    if (key.startsWith("og:")) og[key.slice(3)] ??= content;
-    else if (key.startsWith("twitter:")) tw[key.slice(8)] ??= content;
-    else if (name) named[name] ??= content;
-  }
-
-  const titleMatch = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
-  const rawTitle = titleMatch ? decodeEntities(collapse(titleMatch[1])) : "";
-
-  const appleIcons: Array<{ href: string; size: number }> = [];
-  const linkIcons: Array<{ href: string; size: number }> = [];
-  let manifestHref = "";
-  for (const tag of html.match(/<link\b[^>]*>/gi) ?? []) {
-    const attrs = parseAttributes(tag);
-    const rel = (attrs["rel"] ?? "").toLowerCase();
-    const href = attrs["href"];
-    if (!href) continue;
-    const size = parseIconSize(attrs["sizes"]);
-    if (rel.includes("apple-touch-icon")) appleIcons.push({ href, size });
-    else if (rel.includes("manifest")) manifestHref ||= href;
-    else if (rel.includes("icon")) linkIcons.push({ href, size });
-  }
-  appleIcons.sort(bySizeDesc);
-  linkIcons.sort(bySizeDesc);
-
-  const title = og["title"] || tw["title"] || rawTitle;
-  const siteName = og["site_name"] || null;
-  const description = collapse(og["description"] || tw["description"] || named["description"] || "").slice(0, 1000);
-
-  // Gallery: the social-preview image(s), absolute + deduped.
-  const declaredIcons = new Set<string>();
-  for (const { href } of [...appleIcons, ...linkIcons]) {
-    const abs = toAbsolute(href, baseUrl);
-    if (abs) declaredIcons.add(abs);
-  }
-  const images: string[] = [];
-  for (const raw of [og["image"], og["image:url"], og["image:secure_url"], tw["image"], tw["image:src"]]) {
-    const abs = toAbsolute(raw, baseUrl);
-    if (abs && !declaredIcons.has(abs) && !images.includes(abs)) images.push(abs);
-  }
-
-  // Icon candidates, best first. The maker's real square logo lives in the
-  // apple-touch-icon or the PWA manifest; a raster <link rel="icon"> is next.
-  // Only after all of those do we accept a bare .ico, then a social image as a
-  // stand-in logo — which is what "fetch some other image" means in practice.
-  const raster = linkIcons.filter(({ href }) => /\.(png|svg|webp|jpe?g|avif)(\?|#|$)/i.test(href));
-  const legacy = linkIcons.filter(({ href }) => !raster.some((r) => r.href === href));
-  const origin = safeOrigin(baseUrl);
-  const iconCandidates = [
-    ...appleIcons.map(({ href }) => href),
-    ...raster.map(({ href }) => href),
-    named["msapplication-tileimage"],
-    ...legacy.map(({ href }) => href),
-    og["logo"],
-    origin ? `${origin}/favicon.ico` : undefined, // undeclared but conventional
-    ...images,
-  ]
-    .map((href) => toAbsolute(href, baseUrl))
-    .filter((href): href is string => Boolean(href))
-    .filter((href, index, all) => all.indexOf(href) === index);
-
-  return {
-    url: baseUrl,
-    name: (siteName || title || "").trim(),
-    title: title.trim(),
-    description,
-    icon: null, // resolved by resolveIcon() once we can make requests
-    images,
-    siteName,
-    iconCandidates,
-    manifestUrl: toAbsolute(manifestHref, baseUrl),
-  };
-}
-
 /** Icons declared in a PWA manifest, largest first. */
 async function manifestIcons(manifestUrl: string): Promise<string[]> {
   try {
@@ -301,7 +267,7 @@ async function manifestIcons(manifestUrl: string): Promise<string[]> {
     const timer = setTimeout(() => controller.abort(), ICON_PROBE_TIMEOUT_MS);
     try {
       const res = await fetch(manifestUrl, {
-        headers: { "User-Agent": "BharatHuntBot/1.0", Accept: "application/manifest+json, application/json" },
+        headers: { ...BROWSER_HEADERS, Accept: "application/manifest+json, application/json" },
         signal: controller.signal,
       });
       if (!res.ok) return [];
@@ -331,7 +297,7 @@ async function isLiveImage(url: string): Promise<boolean> {
     const timer = setTimeout(() => controller.abort(), ICON_PROBE_TIMEOUT_MS);
     try {
       const res = await fetch(url, {
-        headers: { "User-Agent": "BharatHuntBot/1.0", Accept: "image/*" },
+        headers: { ...BROWSER_HEADERS, Accept: "image/*,*/*;q=0.8" },
         signal: controller.signal,
       });
       // Read no further than the headers — we only care that it exists.
@@ -371,65 +337,6 @@ async function resolveIcon(
 
   const host = safeHostname(baseUrl);
   return host ? `https://www.google.com/s2/favicons?sz=128&domain=${encodeURIComponent(host)}` : null;
-}
-
-function safeHostname(url: string): string | null {
-  try {
-    return new URL(url).hostname;
-  } catch {
-    return null;
-  }
-}
-
-function safeOrigin(url: string): string | null {
-  try {
-    return new URL(url).origin;
-  } catch {
-    return null;
-  }
-}
-
-function parseAttributes(tag: string): Record<string, string> {
-  const attrs: Record<string, string> = {};
-  const re = /([a-zA-Z_:][-a-zA-Z0-9_:.]*)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))/g;
-  let match: RegExpExecArray | null;
-  while ((match = re.exec(tag))) {
-    attrs[match[1].toLowerCase()] = decodeEntities(match[2] ?? match[3] ?? match[4] ?? "");
-  }
-  return attrs;
-}
-
-function collapse(value: string): string {
-  return value.replace(/\s+/g, " ").trim();
-}
-
-function toAbsolute(href: string | undefined, base: string): string | null {
-  if (!href) return null;
-  try {
-    return new URL(href, base).toString();
-  } catch {
-    return null;
-  }
-}
-
-function decodeEntities(value: string): string {
-  return value
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&apos;/g, "'")
-    .replace(/&nbsp;/g, " ")
-    .replace(/&#x([0-9a-f]+);/gi, (_, hex) => safeCodePoint(parseInt(hex, 16)))
-    .replace(/&#(\d+);/g, (_, dec) => safeCodePoint(Number(dec)));
-}
-
-function safeCodePoint(code: number): string {
-  try {
-    return String.fromCodePoint(code);
-  } catch {
-    return "";
-  }
 }
 
 // ── Private-range detection ──────────────────────────────────────────────

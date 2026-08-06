@@ -1,20 +1,11 @@
-import {
-  Rocket,
-  Users,
-  TrendingUp,
-  Zap,
-  LayoutGrid,
-  CreditCard,
-  FileText,
-  Package,
-  Type,
-  type LucideIcon,
-} from "lucide-react";
+import { LayoutDashboard, Link2, MessageSquare, Users, type LucideIcon } from "lucide-react";
 
 /**
- * Static demo content for the landing page — matches the reference mockup
- * exactly (ZenTask / Payflow / DocuGen / ShipFast / TypeFit, the community
- * stats, etc.). This is presentation data, not live product data.
+ * Presentation constants for the landing page.
+ *
+ * Everything a visitor can read as a *claim* — products, upvote counts, maker
+ * and community numbers — is queried live in `app/page.tsx`. Only styling
+ * tokens and our own feature copy live here.
  */
 
 export type IconTone = "orange" | "violet" | "rose" | "amber" | "dark";
@@ -28,64 +19,6 @@ export const ICON_TONE: Record<IconTone, string> = {
   dark: "bg-gradient-to-br from-[#2b2620] to-[#4b4238]",
 };
 
-export type DemoProduct = {
-  rank: number;
-  name: string;
-  tagline: string;
-  category: string;
-  upvotes: number;
-  icon: LucideIcon;
-  tone: IconTone;
-};
-
-export const TOP_PRODUCTS: DemoProduct[] = [
-  {
-    rank: 1,
-    name: "ZenTask",
-    tagline: "Task management, reimagined for teams",
-    category: "SaaS",
-    upvotes: 523,
-    icon: LayoutGrid,
-    tone: "violet",
-  },
-  {
-    rank: 2,
-    name: "Payflow",
-    tagline: "Payments infrastructure for modern India",
-    category: "Fintech",
-    upvotes: 421,
-    icon: CreditCard,
-    tone: "dark",
-  },
-  {
-    rank: 3,
-    name: "DocuGen",
-    tagline: "Generate documents in seconds with AI",
-    category: "AI",
-    upvotes: 318,
-    icon: FileText,
-    tone: "orange",
-  },
-  {
-    rank: 4,
-    name: "ShipFast",
-    tagline: "Shipping API for e-commerce made simple",
-    category: "Developer Tools",
-    upvotes: 289,
-    icon: Package,
-    tone: "amber",
-  },
-  {
-    rank: 5,
-    name: "TypeFit",
-    tagline: "AI-powered typography for stunning designs",
-    category: "Design Tools",
-    upvotes: 254,
-    icon: Type,
-    tone: "dark",
-  },
-];
-
 export type Feature = {
   title: string;
   description: string;
@@ -93,44 +26,38 @@ export type Feature = {
   tone: IconTone;
 };
 
+/**
+ * Each of these describes something the product actually does — the import
+ * flow, the comment thread, the maker dashboard. Vague benefit copy ("build
+ * your audience", "fast & easy") tells a maker nothing they can check.
+ */
 export const FEATURES: Feature[] = [
   {
-    title: "Launch with reach",
+    title: "Launch from a link",
     description:
-      "Get discovered by thousands of product enthusiasts and early adopters.",
-    icon: Rocket,
+      "Paste your URL and we pull in your logo, description and screenshots. Change anything you like before it goes live.",
+    icon: Link2,
     tone: "orange",
   },
   {
-    title: "Community support",
-    description: "Upvotes, feedback and real conversations that help you build better.",
-    icon: Users,
+    title: "Feedback you can use",
+    description:
+      "Comments and questions from people who opened your product — not a vanity counter.",
+    icon: MessageSquare,
     tone: "rose",
   },
   {
-    title: "Build your audience",
-    description: "Turn your product launch into lasting followers and customers.",
-    icon: TrendingUp,
+    title: "Made for Indian makers",
+    description:
+      "Categories that match what India actually ships, and a community that already has the context.",
+    icon: Users,
     tone: "violet",
   },
   {
-    title: "Fast & easy",
-    description: "Launch your product in minutes, focus on building, not setup.",
-    icon: Zap,
+    title: "Yours to edit, always",
+    description:
+      "Track views and upvotes from your dashboard, and update your launch whenever the product moves on.",
+    icon: LayoutDashboard,
     tone: "amber",
   },
 ];
-
-export type Stat = { value: string; label: string };
-
-export const COMMUNITY_STATS: Stat[] = [
-  { value: "15K+", label: "Makers" },
-  { value: "50K+", label: "Products" },
-  { value: "250K+", label: "Upvotes" },
-  { value: "120+", label: "Countries" },
-];
-
-/** Avatar face URLs (pravatar) used in the rating row + community map. */
-export const AVATARS = [12, 5, 33, 47, 9, 60].map(
-  (n) => `https://i.pravatar.cc/80?img=${n}`,
-);

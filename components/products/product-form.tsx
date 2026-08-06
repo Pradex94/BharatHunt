@@ -27,6 +27,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { ProductLogo } from "@/components/products/product-logo";
 import { uploadProductImage } from "@/lib/upload";
 import { cn } from "@/lib/utils";
 
@@ -97,6 +98,12 @@ function toTagline(description: string, max = 120): string {
   const cut = clean.slice(0, max - 1);
   const lastSpace = cut.lastIndexOf(" ");
   return `${(lastSpace > 40 ? cut.slice(0, lastSpace) : cut).trimEnd()}…`;
+}
+
+/** ["a","b","c"] → "a, b and c" */
+function formatList(items: string[]): string {
+  if (items.length <= 1) return items[0] ?? "";
+  return `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
 }
 
 /** Comma-separated input → trimmed, non-empty entries. */
@@ -171,7 +178,10 @@ export function ProductForm({ product }: { product?: ExistingProduct }) {
   // Import from URL
   const [importUrl, setImportUrl] = useState(product?.website_url ?? "");
   const [importing, setImporting] = useState(false);
-  const [importMsg, setImportMsg] = useState<{ type: "error" | "success"; text: string } | null>(
+  const [importMsg, setImportMsg] = useState<{
+    type: "error" | "success" | "warning";
+    text: string;
+  } | null>(
     null,
   );
 
@@ -257,8 +267,10 @@ export function ProductForm({ product }: { product?: ExistingProduct }) {
       setFormData((prev) => ({
         ...prev,
         name: data.name || prev.name,
-        tagline: data.description ? toTagline(data.description) : prev.tagline,
+        tagline: data.tagline ? toTagline(data.tagline) : prev.tagline,
         description: data.description || prev.description,
+        // Only a guess — never overwrite a category the maker already picked.
+        category: prev.category || data.category || "",
         websiteUrl: data.url || url,
         heroImageUrl: data.icon || prev.heroImageUrl,
       }));
@@ -273,12 +285,32 @@ export function ProductForm({ product }: { product?: ExistingProduct }) {
         }
         return merged.slice(0, 8);
       });
-      setImportMsg({
-        type: "success",
-        text: data.icon
-          ? "Details imported — review and edit below."
-          : "Details imported, but we couldn't find a logo. Add one in Images and media.",
-      });
+      // A `notice` means the page couldn't be read at all and we fell back to
+      // the URL and domain favicon — real information, so don't dress it up as
+      // a clean success.
+      if (result.notice) {
+        setImportMsg({ type: "warning", text: result.notice });
+        return;
+      }
+
+      // Name what the page didn't publish. Single-page apps very often ship a
+      // <title> and nothing else, and "Details imported" over three still-empty
+      // fields reads like the importer failed silently.
+      const missing = [
+        !data.tagline && "tagline",
+        !data.description && "description",
+        !data.icon && "logo",
+        !data.category && "category",
+      ].filter((label): label is string => Boolean(label));
+
+      setImportMsg(
+        missing.length === 0
+          ? { type: "success", text: "Details imported — review and edit below." }
+          : {
+              type: "warning",
+              text: `Imported what that page publishes. It doesn't list a ${formatList(missing)} — add ${missing.length > 1 ? "those" : "that"} below.`,
+            },
+      );
     } catch {
       setImportMsg({ type: "error", text: "Couldn't fetch that page. Fill the form in manually." });
     } finally {
@@ -506,7 +538,9 @@ export function ProductForm({ product }: { product?: ExistingProduct }) {
               <p
                 className={cn(
                   "text-xs",
-                  importMsg.type === "error" ? "text-destructive" : "text-success",
+                  importMsg.type === "error" && "text-destructive",
+                  importMsg.type === "warning" && "text-warning",
+                  importMsg.type === "success" && "text-success",
                 )}
                 role="status"
               >
@@ -609,8 +643,13 @@ export function ProductForm({ product }: { product?: ExistingProduct }) {
 
             {imagePreview && (
               <div className="relative w-full overflow-hidden rounded-lg border border-input bg-muted">
+                {/* The uploaded file is a square logo, so show it whole. */}
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={imagePreview} alt="Product preview" className="h-48 w-full object-cover" />
+                <img
+                  src={imagePreview}
+                  alt="Product preview"
+                  className="h-48 w-full object-contain p-4"
+                />
                 <button
                   type="button"
                   onClick={handleRemoveImage}
@@ -987,14 +1026,7 @@ export function ProductForm({ product }: { product?: ExistingProduct }) {
           <div className={card}>
             <h2 className="text-lg font-semibold text-foreground">How your card will look</h2>
             <div className="max-w-sm space-y-3 rounded-xl border border-border bg-background p-4">
-              <div className="flex size-14 items-center justify-center overflow-hidden rounded-lg bg-secondary-bg text-lg font-semibold text-muted">
-                {previewData.imageUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={previewData.imageUrl} alt="" className="size-full object-cover" />
-                ) : (
-                  previewData.name.slice(0, 1).toUpperCase()
-                )}
-              </div>
+              <ProductLogo src={previewData.imageUrl} name={previewData.name} size="md" />
 
               <div className="space-y-2">
                 <div className="flex items-start justify-between gap-2">

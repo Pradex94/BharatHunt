@@ -11,7 +11,6 @@ import { Container } from "@/components/ui/container";
 import { Display, H2, Lead, Numeric } from "@/components/ui/typography";
 import { FadeIn } from "@/components/ui/motion";
 import { buttonVariants } from "@/components/ui/button";
-import { AVATARS } from "@/components/landing/data";
 import { AD_PACKAGES } from "@/lib/advertise";
 import { PRODUCT_CATEGORIES } from "@/lib/constants";
 import { getPlatformStats } from "@/services/products";
@@ -72,33 +71,30 @@ export default async function AdvertisePage() {
             </Link>
           </FadeIn>
 
-          {/* Decorative audience cluster */}
-          <FadeIn delay={0.1} className="relative mx-auto hidden aspect-square w-full max-w-md lg:block">
+          {/* Who's on the other side of the ad. Named segments rather than
+              stock faces — this page asks advertisers for money, so the
+              illustration shouldn't imply members we can't point to. */}
+          <FadeIn delay={0.1} className="relative mx-auto hidden w-full max-w-md lg:block">
             <div
               aria-hidden
               className="absolute inset-0 rounded-full bg-[radial-gradient(circle,rgba(255,138,61,0.14),transparent_65%)]"
             />
-            {[
-              { src: AVATARS[0], cls: "left-[6%] top-[14%] size-20", Icon: Code2 },
-              { src: AVATARS[1], cls: "right-[10%] top-[6%] size-24", Icon: Palette },
-              { src: AVATARS[2], cls: "left-[16%] bottom-[12%] size-24", Icon: Palette },
-              { src: AVATARS[3], cls: "right-[6%] bottom-[18%] size-20", Icon: MessageSquare },
-              { src: AVATARS[4], cls: "left-1/2 top-1/2 size-24 -translate-x-1/2 -translate-y-1/2", Icon: IndianRupee },
-            ].map((a, i) => (
-              <div key={i} className={cn("absolute", a.cls)}>
-                <div className="relative size-full">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={a.src}
-                    alt=""
-                    className="size-full rounded-full border-4 border-background object-cover shadow-soft"
-                  />
-                  <span className="absolute -right-1 -top-1 flex size-7 items-center justify-center rounded-full border border-border bg-card text-primary shadow-sm">
-                    <a.Icon className="size-3.5" />
+            <ul className="relative grid gap-3 sm:grid-cols-2">
+              {AUDIENCE.map(({ label, Icon }, i) => (
+                <li
+                  key={label}
+                  className={cn(
+                    "flex flex-col gap-3 rounded-2xl border border-border bg-card p-5 shadow-sm",
+                    i % 2 === 1 && "sm:mt-8",
+                  )}
+                >
+                  <span className="flex size-11 items-center justify-center rounded-xl bg-gradient-to-br from-[#ff6b1a] to-[#ff8a3d] text-white shadow-sm">
+                    <Icon className="size-5" aria-hidden="true" />
                   </span>
-                </div>
-              </div>
-            ))}
+                  <span className="text-sm font-semibold text-ink">{label}</span>
+                </li>
+              ))}
+            </ul>
           </FadeIn>
         </Container>
       </section>

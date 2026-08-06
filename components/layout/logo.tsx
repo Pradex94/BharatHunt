@@ -47,7 +47,7 @@ export function Logo({
     >
       {iconSrc ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={iconSrc} alt="" className="size-8 shrink-0 rounded-lg object-cover" />
+        <img src={iconSrc} alt="" className="size-8 shrink-0 rounded-lg object-contain" />
       ) : (
         <BrandMark />
       )}

@@ -16,6 +16,7 @@ import { CommentForm } from "@/components/products/comment-form";
 import { CommentItem, type CommentItemData } from "@/components/products/comment-item";
 import { DeleteProductButton } from "@/components/products/delete-product-button";
 import { ProductGallery } from "@/components/products/product-gallery";
+import { ProductLogo } from "@/components/products/product-logo";
 import { ProductReach } from "@/components/products/product-reach";
 import { ProductVideo } from "@/components/products/product-video";
 import { OfferBox } from "@/components/products/offer-box";
@@ -162,14 +163,7 @@ export default async function ProductPage({
       />
       <FadeIn className="flex flex-col gap-6">
         <div className="flex gap-5">
-          <div className="flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-lg bg-surface-cream-strong text-2xl font-semibold text-muted">
-            {product.hero_image_url ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={product.hero_image_url} alt="" className="size-full object-cover" />
-            ) : (
-              product.name.slice(0, 1).toUpperCase()
-            )}
-          </div>
+          <ProductLogo src={product.hero_image_url} name={product.name} size="lg" />
           <div className="flex min-w-0 flex-1 flex-col gap-2">
             <div className="flex items-start justify-between gap-3">
               <H1 className="text-3xl sm:text-4xl">{product.name}</H1>
