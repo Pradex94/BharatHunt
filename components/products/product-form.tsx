@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 import {
   Check,
   ChevronLeft,
@@ -51,6 +51,10 @@ const STEPS = [
 ] as const;
 
 type StepId = (typeof STEPS)[number]["id"];
+
+/** Which step a rejected launch rule belongs to, so we can jump the maker there. */
+/** Steps carrying required fields, in the order a maker should be sent to fix them. */
+const REQUIRED_STEPS: StepId[] = ["main", "links"];
 
 /** Which step a rejected launch rule belongs to, so we can jump the maker there. */
 const STEP_FOR_RULE: Record<ModerationCode, StepId> = {
@@ -202,6 +206,18 @@ export function ProductForm({ product }: { product?: ExistingProduct }) {
   const hasProductLink = productLinks.some((link) => link.trim());
 
   /** Blocks Next when a step is missing something the launch can't go without. */
+  // Whatever the form is currently complaining about, in priority order.
+  const activeError = ruleError ?? state?.error ?? stepError ?? null;
+  const errorRef = useRef<HTMLDivElement>(null);
+
+  // The banner lives below the step panels, so bring it into view whenever it
+  // changes — otherwise a rejected publish just silently scrolls away.
+  useEffect(() => {
+    if (activeError) {
+      errorRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }, [activeError]);
+
   function validateStep(id: StepId): string | null {
     if (id === "main") {
       if (!formData.name.trim()) return "Add your product's name.";
@@ -230,10 +246,20 @@ export function ProductForm({ product }: { product?: ExistingProduct }) {
     }
   }
 
-  function goToStep(next: StepId) {
+  /**
+   * Moves to a step and scrolls back to the top of the form.
+   *
+   * `scroll: false` is for jumps caused by an error: the error banner sits
+   * below the panels, so scrolling to the top would carry it off-screen and
+   * the click would look like it did nothing. Those jumps let the effect above
+   * scroll the banner into view instead.
+   */
+  function goToStep(next: StepId, { scroll = true }: { scroll?: boolean } = {}) {
     setStep(next);
-    setStepError(null);
-    if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
+    if (scroll) {
+      setStepError(null);
+      if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
+    }
   }
 
   function handleNext() {
@@ -362,6 +388,20 @@ export function ProductForm({ product }: { product?: ExistingProduct }) {
   };
 
   const handleFormSubmit = async (submitData: FormData) => {
+    // Required fields live on specific steps, and the stepper lets a maker jump
+    // straight to Review. Check them here so an incomplete form points at the
+    // field to fix instead of bouncing off the server with a generic message.
+    for (const id of REQUIRED_STEPS) {
+      const problem = validateStep(id);
+      if (problem) {
+        setRuleError(null);
+        setStepError(problem);
+        goToStep(id, { scroll: false });
+        return;
+      }
+    }
+    setStepError(null);
+
     // Check the launch rules before uploading anything — the server re-runs the
     // exact same check, this just saves a rejected round trip.
     const check = moderateProduct({
@@ -384,8 +424,9 @@ export function ProductForm({ product }: { product?: ExistingProduct }) {
     });
     if (!check.ok) {
       setRuleError(check.message);
-      // Send them to the step that actually holds the problem.
-      goToStep(STEP_FOR_RULE[check.code]);
+      // Send them to the step that actually holds the problem — without
+      // scrolling to the top, so the reason stays on screen.
+      goToStep(STEP_FOR_RULE[check.code], { scroll: false });
       return;
     }
     setRuleError(null);
@@ -1091,17 +1132,23 @@ export function ProductForm({ product }: { product?: ExistingProduct }) {
           </div>
         </div>
 
-        {stepError && (
-          <div className="rounded-lg border border-amber-300 bg-amber-50 p-4" role="alert">
-            <p className="text-sm text-amber-800">{stepError}</p>
-          </div>
-        )}
+        {/* Scroll target for whichever banner is showing — see the effect above. */}
+        <div ref={errorRef} className="empty:hidden">
+          {stepError && (
+            <div className="rounded-lg border border-amber-300 bg-amber-50 p-4" role="alert">
+              <p className="text-sm text-amber-800">{stepError}</p>
+            </div>
+          )}
 
-        {(ruleError || state?.error) && (
-          <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4" role="alert">
-            <p className="text-sm text-destructive">{ruleError ?? state?.error}</p>
-          </div>
-        )}
+          {(ruleError || state?.error) && (
+            <div
+              className="rounded-lg border border-destructive/50 bg-destructive/10 p-4"
+              role="alert"
+            >
+              <p className="text-sm text-destructive">{ruleError ?? state?.error}</p>
+            </div>
+          )}
+        </div>
 
         {/* Step controls */}
         <div className="flex items-center justify-between gap-3 border-t border-border pt-6">
