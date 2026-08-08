@@ -8,6 +8,9 @@ import { FadeIn } from "@/components/ui/motion";
 import { IndiaFlag } from "@/components/ui/india-flag";
 import type { ProductCardProduct } from "@/components/products/product-card";
 
+/** Grid fade: solid through the headline, gone before the section ends. */
+const GRID_FADE = "linear-gradient(to bottom, #000 0%, #000 30%, transparent 88%)";
+
 export type HeroProps = {
   /** The current top-voted launch. Null before anything is published. */
   topProduct: (ProductCardProduct & { view_count?: number | null }) | null;
@@ -23,6 +26,24 @@ export function Hero({ topProduct, stats }: HeroProps) {
         aria-hidden
         className="absolute inset-0 -z-20 bg-[linear-gradient(180deg,#fff3ec_0%,#fff9f5_55%,#ffffff_100%)]"
       />
+      {/* Fine grid over the wash, masked so it dissolves before the hero ends
+          and never collides with the section below. Ink at 9% — enough to give
+          the space structure, quiet enough not to read as texture. Inline
+          styles because the mask + dual gradient is past what utility classes
+          express legibly (same call as the India map in community-section). */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 -z-20"
+        style={{
+          backgroundImage:
+            "linear-gradient(rgba(23,20,15,0.09) 1px, transparent 0), linear-gradient(90deg, rgba(23,20,15,0.09) 1px, transparent 0)",
+          backgroundSize: "28px 28px",
+          backgroundPosition: "top center",
+          WebkitMaskImage: GRID_FADE,
+          maskImage: GRID_FADE,
+        }}
+      />
+
       {/* A single soft glow anchoring the card — the whole decorative budget. */}
       <div
         aria-hidden
