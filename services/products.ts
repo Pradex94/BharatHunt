@@ -66,13 +66,24 @@ export type PublishedProduct = NonNullable<Awaited<ReturnType<typeof getPublishe
  * Fails soft (empty list) so a transient DB error never 500s the sitemap route.
  */
 export async function getAllPublishedProductSlugs(): Promise<
-  { slug: string; lastModified: string }[]
+  {
+    slug: string;
+    lastModified: string;
+    tagline: string;
+    description: string | null;
+    hero_image_url: string | null;
+    screenshot_urls: string[] | null;
+  }[]
 > {
   return cacheRemember(`${PRODUCTS_CACHE_PREFIX}slugs`, AGGREGATE_TTL, async () => {
     const supabase = createClient();
     const { data, error } = await supabase
       .from("products")
-      .select("slug, updated_at, published_at, created_at")
+      // Extra columns so the sitemap can apply the same indexability rule the
+      // product page uses for its robots directive.
+      .select(
+        "slug, updated_at, published_at, created_at, tagline, description, hero_image_url, screenshot_urls",
+      )
       .eq("status", "published")
       .order("published_at", { ascending: false, nullsFirst: false })
       .limit(5000);
@@ -85,6 +96,10 @@ export async function getAllPublishedProductSlugs(): Promise<
       slug: row.slug,
       lastModified:
         row.updated_at ?? row.published_at ?? row.created_at ?? new Date().toISOString(),
+      tagline: row.tagline,
+      description: row.description,
+      hero_image_url: row.hero_image_url,
+      screenshot_urls: row.screenshot_urls,
     }));
   });
 }
@@ -384,8 +399,10 @@ export async function getCategoryCounts(): Promise<Record<string, number>> {
       .select("category")
       .eq("status", "published");
 
+    // Fail soft: this feeds the sitemap and the marketplace sidebar, neither of
+    // which should break the page (or the build) over a transient query error.
     if (error) {
-      throw new Error(`Failed to load category counts: ${error.message}`);
+      return {};
     }
 
     const counts: Record<string, number> = {};

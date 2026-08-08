@@ -44,9 +44,9 @@ export const metadata: Metadata = {
     "founders",
     "India",
   ],
-  alternates: {
-    canonical: "/",
-  },
+  // NOTE: no site-wide `alternates.canonical`. A default of "/" made every
+  // page that didn't override it declare itself the homepage, which drops it
+  // from the index entirely. Each route sets its own canonical below.
   // Favicon + Apple touch icon come from app/icon.tsx and app/apple-icon.tsx
   // (generated), and the default share card from app/opengraph-image.tsx.
   openGraph: {

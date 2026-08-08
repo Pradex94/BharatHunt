@@ -21,8 +21,8 @@ import { ProductReach } from "@/components/products/product-reach";
 import { ProductVideo } from "@/components/products/product-video";
 import { OfferBox } from "@/components/products/offer-box";
 import { JsonLd } from "@/components/seo/json-ld";
-import { PRODUCT_PLATFORMS } from "@/lib/constants";
-import { productBreadcrumbs, productSchema } from "@/lib/seo";
+import { PRODUCT_PLATFORMS, SITE_URL } from "@/lib/constants";
+import { isIndexableProduct, productBreadcrumbs, productSchema } from "@/lib/seo";
 import { H1, H2, Numeric } from "@/components/ui/typography";
 import { FadeIn } from "@/components/ui/motion";
 import { buttonVariants } from "@/components/ui/button";
@@ -49,17 +49,23 @@ export async function generateMetadata({
     return { title: "Product not found" };
   }
 
-  const title = product.name;
-  const description = (product.description || product.tagline).slice(0, 160);
+  const title = seoTitle(product.name, product.tagline);
+  const description = seoDescription(product);
   const canonical = `/products/${product.slug}`;
+
+  // Thin listings are kept out of the index rather than diluting the site with
+  // near-empty pages. They stay publicly reachable and `follow`, so their links
+  // still pass equity and they get indexed automatically once filled in.
+  const indexable = isIndexableProduct(product);
 
   // og:image / twitter:image are supplied by the dynamic route
   // app/products/[slug]/opengraph-image.tsx (branded card with the live
   // upvote count), so we don't set `images` here.
   return {
-    title,
+    title: { absolute: title },
     description,
     alternates: { canonical },
+    ...(indexable ? {} : { robots: { index: false, follow: true } }),
     openGraph: {
       title: `${product.name} — ${product.tagline}`,
       description,
@@ -72,6 +78,65 @@ export async function generateMetadata({
       description,
     },
   };
+}
+
+/**
+ * Search-result title, built to a real budget.
+ *
+ * Returned as `absolute` so the layout's " · Bharat Hunt" template doesn't
+ * push it past the ~60 characters Google renders — the earlier version forgot
+ * the template and then dropped the tagline entirely whenever the combination
+ * overflowed, which threw away every keyword. This trims the tagline at a word
+ * boundary instead, and omits it only when too little room is left to say
+ * anything useful.
+ */
+const TITLE_LIMIT = 60;
+const TITLE_SUFFIX = " | Bharat Hunt";
+
+function seoTitle(name: string, tagline: string): string {
+  const clean = tagline.replace(/\s+/g, " ").trim().replace(/[.\s]+$/, "");
+  const room = TITLE_LIMIT - TITLE_SUFFIX.length - name.length - 3; // 3 = " — "
+
+  if (!clean || room < 15) return `${name}${TITLE_SUFFIX}`;
+  if (clean.length <= room) return `${name} — ${clean}${TITLE_SUFFIX}`;
+
+  const cut = clean.slice(0, room);
+  const lastSpace = cut.lastIndexOf(" ");
+  const trimmed = (lastSpace > room * 0.5 ? cut.slice(0, lastSpace) : cut).trimEnd();
+  return `${name} — ${dropDanglingWord(trimmed)}${TITLE_SUFFIX}`;
+}
+
+/**
+ * Truncating mid-phrase leaves titles ending on "and" or "with", which reads
+ * like the page is broken. Drop trailing connectives and punctuation.
+ */
+const DANGLING = new Set([
+  "and", "or", "with", "for", "to", "the", "a", "an", "in", "on", "of", "your",
+  "that", "from", "by", "at", "is", "are", "&",
+]);
+
+function dropDanglingWord(value: string): string {
+  let out = value.replace(/[\s,;:\-–—&]+$/, "");
+  for (;;) {
+    const match = /\s+([^\s]+)$/.exec(out);
+    if (!match || !DANGLING.has(match[1].toLowerCase())) break;
+    out = out.slice(0, match.index).replace(/[\s,;:\-–—&]+$/, "");
+  }
+  return out;
+}
+
+/** Meta description from the fullest text the listing has, capped for SERPs. */
+function seoDescription(product: {
+  name: string;
+  tagline: string;
+  description: string | null;
+  category: string;
+}): string {
+  const body = (product.description || product.tagline).replace(/\s+/g, " ").trim();
+  const suffix = ` ${product.category} on Bharat Hunt.`;
+  const room = 158 - suffix.length;
+  const head = body.length <= room ? body : `${body.slice(0, room - 1).trimEnd()}…`;
+  return `${head}${suffix}`;
 }
 
 const PRICING_LABEL: Record<string, string> = {
@@ -126,7 +191,7 @@ export default async function ProductPage({
 
   // Absolute URL for share links + the embeddable badge.
   const requestHeaders = await headers();
-  const host = requestHeaders.get("host") ?? "bharat-hunt.vercel.app";
+  const host = requestHeaders.get("host") ?? new URL(SITE_URL).host;
   const proto =
     requestHeaders.get("x-forwarded-proto") ??
     (host.startsWith("localhost") || host.startsWith("127.") ? "http" : "https");

@@ -12,6 +12,12 @@ import { CommunitySection } from "@/components/landing/community-section";
 import { Newsletter } from "@/components/landing/newsletter";
 import { getPlatformStats, getTopUpvotedProducts } from "@/services/products";
 
+export const metadata = {
+  // The layout no longer sets a site-wide canonical, so the homepage declares
+  // its own rather than relying on Google to infer one.
+  alternates: { canonical: "/" },
+};
+
 export default async function Home() {
   const [ranked, stats] = await Promise.all([getTopUpvotedProducts(6), getPlatformStats()]);
 

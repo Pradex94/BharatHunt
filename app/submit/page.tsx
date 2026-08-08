@@ -11,8 +11,11 @@ import { getUserProductCount } from "@/services/products";
 import { getIsAdmin } from "@/lib/admin";
 
 export const metadata = {
-  title: "Launch Your Product | Bharat Hunt",
+  title: "Launch Your Product",
   description: "Share your product with the Bharat Hunt community.",
+  // Sign-in-gated action, not a landing page. robots.txt disallows crawling;
+  // this stops it being indexed if it's ever linked directly.
+  robots: { index: false, follow: true },
 };
 
 export default async function SubmitPage() {

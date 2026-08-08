@@ -11,6 +11,7 @@ import { Caption, H1, H2, Lead } from "@/components/ui/typography";
 
 export const metadata: Metadata = {
   title: "Privacy Policy",
+  alternates: { canonical: "/privacy" },
   description:
     "What Bharat Hunt collects, why we collect it, who processes it, and the choices you have over your data.",
 };

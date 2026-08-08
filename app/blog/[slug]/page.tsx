@@ -26,7 +26,11 @@ export async function generateMetadata({
   const { slug } = await params;
   const post = postFromSlug(slug);
   if (!post) return { title: "Post not found" };
-  return { title: post.title, description: post.excerpt };
+  return {
+    title: post.title,
+    description: post.excerpt,
+    alternates: { canonical: `/blog/${slug}` },
+  };
 }
 
 function Block({ block }: { block: BlogBlock }) {

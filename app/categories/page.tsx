@@ -19,6 +19,7 @@ export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "Categories",
+  alternates: { canonical: "/categories" },
   description:
     "Browse every category on Bharat Hunt — developer tools, productivity, finance, design, and more, each filtered to real listings.",
 };

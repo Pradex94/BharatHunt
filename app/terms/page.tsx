@@ -12,6 +12,7 @@ import { SUBMISSION_RULES } from "@/lib/moderation";
 
 export const metadata: Metadata = {
   title: "Terms of Service",
+  alternates: { canonical: "/terms" },
   description:
     "The rules for using Bharat Hunt — accounts, launching products, content ownership, and moderation.",
 };

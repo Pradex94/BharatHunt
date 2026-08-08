@@ -10,6 +10,7 @@ import { CookiePreferences } from "@/components/layout/cookie-preferences";
 
 export const metadata: Metadata = {
   title: "Cookie Policy",
+  alternates: { canonical: "/cookies" },
   description:
     "How Bharat Hunt uses cookies — essential cookies that keep you signed in, and how to manage your choices.",
 };

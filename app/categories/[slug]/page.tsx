@@ -32,7 +32,23 @@ export async function generateMetadata({
   const { slug } = await params;
   const category = categoryFromSlug(slug);
   if (!category) return { title: "Category not found" };
-  return { title: category.name, description: category.blurb };
+
+  // A category with nothing in it is an empty page — reachable, but not worth
+  // indexing. It becomes indexable on its own the moment a product lands in it.
+  const counts = await getCategoryCounts();
+  const count = counts[category.name] ?? 0;
+
+  return {
+    // "Best Productivity in India" is missing a noun; "Developer Tools"
+    // already has one. Only add "Products" when the name needs it.
+    title: `Best ${category.name}${/tools|products/i.test(category.name) ? "" : " Products"} in India`,
+    description:
+      count > 0
+        ? `${count} ${category.name.toLowerCase()} ${count === 1 ? "product" : "products"} built by Indian makers. ${category.blurb}`
+        : category.blurb,
+    alternates: { canonical: `/categories/${slug}` },
+    ...(count > 0 ? {} : { robots: { index: false, follow: true } }),
+  };
 }
 
 export default async function CategoryPage({

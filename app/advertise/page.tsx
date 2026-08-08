@@ -21,6 +21,7 @@ export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "Advertise",
+  alternates: { canonical: "/advertise" },
   description:
     "Put your product in front of India's most curious early adopters — founders, makers and developers. Explore advertising options on Bharat Hunt.",
 };

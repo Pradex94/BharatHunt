@@ -14,6 +14,7 @@ import { BLOG_POSTS, formatPostDate } from "@/lib/blog";
 
 export const metadata: Metadata = {
   title: "Blog",
+  alternates: { canonical: "/blog" },
   description:
     "Notes from Bharat Hunt on launching well, how ranking works, and the design behind the marketplace.",
 };

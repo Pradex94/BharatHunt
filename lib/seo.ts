@@ -129,3 +129,25 @@ export function productBreadcrumbs(product: { name: string; slug: string; catego
     { name: product.name, path: `/products/${product.slug}` },
   ]);
 }
+
+/**
+ * Whether a product listing has enough substance to belong in the index.
+ *
+ * Shared by the product page's `robots` directive and the sitemap, so the two
+ * can never disagree — a sitemap that advertises a page the page itself marks
+ * `noindex` is a contradiction crawlers report as an error. Thin listings stay
+ * publicly reachable and keep `follow`; they re-enter the index by themselves
+ * once the maker fills them in.
+ */
+export function isIndexableProduct(product: {
+  tagline: string;
+  description: string | null;
+  hero_image_url: string | null;
+  screenshot_urls: string[] | null;
+}): boolean {
+  const description = (product.description ?? "").trim();
+  if (description.length >= 120) return true;
+  const hasImagery =
+    Boolean(product.hero_image_url) || (product.screenshot_urls ?? []).length > 0;
+  return description.length >= 40 && hasImagery && product.tagline.trim().length >= 20;
+}
