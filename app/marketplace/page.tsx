@@ -3,6 +3,8 @@
  * ui: ported from Claude Design mockup "Marketplace.dc.html" (project fe806209)
  */
 
+import Link from "next/link";
+import { after } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 
 import { Container } from "@/components/ui/container";
@@ -15,10 +17,12 @@ import { ProductList } from "@/components/marketplace/product-list";
 import {
   getCategoryCounts,
   getProducts,
+  suggestProductName,
   getUpvotedProductIds,
   PRODUCTS_PAGE_SIZE,
 } from "@/services/products";
 import { PRODUCT_CATEGORIES, PRODUCT_SORTS, type ProductSort } from "@/lib/constants";
+import { recordSearch } from "@/lib/search-analytics";
 
 export const metadata = {
   title: "Marketplace",
@@ -46,10 +50,15 @@ export default async function MarketplacePage({
     params.category && (PRODUCT_CATEGORIES as readonly string[]).includes(params.category)
       ? params.category
       : undefined;
+  const q = params.q?.trim() || undefined;
+  // Ranking by relevance is only meaningful with a query, and imposing
+  // "trending" on a search is what made the old results feel arbitrary. An
+  // explicit ?sort= still wins, so a deliberate choice is never overridden.
   const sort: ProductSort = (PRODUCT_SORTS as readonly string[]).includes(params.sort ?? "")
     ? (params.sort as ProductSort)
-    : "trending";
-  const q = params.q?.trim() || undefined;
+    : q
+      ? "relevance"
+      : "trending";
   const pricing = params.pricing ? params.pricing.split(",").filter(Boolean) : undefined;
 
   const filters = { category, sort, q, pricing };
@@ -58,6 +67,17 @@ export default async function MarketplacePage({
     getProducts({ ...filters, page: 1 }),
     getCategoryCounts(),
   ]);
+
+  // Only ask for a spelling suggestion once the search has genuinely come up
+  // empty — the normalised, token and fuzzy passes have all already run inside
+  // search_products by this point.
+  const didYouMean = q && products.length === 0 ? await suggestProductName(q) : null;
+
+  // Logged after the response is flushed, so measuring a search never slows one
+  // down. Records the term and the result count only — see lib/search-analytics.
+  if (q) {
+    after(() => recordSearch(q, totalCount));
+  }
 
   const upvotedIds = await getUpvotedProductIds(
     userId,
@@ -94,9 +114,38 @@ export default async function MarketplacePage({
         </p>
 
         {products.length === 0 ? (
-          <p className="rounded-lg border border-dashed border-border bg-card p-12 text-center text-sm text-muted">
-            No products match your filters. Try clearing them.
-          </p>
+          <div className="rounded-lg border border-dashed border-border bg-card p-12 text-center">
+            {q ? (
+              <>
+                <p className="text-sm text-body">
+                  No products found for{" "}
+                  <span className="font-semibold text-ink">&ldquo;{q}&rdquo;</span>.
+                </p>
+                {didYouMean && (
+                  <p className="mt-3 text-sm text-muted">
+                    Did you mean{" "}
+                    <Link
+                      href={`/marketplace?q=${encodeURIComponent(didYouMean)}`}
+                      className="font-semibold text-primary hover:underline"
+                    >
+                      {didYouMean}
+                    </Link>
+                    ?
+                  </p>
+                )}
+                <p className="mt-3 text-sm text-muted">
+                  <Link href="/marketplace" className="text-primary hover:underline">
+                    Clear search
+                  </Link>{" "}
+                  to browse everything.
+                </p>
+              </>
+            ) : (
+              <p className="text-sm text-muted">
+                No products match your filters. Try clearing them.
+              </p>
+            )}
+          </div>
         ) : (
           <ProductList
             key={`${category ?? "all"}:${sort}:${q ?? ""}:${(pricing ?? []).join(",")}`}

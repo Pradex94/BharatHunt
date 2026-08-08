@@ -274,17 +274,98 @@ export type GetProductsResult = {
   pageSize: number;
 };
 
+const PRICING_TYPE_VALUES = ["free", "freemium", "paid"];
+
 /**
- * Strips characters that are meaningful in PostgREST's `or=`/`ilike` filter
- * grammar (`,`, `(`, `)`) and SQL LIKE wildcards (`%`, `_`) out of raw user
- * search input before it's interpolated into a filter string, so a search
- * term can't break out of the intended `ilike` conditions.
+ * Runs a search through `public.search_products` (see
+ * supabase/migrations/20260809120000_product_search.sql).
+ *
+ * The old path built a PostgREST filter string by interpolating the raw query
+ * into `name.ilike.%q%,tagline.ilike.%q%`, which is why it needed to strip
+ * `%`, `_`, `,` and parentheses first — characters that are meaningful in that
+ * grammar. Passing the query as an RPC argument removes the string-building
+ * entirely, so a search term is now data rather than something spliced into a
+ * filter expression, and no sanitising is needed to keep it safe.
+ *
+ * The function is SECURITY INVOKER, so row-level security still applies and it
+ * cannot reach anything the caller could not already read.
  */
-function sanitizeSearchTerm(input: string): string {
-  return input.replace(/[%_,()]/g, " ").trim();
+async function searchProductsRanked({
+  q,
+  category,
+  pricing,
+  sort,
+  from,
+  limit,
+}: {
+  q: string;
+  category?: string;
+  pricing?: string[];
+  sort: ProductSort;
+  from: number;
+  limit: number;
+}): Promise<GetProductsResult> {
+  const supabase = createClient();
+  const validPricing = (pricing ?? []).filter((value) => PRICING_TYPE_VALUES.includes(value));
+
+  const { data, error } = await supabase.rpc("search_products", {
+    search_query: q,
+    category_filter:
+      category && (PRODUCT_CATEGORIES as readonly string[]).includes(category) ? category : null,
+    pricing_filter: validPricing.length > 0 ? validPricing : null,
+    sort_mode: sort,
+    page_limit: limit,
+    page_offset: from,
+  });
+
+  if (error) {
+    throw new Error(`Failed to search products: ${error.message}`);
+  }
+
+  const rows = data ?? [];
+
+  return {
+    // The RPC returns the creator flattened (an RPC can't produce PostgREST's
+    // nested join shape), so rebuild the object the cards expect.
+    products: rows.map((row) => ({
+      id: row.id,
+      slug: row.slug,
+      name: row.name,
+      tagline: row.tagline,
+      category: row.category,
+      pricing_type: row.pricing_type,
+      avg_rating: row.avg_rating,
+      upvote_count: row.upvote_count,
+      comment_count: row.comment_count,
+      hero_image_url: row.hero_image_url,
+      tags: row.tags,
+      website_url: row.website_url,
+      github_url: row.github_url,
+      creator: row.creator_display_name
+        ? { display_name: row.creator_display_name, username: row.creator_username ?? "" }
+        : null,
+    })),
+    // Every row carries the same window-function count; zero rows means zero.
+    totalCount: rows.length > 0 ? Number(rows[0].total_count) : 0,
+    page: Math.floor(from / limit) + 1,
+    pageSize: limit,
+  };
 }
 
-const PRICING_TYPE_VALUES = ["free", "freemium", "paid"];
+/**
+ * The closest product name to a query that found nothing — the "Did you mean?"
+ * candidate. Returns null unless something is genuinely close, so a hopeless
+ * search stays honest instead of pointing at a random product.
+ */
+export async function suggestProductName(q: string): Promise<string | null> {
+  if (!q.trim()) return null;
+
+  const supabase = createClient();
+  const { data, error } = await supabase.rpc("suggest_product_name", { search_query: q });
+
+  // A suggestion is a nicety; never fail a page over it.
+  return error ? null : (data ?? null);
+}
 
 export async function getProducts({
   category,
@@ -307,6 +388,21 @@ export async function getProducts({
     const from = (currentPage - 1) * PRODUCTS_PAGE_SIZE;
     const to = from + PRODUCTS_PAGE_SIZE - 1;
 
+    // A search is a different question from a browse: it has to rank by how
+    // well each row answers the query, which PostgREST filters can't express.
+    // Browsing without a query keeps the original path untouched.
+    const term = q?.trim();
+    if (term) {
+      return searchProductsRanked({
+        q: term,
+        category,
+        pricing,
+        sort,
+        from,
+        limit: PRODUCTS_PAGE_SIZE,
+      });
+    }
+
     let query = supabase
       .from("products")
       .select(PRODUCT_CARD_COLUMNS, { count: "exact" })
@@ -319,11 +415,6 @@ export async function getProducts({
     const validPricing = (pricing ?? []).filter((value) => PRICING_TYPE_VALUES.includes(value));
     if (validPricing.length > 0) {
       query = query.in("pricing_type", validPricing);
-    }
-
-    const term = q ? sanitizeSearchTerm(q) : "";
-    if (term) {
-      query = query.or(`name.ilike.%${term}%,tagline.ilike.%${term}%`);
     }
 
     switch (sort) {

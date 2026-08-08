@@ -12,6 +12,7 @@ const SORT_LABELS: Record<ProductSort, string> = {
   "top-rated": "Top rated",
   "price-low": "Price: Low to High",
   "price-high": "Price: High to Low",
+  relevance: "Best match",
 };
 
 /** The compact segmented control only surfaces the three sorts the mockup
@@ -24,19 +25,34 @@ export function SortPills() {
   const updateSearchParams = useUpdateSearchParams();
 
   const sortParam = searchParams.get("sort");
+  const searching = Boolean(searchParams.get("q")?.trim());
+
+  // With a query and no explicit choice, results are ranked by relevance —
+  // mirror that here so the highlighted pill matches what is on screen.
   const sort: ProductSort = (PRODUCT_SORTS as readonly string[]).includes(sortParam ?? "")
     ? (sortParam as ProductSort)
-    : "trending";
+    : searching
+      ? "relevance"
+      : "trending";
+
+  // "Best match" is meaningless without a query, so it appears only while one
+  // is active — and then leads, because it is the default.
+  const options: ProductSort[] = searching ? ["relevance", ...VISIBLE_SORTS] : VISIBLE_SORTS;
 
   return (
     <div className="flex gap-0.5 rounded-md border border-border bg-background p-1">
-      {VISIBLE_SORTS.map((value) => (
+      {options.map((value) => (
         <button
           key={value}
           type="button"
           aria-pressed={sort === value}
           onClick={() =>
-            updateSearchParams({ sort: value === "trending" ? null : value }, { resetPage: true })
+            updateSearchParams(
+              // Clearing the param restores the contextual default, so neither
+              // default ends up pinned in the URL.
+              { sort: value === (searching ? "relevance" : "trending") ? null : value },
+              { resetPage: true },
+            )
           }
           className={cn(
             "rounded-sm px-3.5 py-1.5 text-sm font-medium whitespace-nowrap transition-colors duration-150 outline-none focus-visible:ring-2 focus-visible:ring-ring/50",

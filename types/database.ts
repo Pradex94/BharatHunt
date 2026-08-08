@@ -264,6 +264,30 @@ export type Database = {
           },
         ]
       }
+      search_queries: {
+        Row: {
+          id: string
+          query: string
+          query_normalized: string
+          result_count: number
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          query: string
+          query_normalized: string
+          result_count: number
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          query?: string
+          query_normalized?: string
+          result_count?: number
+          created_at?: string
+        }
+        Relationships: []
+      }
       products: {
         Row: {
           avg_rating: number | null
@@ -308,6 +332,8 @@ export type Database = {
           hire_pitch: string | null
           launch_state: string | null
           launch_state_source: string | null
+          search_name: string | null
+          search_text: string | null
         }
         Insert: {
           avg_rating?: number | null
@@ -414,6 +440,7 @@ export type Database = {
           created_at: string | null
           display_name: string
           id: string
+          search_name: string | null
           twitter_handle: string | null
           username: string
           website_url: string | null
@@ -483,6 +510,43 @@ export type Database = {
         Returns: undefined
       }
       calculate_product_scores: { Args: never; Returns: undefined }
+      search_products: {
+        Args: {
+          search_query: string
+          category_filter?: string | null
+          pricing_filter?: string[] | null
+          sort_mode?: string
+          page_limit?: number
+          page_offset?: number
+        }
+        Returns: {
+          id: string
+          slug: string
+          name: string
+          tagline: string
+          category: string
+          pricing_type: string
+          avg_rating: number | null
+          upvote_count: number | null
+          comment_count: number | null
+          hero_image_url: string | null
+          tags: string[] | null
+          website_url: string | null
+          github_url: string | null
+          creator_display_name: string | null
+          creator_username: string | null
+          relevance: number
+          total_count: number
+        }[]
+      }
+      suggest_product_name: {
+        Args: { search_query: string }
+        Returns: string | null
+      }
+      search_normalize: {
+        Args: { value: string }
+        Returns: string
+      }
       increment_product_counter: {
         Args: {
           counter_column: string

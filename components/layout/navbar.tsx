@@ -8,13 +8,14 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useClerk, useUser } from "@clerk/nextjs";
-import { MenuIcon, Search } from "lucide-react";
+import { MenuIcon } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { ADMIN_EMAILS, NAV_LINKS } from "@/lib/constants";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Container } from "@/components/ui/container";
 import { Logo } from "@/components/layout/logo";
+import { SearchAutocomplete } from "@/components/layout/search-autocomplete";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
@@ -47,7 +48,6 @@ export function Navbar() {
   const router = useRouter();
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [query, setQuery] = useState("");
   const { isLoaded, isSignedIn, user } = useUser();
   const { signOut } = useClerk();
 
@@ -65,12 +65,6 @@ export function Navbar() {
   const isAdmin = (user?.emailAddresses ?? []).some((address) =>
     ADMIN_EMAILS.includes(address.emailAddress.toLowerCase()),
   );
-
-  function submitSearch(e: React.FormEvent) {
-    e.preventDefault();
-    const q = query.trim();
-    router.push(q ? `/marketplace?q=${encodeURIComponent(q)}` : "/marketplace");
-  }
 
   return (
     <header
@@ -96,19 +90,7 @@ export function Navbar() {
           </nav>
 
           <div className="hidden items-center gap-3 lg:flex">
-            <form onSubmit={submitSearch} className="relative hidden xl:block">
-              <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-white/40" />
-              <input
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search products..."
-                aria-label="Search products"
-                className="h-10 w-56 rounded-xl border border-white/15 bg-white/10 pr-9 pl-9 text-sm text-white outline-none transition-colors placeholder:text-white/40 focus-visible:border-primary/60"
-              />
-              <kbd className="absolute top-1/2 right-3 -translate-y-1/2 rounded border border-white/15 bg-white/10 px-1.5 text-xs text-white/50">
-                /
-              </kbd>
-            </form>
+            <SearchAutocomplete className="hidden xl:block" />
 
             {!isLoaded ? (
               <div className="flex items-center gap-2">

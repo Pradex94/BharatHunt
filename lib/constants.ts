@@ -101,7 +101,16 @@ export const PRODUCT_PLATFORMS = [
 
 export type ProductPlatformKey = (typeof PRODUCT_PLATFORMS)[number]["key"];
 
-export const PRODUCT_SORTS = ["trending", "newest", "price-low", "price-high", "top-rated"] as const;
+// "relevance" only makes sense with a search term, so it is deliberately last
+// and is never offered as a browse sort — see components/marketplace/sort-pills.tsx.
+export const PRODUCT_SORTS = [
+  "trending",
+  "newest",
+  "price-low",
+  "price-high",
+  "top-rated",
+  "relevance",
+] as const;
 export type ProductSort = (typeof PRODUCT_SORTS)[number];
 
 export const PRODUCT_PRICING_TYPES = ["free", "freemium", "paid"] as const;
