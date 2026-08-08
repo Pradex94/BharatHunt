@@ -9,6 +9,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { MAX_PRODUCTS_PER_USER } from "@/lib/constants";
 import { getUserProductCount } from "@/services/products";
 import { getIsAdmin } from "@/lib/admin";
+import { detectStateCode } from "@/lib/request-geo";
 
 export const metadata = {
   title: "Launch Your Product",
@@ -25,7 +26,11 @@ export default async function SubmitPage() {
     redirect("/login");
   }
 
-  const [count, isAdmin] = await Promise.all([getUserProductCount(userId), getIsAdmin()]);
+  const [count, isAdmin, detectedState] = await Promise.all([
+    getUserProductCount(userId),
+    getIsAdmin(),
+    detectStateCode(),
+  ]);
   const atLimit = !isAdmin && count >= MAX_PRODUCTS_PER_USER;
 
   return (
@@ -72,7 +77,7 @@ export default async function SubmitPage() {
               </div>
             </div>
           ) : (
-            <ProductForm />
+            <ProductForm detectedState={detectedState} />
           )}
         </div>
       </Container>

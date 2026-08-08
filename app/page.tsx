@@ -10,7 +10,7 @@ import { FeatureSection } from "@/components/landing/feature-section";
 import { TopProducts } from "@/components/landing/top-products";
 import { CommunitySection } from "@/components/landing/community-section";
 import { Newsletter } from "@/components/landing/newsletter";
-import { getPlatformStats, getTopUpvotedProducts } from "@/services/products";
+import { getLaunchStateCounts, getPlatformStats, getTopUpvotedProducts } from "@/services/products";
 
 export const metadata = {
   // The layout no longer sets a site-wide canonical, so the homepage declares
@@ -19,7 +19,11 @@ export const metadata = {
 };
 
 export default async function Home() {
-  const [ranked, stats] = await Promise.all([getTopUpvotedProducts(6), getPlatformStats()]);
+  const [ranked, stats, launchCounts] = await Promise.all([
+    getTopUpvotedProducts(6),
+    getPlatformStats(),
+    getLaunchStateCounts(),
+  ]);
 
   // The hero features the leader; the grid picks up from #2 so the same
   // product isn't shown twice in one viewport.
@@ -30,7 +34,7 @@ export default async function Home() {
       <Hero topProduct={leader ?? null} stats={stats} />
       <FeatureSection />
       <TopProducts products={rest} startRank={2} heading="Also climbing" />
-      <CommunitySection stats={stats} />
+      <CommunitySection stats={stats} launchCounts={launchCounts} />
       <Newsletter />
     </>
   );

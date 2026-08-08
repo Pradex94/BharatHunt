@@ -7,7 +7,18 @@ import { IndiaMap } from "@/components/landing/india-map";
 
 export type CommunityStats = { products: number; makers: number; upvotes: number };
 
-export function CommunitySection({ stats }: { stats: CommunityStats }) {
+export type CommunitySectionProps = {
+  stats: CommunityStats;
+  /** Published products per ISO 3166-2:IN state code. */
+  launchCounts?: Record<string, number>;
+};
+
+export function CommunitySection({ stats, launchCounts }: CommunitySectionProps) {
+  // Only states a maker actually named — the map stays empty until real
+  // launches carry a location, rather than inventing coverage.
+  const statesOnMap = Object.values(launchCounts ?? {}).filter((count) => count > 0).length;
+  const mappedProducts = Object.values(launchCounts ?? {}).reduce((sum, count) => sum + count, 0);
+
   const cards = [
     { value: stats.makers, label: stats.makers === 1 ? "Maker" : "Makers" },
     { value: stats.products, label: stats.products === 1 ? "Product" : "Products" },
@@ -61,7 +72,16 @@ export function CommunitySection({ stats }: { stats: CommunityStats }) {
             <IndiaMap
               id="community-india"
               className="relative text-primary drop-shadow-[0_0_28px_rgba(255,107,26,0.35)]"
+              launchCounts={launchCounts}
             />
+            {statesOnMap > 0 && (
+              <p className="relative mt-4 text-center text-sm text-on-dark-soft">
+                <Numeric className="font-semibold text-on-dark">{mappedProducts}</Numeric>{" "}
+                {mappedProducts === 1 ? "product" : "products"} from{" "}
+                <Numeric className="font-semibold text-on-dark">{statesOnMap}</Numeric>{" "}
+                {statesOnMap === 1 ? "state" : "states"}
+              </p>
+            )}
           </FadeIn>
         </div>
       </div>

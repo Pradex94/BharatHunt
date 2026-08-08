@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { auth } from "@clerk/nextjs/server";
+import type { PostgrestError } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { isMissingColumnError } from "@/lib/supabase/errors";
@@ -12,6 +13,8 @@ import { ensureProfile } from "@/lib/ensure-profile";
 import { getUserProductCount, PRODUCTS_CACHE_PREFIX } from "@/services/products";
 import { MAX_PRODUCTS_PER_USER, PRODUCT_PLATFORMS } from "@/lib/constants";
 import { hostnameOf, moderateProduct } from "@/lib/moderation";
+import { isIndiaStateCode } from "@/lib/india-states";
+import { detectStateCode } from "@/lib/request-geo";
 
 export type ProductFormState = { error?: string } | undefined;
 
@@ -64,6 +67,8 @@ type ParsedProductForm = {
   changelogUrl: string | null;
   availableForHire: boolean;
   hirePitch: string | null;
+  /** ISO 3166-2:IN code, or null when the maker chose not to share one. */
+  launchState: string | null;
 };
 
 function parseProductForm(formData: FormData): { error: string } | { fields: ParsedProductForm } {
@@ -147,8 +152,46 @@ function parseProductForm(formData: FormData): { error: string } | { fields: Par
       changelogUrl: cleanUrl(formData.get("changelogUrl")),
       availableForHire: formData.get("availableForHire") === "on",
       hirePitch: cleanText(formData.get("hirePitch"), 300),
+      // An unrecognised code is dropped rather than rejected — location is
+      // optional, and a bad value shouldn't block a launch.
+      launchState: launchStateOf(formData.get("launchState")),
     },
   };
+}
+
+/** Keep a submitted state only if it's a real ISO 3166-2:IN code. */
+function launchStateOf(value: FormDataEntryValue | null): string | null {
+  const raw = String(value ?? "").trim().toUpperCase();
+  return isIndiaStateCode(raw) ? raw : null;
+}
+
+/**
+ * Inserts/updates with the richest payload the database will actually accept.
+ *
+ * Several columns live in migrations that may not have been applied yet, so a
+ * write is attempted with every optional group, then with progressively fewer,
+ * falling back only on "column does not exist". Without this a pending
+ * migration would hard-fail every launch instead of just omitting a field.
+ */
+async function writeWithOptionalColumns<P extends object, T>(
+  base: P,
+  optional: object[],
+  write: (payload: P) => PromiseLike<{ data: T; error: PostgrestError | null }>,
+): Promise<{ data: T | null; error: PostgrestError | null }> {
+  // Every combination, widest first: all groups, then each group dropped in
+  // turn, then none. With two groups that's 4 attempts worst case, and only
+  // when columns are genuinely missing.
+  const candidates = [
+    Object.assign({}, base, ...optional),
+    ...optional.map((_, skip) => Object.assign({}, base, ...optional.filter((__, i) => i !== skip))),
+    base,
+  ] as P[];
+
+  let result: { data: T | null; error: PostgrestError | null } = await write(candidates[0]);
+  for (let i = 1; i < candidates.length && result.error && isMissingColumnError(result.error); i++) {
+    result = await write(candidates[i]);
+  }
+  return result;
 }
 
 /** `\`, `%` and `_` are LIKE wildcards — escape them before building a pattern. */
@@ -263,7 +306,14 @@ export async function createProduct(
     changelogUrl,
     availableForHire,
     hirePitch,
+    launchState,
   } = parsed.fields;
+
+  // Provenance is derived from a fresh server-side lookup rather than a hidden
+  // form field, so it records what the request actually looked like and can't
+  // be spoofed by the client. Detection never overrides the maker: if they
+  // cleared the field, `launchState` is null and nothing is stored.
+  const detectedState = launchState ? await detectStateCode() : null;
 
   // Make sure the creator has a profile row before inserting — products.creator_id
   // has a FK to profiles.id, and the Clerk webhook may not have run for this user.
@@ -320,23 +370,16 @@ export async function createProduct(
     available_for_hire: availableForHire,
     hire_pitch: hirePitch,
   };
+  const locationFields = {
+    launch_state: launchState,
+    launch_state_source: launchState ? (launchState === detectedState ? "detected" : "maker") : null,
+  };
 
-  let { data: product, error } = await supabase
-    .from("products")
-    .insert({ ...basePayload, ...launchFields })
-    .select("slug")
-    .single();
-
-  // If the Phase 2 launch columns aren't migrated yet, publish with the base
-  // fields so submitting never hard-fails (run db/product-launch-fields.sql to
-  // persist the launch fields).
-  if (error && isMissingColumnError(error)) {
-    ({ data: product, error } = await supabase
-      .from("products")
-      .insert(basePayload)
-      .select("slug")
-      .single());
-  }
+  const { data: product, error } = await writeWithOptionalColumns(
+    basePayload,
+    [launchFields, locationFields],
+    (payload) => supabase.from("products").insert(payload).select("slug").single(),
+  );
 
   if (error || !product) {
     return { error: error?.message ?? "Could not publish your product. Please try again." };
@@ -407,6 +450,7 @@ export async function updateProduct(
     changelogUrl,
     availableForHire,
     hirePitch,
+    launchState,
   } = parsed.fields;
 
   // Admins may edit any product (service-role client bypasses RLS); everyone
@@ -440,8 +484,15 @@ export async function updateProduct(
     available_for_hire: availableForHire,
     hire_pitch: hirePitch,
   };
+  // On an edit the value is always a deliberate choice, so it's never marked
+  // "detected" — and we don't re-run geo-IP, which would otherwise relabel a
+  // product with wherever the maker happens to be sitting today.
+  const locationFields = {
+    launch_state: launchState,
+    launch_state_source: launchState ? "maker" : null,
+  };
 
-  const runUpdate = async (payload: typeof basePayload | (typeof basePayload & typeof launchFields)) => {
+  const runUpdate = (payload: typeof basePayload) => {
     let query = db.from("products").update(payload).eq("id", productId);
     if (!isAdmin) {
       query = query.eq("creator_id", userId);
@@ -449,11 +500,7 @@ export async function updateProduct(
     return query;
   };
 
-  let { error } = await runUpdate({ ...basePayload, ...launchFields });
-  // Fall back to base fields if the Phase 2 launch columns aren't migrated yet.
-  if (error && isMissingColumnError(error)) {
-    ({ error } = await runUpdate(basePayload));
-  }
+  const { error } = await writeWithOptionalColumns(basePayload, [launchFields, locationFields], runUpdate);
 
   if (error) {
     return { error: error.message };

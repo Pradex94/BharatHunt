@@ -14,21 +14,60 @@ const AGGREGATE_TTL = 300; // featured / counts / stats / slugs
 
 // Literal strings (not built dynamically) so the Supabase client can infer the
 // row type from the selected columns.
-const PRODUCT_PAGE_BASE_COLUMNS =
-  "id, slug, creator_id, name, tagline, description, hero_image_url, screenshot_urls, website_url, github_url, video_url, category, pricing_type, tags, view_count, upvote_count, comment_count, creator:profiles!products_creator_id_fkey(display_name, username)";
-
 const PRODUCT_PAGE_COLUMNS =
-  "id, slug, creator_id, name, tagline, description, hero_image_url, screenshot_urls, website_url, github_url, video_url, category, pricing_type, tags, view_count, upvote_count, comment_count, cta_text, cta_url, platform_links, tech_stack, coupon_code, offer_description, offer_expires_at, roadmap_url, changelog_url, available_for_hire, hire_pitch, creator:profiles!products_creator_id_fkey(display_name, username)";
+  "id, slug, creator_id, name, tagline, description, hero_image_url, screenshot_urls, website_url, github_url, video_url, category, pricing_type, tags, view_count, upvote_count, comment_count, cta_text, cta_url, platform_links, tech_stack, coupon_code, offer_description, offer_expires_at, roadmap_url, changelog_url, available_for_hire, hire_pitch, launch_state, creator:profiles!products_creator_id_fkey(display_name, username)";
+
+/**
+ * Split a select list on its top-level commas only — the embedded creator join
+ * contains a comma of its own, and splitting inside it would corrupt the query.
+ */
+function splitColumns(columns: string): string[] {
+  return columns.split(/,\s*(?![^()]*\))/);
+}
+
+/** `columns` minus `drop`, so the narrower variants are derived, never retyped. */
+function withoutColumns(columns: string, drop: string[]): string {
+  return splitColumns(columns)
+    .filter((column) => !drop.includes(column))
+    .join(", ");
+}
+
+const LAUNCH_FIELD_COLUMNS = [
+  "cta_text",
+  "cta_url",
+  "platform_links",
+  "tech_stack",
+  "coupon_code",
+  "offer_description",
+  "offer_expires_at",
+  "roadmap_url",
+  "changelog_url",
+  "available_for_hire",
+  "hire_pitch",
+];
+const LAUNCH_LOCATION_COLUMNS = ["launch_state"];
+
+/**
+ * Progressively narrower selects, tried in order. The launch fields and the
+ * launch location ship in separate migrations, so either can be missing
+ * independently and a single all-or-nothing fallback would drop columns that
+ * the database actually has.
+ */
+const PRODUCT_PAGE_FALLBACK_COLUMNS = [
+  withoutColumns(PRODUCT_PAGE_COLUMNS, LAUNCH_LOCATION_COLUMNS),
+  withoutColumns(PRODUCT_PAGE_COLUMNS, LAUNCH_FIELD_COLUMNS),
+  withoutColumns(PRODUCT_PAGE_COLUMNS, [...LAUNCH_FIELD_COLUMNS, ...LAUNCH_LOCATION_COLUMNS]),
+];
 
 /**
  * Single published product by slug. Wrapped in React `cache()` so the product
  * page and its `generateMetadata` share one DB round-trip per request instead
  * of querying twice. Returns `null` when the slug isn't a published product.
  *
- * Falls back to base columns if the Phase 2 launch columns aren't migrated yet
- * (Postgres `undefined_column`), so a deploy that lands before
- * `db/product-launch-fields.sql` is run degrades gracefully (extra sections
- * hidden) instead of 500-ing every product page.
+ * Falls back to narrower column sets if a migration hasn't been applied yet
+ * (Postgres `undefined_column`), so a deploy that lands before its migration
+ * degrades gracefully (extra sections hidden) instead of 500-ing every product
+ * page.
  */
 export const getPublishedProductBySlug = cache(async (slug: string) => {
   const supabase = createClient();
@@ -42,18 +81,26 @@ export const getPublishedProductBySlug = cache(async (slug: string) => {
   if (!error) {
     return data;
   }
+  if (!isMissingColumnError(error)) {
+    throw new Error(`Failed to load product: ${error.message}`);
+  }
 
-  if (isMissingColumnError(error)) {
+  for (const columns of PRODUCT_PAGE_FALLBACK_COLUMNS) {
     const fallback = await supabase
       .from("products")
-      .select(PRODUCT_PAGE_BASE_COLUMNS)
+      .select(columns as typeof PRODUCT_PAGE_COLUMNS)
       .eq("slug", slug)
       .eq("status", "published")
       .maybeSingle();
-    if (fallback.error) {
+
+    if (!fallback.error) {
+      // Typed as the full row even though fewer columns came back; every
+      // optional field is read defensively at the call site.
+      return fallback.data as unknown as typeof data;
+    }
+    if (!isMissingColumnError(fallback.error)) {
       throw new Error(`Failed to load product: ${fallback.error.message}`);
     }
-    return fallback.data as unknown as typeof data;
   }
 
   throw new Error(`Failed to load product: ${error.message}`);
@@ -445,6 +492,34 @@ export async function getCategoryCounts(): Promise<Record<string, number>> {
     const counts: Record<string, number> = {};
     for (const row of data ?? []) {
       counts[row.category] = (counts[row.category] ?? 0) + 1;
+    }
+    return counts;
+  });
+}
+
+/**
+ * How many published products were launched from each state, keyed by ISO
+ * 3166-2:IN code. Feeds the India map on the landing page.
+ *
+ * Fails soft — an empty map just renders the outline with no markers, which is
+ * also what happens before the launch-location migration is applied.
+ */
+export async function getLaunchStateCounts(): Promise<Record<string, number>> {
+  return cacheRemember(`${PRODUCTS_CACHE_PREFIX}launch-state-counts`, AGGREGATE_TTL, async () => {
+    const supabase = createClient();
+    const { data, error } = await supabase
+      .from("products")
+      .select("launch_state")
+      .eq("status", "published")
+      .not("launch_state", "is", null);
+
+    if (error) {
+      return {};
+    }
+
+    const counts: Record<string, number> = {};
+    for (const row of data ?? []) {
+      if (row.launch_state) counts[row.launch_state] = (counts[row.launch_state] ?? 0) + 1;
     }
     return counts;
   });

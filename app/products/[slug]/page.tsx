@@ -6,7 +6,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { headers } from "next/headers";
 import { notFound } from "next/navigation";
-import { Briefcase, ChevronUp, ExternalLink, Map as RoadmapIcon, ScrollText } from "lucide-react";
+import { Briefcase, ChevronUp, ExternalLink, MapPin, Map as RoadmapIcon, ScrollText } from "lucide-react";
 import { auth } from "@clerk/nextjs/server";
 import { createClient } from "@/lib/supabase/server";
 import { getIsAdmin } from "@/lib/admin";
@@ -23,6 +23,7 @@ import { OfferBox } from "@/components/products/offer-box";
 import { JsonLd } from "@/components/seo/json-ld";
 import { PRODUCT_PLATFORMS, SITE_URL, slugForCategory } from "@/lib/constants";
 import { isIndexableProduct, productBreadcrumbs, productSchema, withReferral } from "@/lib/seo";
+import { indiaStateName } from "@/lib/india-states";
 import { H1, H2, Numeric } from "@/components/ui/typography";
 import { FadeIn } from "@/components/ui/motion";
 import { buttonVariants } from "@/components/ui/button";
@@ -167,6 +168,9 @@ export default async function ProductPage({
     notFound();
   }
 
+  // Only set once the maker has shared a location — never inferred at read time.
+  const launchStateName = indiaStateName(product.launch_state);
+
   // Owners manage their own product; admins can moderate any product.
   const isOwner = userId === product.creator_id;
   const canManage = isOwner || (userId ? await getIsAdmin() : false);
@@ -246,6 +250,12 @@ export default async function ProductPage({
             <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted">
               <span className="rounded-full bg-secondary-bg px-2 py-0.5">{product.category}</span>
               {product.creator && <span>by {product.creator.display_name}</span>}
+              {launchStateName && (
+                <span className="flex items-center gap-1">
+                  <MapPin className="size-3.5" aria-hidden="true" />
+                  {launchStateName}
+                </span>
+              )}
               <span>
                 <Numeric>{product.view_count ?? 0}</Numeric> views
               </span>

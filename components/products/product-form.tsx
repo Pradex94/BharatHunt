@@ -21,6 +21,7 @@ import {
 import { createProduct, updateProduct, type ProductFormState } from "@/lib/actions/products";
 import { fetchUrlMetadata } from "@/lib/actions/fetch-metadata";
 import { PRODUCT_CATEGORIES, PRICING_TYPE_LABELS, PRODUCT_PLATFORMS } from "@/lib/constants";
+import { INDIA_STATES } from "@/lib/india-states";
 import { moderateProduct, SUBMISSION_RULES, type ModerationCode } from "@/lib/moderation";
 import type { Json } from "@/types/database";
 import { Button } from "@/components/ui/button";
@@ -93,6 +94,7 @@ export type ExistingProduct = {
   changelog_url: string | null;
   available_for_hire: boolean | null;
   hire_pitch: string | null;
+  launch_state: string | null;
 };
 
 /** Squeeze a long meta description down to a one-line tagline. */
@@ -118,7 +120,17 @@ function splitList(value: string): string[] {
     .filter(Boolean);
 }
 
-export function ProductForm({ product }: { product?: ExistingProduct }) {
+export type ProductFormProps = {
+  product?: ExistingProduct;
+  /**
+   * State inferred from the request's IP (see lib/request-geo.ts), used only to
+   * preselect the launch-location field on a new launch. Null in dev and for
+   * requests Vercel can't place.
+   */
+  detectedState?: string | null;
+};
+
+export function ProductForm({ product, detectedState = null }: ProductFormProps) {
   const action = product
     ? updateProduct.bind(null, product.id, product.slug)
     : createProduct;
@@ -149,6 +161,9 @@ export function ProductForm({ product }: { product?: ExistingProduct }) {
     roadmapUrl: product?.roadmap_url ?? "",
     changelogUrl: product?.changelog_url ?? "",
     hirePitch: product?.hire_pitch ?? "",
+    // On an edit the maker's saved answer wins; only a new launch is prefilled
+    // from geo-IP, and even then it's just a default they can change.
+    launchState: product ? (product.launch_state ?? "") : (detectedState ?? ""),
   });
 
   // Multi-platform availability matrix + hire toggle (non-string state)
@@ -670,6 +685,47 @@ export function ProductForm({ product }: { product?: ExistingProduct }) {
                   <option value="paid">Paid</option>
                 </select>
               </div>
+            </div>
+          </div>
+
+          {/* Optional and always the maker's call. On a new launch this starts
+              on whatever the request's IP suggests, which is a guess — VPNs and
+              mobile carriers routinely place people in the wrong state — so the
+              copy says so and "Prefer not to say" is a real, reachable option
+              rather than a disabled placeholder. */}
+          <div className={card}>
+            <h2 className="text-lg font-semibold text-foreground">Where are you building from?</h2>
+            <p className="text-xs text-muted-foreground">
+              Optional. Puts your launch on the India map on our homepage.
+              {!product && detectedState
+                ? " We've guessed this from your connection — change it if it's wrong."
+                : ""}
+            </p>
+            <div className="flex flex-col gap-1.5 sm:max-w-xs">
+              <Label htmlFor="launchState">State or union territory</Label>
+              <select
+                id="launchState"
+                name="launchState"
+                value={formData.launchState}
+                onChange={handleInputChange}
+                className={selectClassName}
+              >
+                <option value="">Prefer not to say</option>
+                <optgroup label="States">
+                  {INDIA_STATES.filter((entry) => entry.kind === "state").map((entry) => (
+                    <option key={entry.code} value={entry.code}>
+                      {entry.name}
+                    </option>
+                  ))}
+                </optgroup>
+                <optgroup label="Union territories">
+                  {INDIA_STATES.filter((entry) => entry.kind === "ut").map((entry) => (
+                    <option key={entry.code} value={entry.code}>
+                      {entry.name}
+                    </option>
+                  ))}
+                </optgroup>
+              </select>
             </div>
           </div>
         </div>

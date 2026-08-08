@@ -1,4 +1,5 @@
 import { cn } from "@/lib/utils";
+import { INDIA_STATES } from "@/lib/india-states";
 
 /**
  * India, as a dot matrix.
@@ -32,24 +33,57 @@ export type IndiaMapProps = {
   /** Distance between dot centres, in viewBox units. */
   spacing?: number;
   dotRadius?: number;
+  /**
+   * Published products per state, keyed by ISO 3166-2:IN code. States absent
+   * from the map get no marker — the map only ever shows locations makers
+   * actually gave us.
+   */
+  launchCounts?: Record<string, number>;
 };
+
+/**
+ * Marker radius for a state's launch count.
+ *
+ * Square-root scaling, because a marker is read by its *area*: sizing the
+ * radius linearly would make a 9-launch state look nine times the weight of a
+ * 1-launch one. Clamped so a single launch is still visible and a runaway hub
+ * (Bengaluru, realistically) can't swallow its neighbours.
+ */
+function markerRadius(count: number): number {
+  return Math.min(34, 11 + Math.sqrt(count) * 7);
+}
 
 export function IndiaMap({
   id = "india-map",
   className,
   spacing = 22,
   dotRadius = 4.2,
+  launchCounts,
 }: IndiaMapProps) {
   const clipId = `${id}-clip`;
   const dotsId = `${id}-dots`;
   const glowId = `${id}-glow`;
+
+  // Biggest first, so a state with one launch is never hidden under a hub.
+  const markers = INDIA_STATES.flatMap((state) => {
+    const count = launchCounts?.[state.code] ?? 0;
+    return count > 0 ? [{ ...state, count }] : [];
+  }).sort((a, b) => b.count - a.count);
+
+  // The markers are the content here, so they have to exist for a screen
+  // reader too — the SVG is otherwise an unlabelled decorative shape.
+  const label = markers.length
+    ? `Map of India showing where products were launched from. ${markers
+        .map((m) => `${m.name}: ${m.count}`)
+        .join(". ")}.`
+    : "Map of India";
 
   return (
     <svg
       viewBox={VIEW_BOX}
       className={cn("h-full w-full", className)}
       role="img"
-      aria-label="Map of India"
+      aria-label={label}
     >
       <defs>
         <clipPath id={clipId}>
@@ -80,6 +114,29 @@ export function IndiaMap({
         strokeWidth="2"
         strokeLinejoin="round"
       />
+
+      {/* One marker per state a maker actually named. Drawn outside the clip so
+          coastal states aren't sliced in half by the country outline. */}
+      {markers.map((marker) => {
+        const r = markerRadius(marker.count);
+        return (
+          <g key={marker.code}>
+            <title>
+              {marker.name}: {marker.count} {marker.count === 1 ? "product" : "products"}
+            </title>
+            <circle cx={marker.x} cy={marker.y} r={r} fill="currentColor" fillOpacity="0.22" />
+            <circle
+              cx={marker.x}
+              cy={marker.y}
+              r={r * 0.45}
+              fill="currentColor"
+              stroke="currentColor"
+              strokeOpacity="0.55"
+              strokeWidth="2"
+            />
+          </g>
+        );
+      })}
     </svg>
   );
 }

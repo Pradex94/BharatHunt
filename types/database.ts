@@ -306,6 +306,8 @@ export type Database = {
           changelog_url: string | null
           available_for_hire: boolean
           hire_pitch: string | null
+          launch_state: string | null
+          launch_state_source: string | null
         }
         Insert: {
           avg_rating?: number | null
@@ -348,6 +350,8 @@ export type Database = {
           changelog_url?: string | null
           available_for_hire?: boolean
           hire_pitch?: string | null
+          launch_state?: string | null
+          launch_state_source?: string | null
         }
         Update: {
           avg_rating?: number | null
@@ -390,6 +394,8 @@ export type Database = {
           changelog_url?: string | null
           available_for_hire?: boolean
           hire_pitch?: string | null
+          launch_state?: string | null
+          launch_state_source?: string | null
         }
         Relationships: [
           {
