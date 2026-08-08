@@ -6,11 +6,11 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { headers } from "next/headers";
 import { notFound } from "next/navigation";
-import { Briefcase, ExternalLink, Map as RoadmapIcon, ScrollText } from "lucide-react";
+import { Briefcase, ChevronUp, ExternalLink, Map as RoadmapIcon, ScrollText } from "lucide-react";
 import { auth } from "@clerk/nextjs/server";
 import { createClient } from "@/lib/supabase/server";
 import { getIsAdmin } from "@/lib/admin";
-import { getPublishedProductBySlug } from "@/services/products";
+import { getCompetingProducts, getPublishedProductBySlug } from "@/services/products";
 import { UpvoteButton } from "@/components/products/upvote-button";
 import { CommentForm } from "@/components/products/comment-form";
 import { CommentItem, type CommentItemData } from "@/components/products/comment-item";
@@ -21,8 +21,8 @@ import { ProductReach } from "@/components/products/product-reach";
 import { ProductVideo } from "@/components/products/product-video";
 import { OfferBox } from "@/components/products/offer-box";
 import { JsonLd } from "@/components/seo/json-ld";
-import { PRODUCT_PLATFORMS, SITE_URL } from "@/lib/constants";
-import { isIndexableProduct, productBreadcrumbs, productSchema } from "@/lib/seo";
+import { PRODUCT_PLATFORMS, SITE_URL, slugForCategory } from "@/lib/constants";
+import { isIndexableProduct, productBreadcrumbs, productSchema, withReferral } from "@/lib/seo";
 import { H1, H2, Numeric } from "@/components/ui/typography";
 import { FadeIn } from "@/components/ui/motion";
 import { buttonVariants } from "@/components/ui/button";
@@ -171,7 +171,7 @@ export default async function ProductPage({
   const isOwner = userId === product.creator_id;
   const canManage = isOwner || (userId ? await getIsAdmin() : false);
 
-  const [{ data: comments }, { data: upvote }] = await Promise.all([
+  const [{ data: comments }, { data: upvote }, competitors] = await Promise.all([
     supabase
       .from("comments")
       .select("id, body, created_at, author:profiles!comments_user_id_fkey(display_name, username)")
@@ -185,6 +185,7 @@ export default async function ProductPage({
           .eq("user_id", userId)
           .maybeSingle()
       : Promise.resolve({ data: null }),
+    getCompetingProducts(product.category, product.id, 4),
   ]);
 
   await supabase.rpc("increment_view_count", { target_product_id: product.id });
@@ -262,7 +263,7 @@ export default async function ProductPage({
           {product.cta_url && (
             // Primary conversion CTA (gradient) — the maker's own call-to-action.
             <a
-              href={product.cta_url}
+              href={withReferral(product.cta_url)}
               target="_blank"
               rel="noopener"
               className={buttonVariants({ size: "sm" })}
@@ -272,10 +273,12 @@ export default async function ProductPage({
             </a>
           )}
           {product.website_url && (
-            // Dofollow (no `nofollow`) so the maker earns a real backlink; no
-            // `noreferrer` so their analytics can attribute traffic to Bharat Hunt.
+            // Dofollow (no `nofollow`) so the maker earns a real backlink, and
+            // no `noreferrer` so their analytics see us. `?ref=bharathunt` names
+            // us explicitly — browsers strip or coarsen the Referer header often
+            // enough that referral traffic otherwise lands under "direct".
             <a
-              href={product.website_url}
+              href={withReferral(product.website_url)}
               target="_blank"
               rel="noopener"
               className={buttonVariants({ variant: "outline", size: "sm" })}
@@ -426,6 +429,57 @@ export default async function ProductPage({
         websiteUrl={product.website_url}
         isOwner={userId === product.creator_id}
       />
+
+      {competitors.length > 0 && (
+        <section
+          aria-labelledby="alternatives"
+          className="flex flex-col gap-4 border-t border-border pt-8"
+        >
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <H2 id="alternatives" className="text-2xl sm:text-2xl">
+              {product.name} alternatives
+            </H2>
+            <Link
+              href={`/categories/${slugForCategory(product.category) ?? ""}`}
+              className="text-sm font-semibold text-primary transition-colors hover:text-primary-active"
+            >
+              All {product.category} &rarr;
+            </Link>
+          </div>
+          <p className="text-sm text-body">
+            Other {product.category.toLowerCase()} products on Bharat Hunt, most upvoted first.
+          </p>
+          <ul className="flex flex-col gap-3">
+            {competitors.map((competitor) => (
+              <li key={competitor.id}>
+                <Link
+                  href={`/products/${competitor.slug}`}
+                  className="flex items-center gap-4 rounded-xl border border-border bg-card p-4 transition-colors hover:border-primary/30"
+                >
+                  <ProductLogo
+                    src={competitor.hero_image_url}
+                    name={competitor.name}
+                    size="sm"
+                  />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-semibold text-ink">
+                      {competitor.name}
+                    </span>
+                    <span className="mt-0.5 line-clamp-1 block text-sm text-body">
+                      {competitor.tagline}
+                    </span>
+                  </span>
+                  <span className="flex shrink-0 items-center gap-1 text-sm font-semibold text-ink">
+                    <ChevronUp className="size-4 text-primary" aria-hidden="true" />
+                    <Numeric>{competitor.upvote_count ?? 0}</Numeric>
+                    <span className="sr-only">upvotes</span>
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <div id="comments" className="flex scroll-mt-24 flex-col gap-4 border-t border-border pt-8">
         <H2 className="text-2xl sm:text-2xl">

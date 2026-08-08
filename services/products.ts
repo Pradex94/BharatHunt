@@ -155,6 +155,43 @@ export async function getTopUpvotedProducts(limit = 6): Promise<LandingProduct[]
   });
 }
 
+/**
+ * Competing products: other published listings in the same category, most
+ * upvoted first, with the product itself excluded.
+ *
+ * Derived rather than maker-declared on purpose — nobody has to curate a list,
+ * so every product gets alternatives from the day it launches, and a newcomer
+ * appears on its rivals' pages automatically. Shares a category with the
+ * breadcrumb trail, so the internal linking stays consistent.
+ *
+ * Fails soft: alternatives are a supporting section, never a reason to 500 a
+ * product page.
+ */
+export async function getCompetingProducts(
+  category: string,
+  excludeId: string,
+  limit = 4,
+): Promise<ProductCardProduct[]> {
+  return cacheRemember(
+    `${PRODUCTS_CACHE_PREFIX}competitors:${category}:${excludeId}:${limit}`,
+    AGGREGATE_TTL,
+    async () => {
+      const supabase = createClient();
+      const { data, error } = await supabase
+        .from("products")
+        .select(PRODUCT_CARD_COLUMNS)
+        .eq("status", "published")
+        .eq("category", category)
+        .neq("id", excludeId)
+        .order("upvote_count", { ascending: false, nullsFirst: false })
+        .limit(limit);
+
+      if (error) return [];
+      return (data ?? []) as ProductCardProduct[];
+    },
+  );
+}
+
 export async function getUpvotedProductIds(
   userId: string | null,
   productIds: string[],

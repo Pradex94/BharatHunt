@@ -151,3 +151,31 @@ export function isIndexableProduct(product: {
     Boolean(product.hero_image_url) || (product.screenshot_urls ?? []).length > 0;
   return description.length >= 40 && hasImagery && product.tagline.trim().length >= 20;
 }
+
+/** Query key + value appended to outbound product links (Product Hunt uses `?ref=producthunt`). */
+export const REFERRAL_PARAM = "ref";
+export const REFERRAL_VALUE = "bharathunt";
+
+/**
+ * Tags an outbound product link so the destination can attribute the visit.
+ *
+ * Without this a maker sees Bharat Hunt traffic only as a generic referrer (or
+ * as "direct" when the browser withholds one), so the listing looks like it
+ * sends nothing. `?ref=bharathunt` shows up in their analytics by name.
+ *
+ * Merges into any existing query string rather than replacing it, and leaves a
+ * URL alone if it already carries its own `ref`. Non-http(s) or unparseable
+ * input is returned untouched — the link still has to work.
+ */
+export function withReferral(url: string | null | undefined): string {
+  if (!url) return "";
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return url;
+    if (parsed.searchParams.has(REFERRAL_PARAM)) return url;
+    parsed.searchParams.set(REFERRAL_PARAM, REFERRAL_VALUE);
+    return parsed.toString();
+  } catch {
+    return url;
+  }
+}
