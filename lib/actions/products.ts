@@ -2,7 +2,8 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { auth } from "@clerk/nextjs/server";
+import { after } from "next/server";
+import { auth, currentUser } from "@clerk/nextjs/server";
 import type { PostgrestError } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
@@ -15,6 +16,8 @@ import { MAX_PRODUCTS_PER_USER, PRODUCT_PLATFORMS } from "@/lib/constants";
 import { hostnameOf, moderateProduct } from "@/lib/moderation";
 import { isIndiaStateCode } from "@/lib/india-states";
 import { detectStateCode } from "@/lib/request-geo";
+import { sendEmail } from "@/lib/email";
+import { buildProductLaunchEmail } from "@/lib/emails/product-launch";
 
 export type ProductFormState = { error?: string } | undefined;
 
@@ -241,6 +244,57 @@ async function findDuplicateLaunch(
   return null;
 }
 
+/**
+ * Emails the maker their launch receipt.
+ *
+ * The address comes from Clerk — `profiles` doesn't store one — so this needs
+ * the request's auth context and has to be resolved before `redirect` unwinds
+ * the action.
+ *
+ * The send itself is handed to `after`, which runs once the response has been
+ * flushed and still fires when `redirect` throws. That keeps a slow or dead
+ * mail provider off the critical path: the maker lands on their product page
+ * immediately either way. Failures are logged, never thrown — the product is
+ * already published, and losing the receipt must not look like a failed
+ * launch. Matches the fail-open contract in lib/email.ts.
+ */
+async function sendLaunchReceipt(product: {
+  name: string;
+  tagline: string;
+  slug: string;
+  category: string;
+  launchState: string | null;
+}): Promise<void> {
+  let recipient: string | undefined;
+  let makerName: string | null = null;
+
+  try {
+    const user = await currentUser();
+    recipient = user?.primaryEmailAddress?.emailAddress;
+    makerName =
+      [user?.firstName, user?.lastName].filter(Boolean).join(" ") || user?.username || null;
+  } catch (error) {
+    console.error("[launch-email] could not read the maker's address from Clerk:", error);
+    return;
+  }
+
+  if (!recipient) {
+    // Clerk accounts can exist without a primary email (phone-only sign-up).
+    return;
+  }
+
+  const to = recipient;
+  const email = buildProductLaunchEmail(product, makerName);
+
+  after(async () => {
+    const sent = await sendEmail({ to, ...email });
+    // Log the slug, not the address — this lands in shared platform logs.
+    if (!sent.ok) {
+      console.error(`[launch-email] "${product.slug}" was not delivered: ${sent.error}`);
+    }
+  });
+}
+
 export async function createProduct(
   _prevState: ProductFormState,
   formData: FormData,
@@ -389,6 +443,14 @@ export async function createProduct(
   await cacheInvalidatePrefix(PRODUCTS_CACHE_PREFIX);
   // …and it's a new row on the maker's dashboard.
   revalidatePath("/dashboard");
+
+  await sendLaunchReceipt({
+    name,
+    tagline,
+    slug: product.slug,
+    category,
+    launchState,
+  });
 
   redirect(`/products/${product.slug}`);
 }

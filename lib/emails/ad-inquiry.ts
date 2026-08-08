@@ -2,29 +2,16 @@ import "server-only";
 
 import { ADS_EMAIL, SITE_NAME, SITE_URL } from "@/lib/constants";
 import { escapeHtml } from "@/lib/email";
+import { BRAND, layout, type BuiltEmail } from "@/lib/emails/layout";
 
 /**
  * The two emails an /advertise lead produces: a confirmation for the advertiser
  * (so they have a record of what they sent) and a notification for the ads
  * mailbox (so a lead is never sitting unseen in the database).
  *
- * Hand-written table-free HTML with inline styles — email clients strip
- * <style> blocks and don't know Tailwind — using the brand palette from
- * app/globals.css. Every interpolated value is escaped: these are
- * attacker-controlled strings from a public, unauthenticated form.
+ * The shell lives in lib/emails/layout.ts. Every interpolated value is escaped:
+ * these are attacker-controlled strings from a public, unauthenticated form.
  */
-
-const BRAND = {
-  primary: "#ff6b1a",
-  ink: "#17140f",
-  body: "#4b5563",
-  muted: "#6b7280",
-  border: "#efe6dd",
-  softBg: "#fdf2ea",
-} as const;
-
-const FONT =
-  "-apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, Roboto, Helvetica, Arial, sans-serif";
 
 export type AdInquiryLead = {
   name: string;
@@ -33,8 +20,6 @@ export type AdInquiryLead = {
   package: string | null;
   message: string | null;
 };
-
-export type BuiltEmail = { subject: string; html: string; text: string };
 
 const NOT_SPECIFIED = "Not specified";
 const NO_PREFERENCE = "Not sure yet — asked for a recommendation";
@@ -66,27 +51,6 @@ function detailsText(lead: AdInquiryLead): string {
   return leadRows(lead)
     .map(([label, value]) => `${label}: ${value}`)
     .join("\n");
-}
-
-/** Shared shell: white card, orange rule, footer. `body` is trusted HTML. */
-function layout(heading: string, intro: string, body: string, footer: string): string {
-  return `<!doctype html>
-<html lang="en">
-  <body style="margin:0;padding:24px 12px;background:${BRAND.softBg};font-family:${FONT};">
-    <div style="max-width:560px;margin:0 auto;background:#ffffff;border:1px solid ${BRAND.border};border-radius:16px;overflow:hidden;">
-      <div style="height:4px;background:${BRAND.primary};"></div>
-      <div style="padding:28px 28px 8px;">
-        <p style="margin:0 0 18px;font-size:15px;font-weight:700;color:${BRAND.primary};letter-spacing:-0.01em;">${SITE_NAME}</p>
-        <h1 style="margin:0 0 10px;font-size:20px;line-height:1.3;font-weight:700;color:${BRAND.ink};letter-spacing:-0.02em;">${heading}</h1>
-        <p style="margin:0 0 18px;font-size:14px;line-height:1.6;color:${BRAND.body};">${intro}</p>
-        ${body}
-      </div>
-      <div style="padding:18px 28px 26px;">
-        <p style="margin:0;font-size:12px;line-height:1.6;color:${BRAND.muted};">${footer}</p>
-      </div>
-    </div>
-  </body>
-</html>`;
 }
 
 function detailsCard(lead: AdInquiryLead): string {
