@@ -284,3 +284,173 @@
 .animate-bh-float {
   animation: bh-float 6s ease-in-out infinite;
 }
+/* ── India launch map: broadcast animation ───────────────────────────────
+ * components/landing/india-map.tsx. Pure CSS on a handful of SVG nodes —
+ * ~14 elements total, no JS, no rAF, no library. Only `transform` and
+ * `opacity` are animated (both compositor-friendly), and there are no blur
+ * filters: every soft edge is a radial gradient, which is far cheaper.
+ *
+ * Every loop starts and ends on its resting value. That matters because the
+ * global prefers-reduced-motion block above collapses animations to 0.01ms
+ * and freezes them on their final keyframe — so a frozen frame here is the
+ * calm state, never a half-expanded ring.
+ */
+
+/* Rings scale about the marker: the circles sit at 0,0 inside a translated
+ * <g>, and fill-box puts the origin on their own centre in every browser. */
+.bh-map-ring,
+.bh-map-wave,
+.bh-map-core,
+.bh-map-halo {
+  transform-box: fill-box;
+  transform-origin: center;
+  will-change: transform, opacity;
+}
+
+/* Expanding broadcast ring. Eased so it leaves fast and settles slowly. */
+@keyframes bh-map-ring {
+  0% {
+    transform: scale(0.26);
+    opacity: 0;
+  }
+  14% {
+    opacity: 0.5;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 0;
+  }
+}
+.bh-map-ring {
+  animation: bh-map-ring 4s cubic-bezier(0.16, 0.8, 0.3, 1) infinite;
+}
+
+/* The band of brightened dots that travels with the pulse. */
+@keyframes bh-map-wave {
+  0% {
+    transform: scale(0.1);
+    opacity: 0;
+  }
+  18% {
+    opacity: 0.85;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 0;
+  }
+}
+.bh-map-wave {
+  animation: bh-map-wave 4s cubic-bezier(0.16, 0.8, 0.3, 1) infinite;
+}
+
+/* Beacon core: a small, steady heartbeat that never fully disappears. */
+@keyframes bh-map-core {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.16);
+  }
+}
+.bh-map-core {
+  animation: bh-map-core 4s ease-in-out infinite;
+}
+
+@keyframes bh-map-halo {
+  0%,
+  100% {
+    opacity: 0.18;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.36;
+    transform: scale(1.07);
+  }
+}
+.bh-map-halo {
+  animation: bh-map-halo 4s ease-in-out infinite;
+}
+
+/* Barely-there upward signal. Capped low on purpose — it should register
+ * only once you have already looked at the beacon. */
+@keyframes bh-map-beam {
+  0%,
+  100% {
+    opacity: 0.04;
+  }
+  45% {
+    opacity: 0.13;
+  }
+}
+.bh-map-beam {
+  animation: bh-map-beam 4s ease-in-out infinite;
+}
+
+/* Signal travelling to another launch state. The paths carry pathLength="100",
+ * so one dash length reads the same on a short hop as on a long one, and each
+ * line rests for a third of the cycle instead of firing continuously. */
+@keyframes bh-map-comet {
+  0% {
+    stroke-dashoffset: 14;
+    opacity: 0;
+  }
+  10% {
+    opacity: 0.7;
+  }
+  52% {
+    opacity: 0.5;
+  }
+  68%,
+  100% {
+    stroke-dashoffset: -100;
+    opacity: 0;
+  }
+}
+.bh-map-comet {
+  stroke-dasharray: 14 100;
+  animation: bh-map-comet 6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+/* Depth only. Three of them, moving slowly enough to read as atmosphere. */
+@keyframes bh-map-mote {
+  0%,
+  100% {
+    transform: translate(0, 0);
+    opacity: 0.14;
+  }
+  50% {
+    transform: translate(8px, -14px);
+    opacity: 0.3;
+  }
+}
+.bh-map-mote {
+  animation: bh-map-mote 22s ease-in-out infinite;
+}
+
+/* Phones: keep the beacon, drop the ambience. Fewer nodes, less overdraw. */
+@media (max-width: 640px) {
+  .bh-map-comet,
+  .bh-map-mote {
+    display: none;
+  }
+  .bh-map-ring:nth-of-type(3) {
+    display: none;
+  }
+}
+
+/* Reduced motion: remove the moving layers outright rather than leaving them
+ * frozen mid-cycle. The beacon core, halo and every real marker stay. */
+@media (prefers-reduced-motion: reduce) {
+  .bh-map-ring,
+  .bh-map-wave,
+  .bh-map-comet,
+  .bh-map-mote,
+  .bh-map-beam {
+    display: none;
+  }
+  .bh-map-core,
+  .bh-map-halo {
+    animation: none;
+  }
+}

@@ -39,7 +39,41 @@ export type IndiaMapProps = {
    * actually gave us.
    */
   launchCounts?: Record<string, number>;
+  /**
+   * The broadcast loop (beacon, ripples, travelling signals). On by default;
+   * pass false for a still map. Honours prefers-reduced-motion regardless —
+   * see the .bh-map-* rules in app/globals.css.
+   */
+  animated?: boolean;
 };
+
+/**
+ * Which marker the broadcast originates from.
+ *
+ * The busiest launch state, so the beacon follows the data rather than being
+ * pinned to a hard-coded city. Ties break towards Delhi, which is where the
+ * design anchors it and which currently has a real launch — but if Delhi ever
+ * has none it simply isn't a candidate, and the beacon moves to a state that
+ * does. Nothing here invents a location.
+ */
+function pickOrigin<T extends { code: string; count: number }>(markers: T[]): T | null {
+  if (markers.length === 0) return null;
+  const best = markers[0].count;
+  const tied = markers.filter((marker) => marker.count === best);
+  return tied.find((marker) => marker.code === "IN-DL") ?? tied[0];
+}
+
+/** A gentle arc between two points, bowed perpendicular to the line. */
+function arcPath(from: { x: number; y: number }, to: { x: number; y: number }): string {
+  const midX = (from.x + to.x) / 2;
+  const midY = (from.y + to.y) / 2;
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  // Offset the control point at right angles, scaled to the span, so short
+  // hops stay nearly straight and long ones curve like a flight path.
+  const bow = 0.16;
+  return `M${from.x} ${from.y} Q${midX - dy * bow} ${midY + dx * bow} ${to.x} ${to.y}`;
+}
 
 /**
  * Marker radius for a state's launch count.
@@ -59,16 +93,27 @@ export function IndiaMap({
   spacing = 22,
   dotRadius = 4.2,
   launchCounts,
+  animated = true,
 }: IndiaMapProps) {
   const clipId = `${id}-clip`;
   const dotsId = `${id}-dots`;
   const glowId = `${id}-glow`;
+  const waveMaskId = `${id}-wave-mask`;
+  const waveBandId = `${id}-wave-band`;
+  const haloId = `${id}-halo`;
+  const beamId = `${id}-beam`;
 
   // Biggest first, so a state with one launch is never hidden under a hub.
   const markers = INDIA_STATES.flatMap((state) => {
     const count = launchCounts?.[state.code] ?? 0;
     return count > 0 ? [{ ...state, count }] : [];
   }).sort((a, b) => b.count - a.count);
+
+  // The beacon fires from the busiest launch state; the signals travel to the
+  // other states that genuinely have launches. No line ever points at a city
+  // we can't account for, and with a single marker there are simply no lines.
+  const origin = animated ? pickOrigin(markers) : null;
+  const signals = origin ? markers.filter((marker) => marker.code !== origin.code).slice(0, 3) : [];
 
   // The markers are the content here, so they have to exist for a screen
   // reader too — the SVG is otherwise an unlabelled decorative shape.
@@ -96,6 +141,47 @@ export function IndiaMap({
           <stop offset="0%" stopColor="currentColor" stopOpacity="0.55" />
           <stop offset="100%" stopColor="currentColor" stopOpacity="0.16" />
         </radialGradient>
+
+        {origin && (
+          <>
+            {/* Soft-edged annulus. Scaling it sweeps a bright band outward,
+                which is what lights the dots up in sequence. */}
+            <radialGradient id={waveBandId}>
+              <stop offset="52%" stopColor="#000" />
+              <stop offset="76%" stopColor="#fff" />
+              <stop offset="100%" stopColor="#000" />
+            </radialGradient>
+
+            {/* Masking one extra dot layer is what makes the dot field react
+                without animating a single dot: the dots are a <pattern>, so
+                the whole field costs one rect no matter how many are drawn. */}
+            <mask id={waveMaskId}>
+              <rect width="100%" height="100%" fill="#000" />
+              <g transform={`translate(${origin.x} ${origin.y})`}>
+                <circle
+                  className="bh-map-wave"
+                  cx="0"
+                  cy="0"
+                  r="460"
+                  fill={`url(#${waveBandId})`}
+                />
+              </g>
+            </mask>
+
+            {/* Layered glow: tight bright centre, wide faint falloff. Cheaper
+                and softer than stacking blurs. */}
+            <radialGradient id={haloId}>
+              <stop offset="0%" stopColor="#ff8a3d" stopOpacity="0.85" />
+              <stop offset="35%" stopColor="currentColor" stopOpacity="0.35" />
+              <stop offset="100%" stopColor="currentColor" stopOpacity="0" />
+            </radialGradient>
+
+            <linearGradient id={beamId} x1="0" y1="1" x2="0" y2="0">
+              <stop offset="0%" stopColor="currentColor" stopOpacity="0.5" />
+              <stop offset="100%" stopColor="currentColor" stopOpacity="0" />
+            </linearGradient>
+          </>
+        )}
       </defs>
 
       {/* The dot grid, clipped to the country. */}
@@ -103,6 +189,19 @@ export function IndiaMap({
         <rect width="100%" height="100%" fill={`url(#${dotsId})`} />
         {/* Centre-weighted wash so the middle reads denser than the edges. */}
         <rect width="100%" height="100%" fill={`url(#${glowId})`} style={{ mixBlendMode: "overlay" }} />
+
+        {/* A second pass of the *same* dot pattern, revealed only inside the
+            travelling band. Where it shows, those dots read brighter; the gaps
+            between them stay dark, so the field never washes out. */}
+        {origin && (
+          <rect
+            width="100%"
+            height="100%"
+            fill={`url(#${dotsId})`}
+            mask={`url(#${waveMaskId})`}
+            opacity="0.85"
+          />
+        )}
       </g>
 
       {/* Hairline border, so the silhouette still reads where dots thin out. */}
@@ -137,6 +236,85 @@ export function IndiaMap({
           </g>
         );
       })}
+
+      {/* ── Broadcast loop ──────────────────────────────────────────────
+          Decorative: the markers above already carry the meaning, and the
+          <title>s above already carry it for screen readers. Everything from
+          here down is aria-hidden so none of it is announced twice. */}
+      {origin && (
+        <g aria-hidden="true" style={{ pointerEvents: "none" }}>
+          {/* Signals to the other launch states. Deliberately staggered rather
+              than randomised: a random pick would differ between server and
+              client and break hydration. Long, offset cycles mean one or two
+              are in flight at a time, never all three. */}
+          {signals.map((target, index) => (
+            <path
+              key={`signal-${target.code}`}
+              className="bh-map-comet"
+              d={arcPath(origin, target)}
+              // Normalised length, so one dash reads the same on every hop.
+              pathLength={100}
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="round"
+              style={{ animationDelay: `${index * 2}s` }}
+            />
+          ))}
+
+          <g transform={`translate(${origin.x} ${origin.y})`}>
+            {/* Faint upward signal. Sits under the beacon so the core stays
+                the brightest thing on the map. */}
+            <rect
+              className="bh-map-beam"
+              x={-7}
+              y={-150}
+              width={14}
+              height={150}
+              rx={7}
+              fill={`url(#${beamId})`}
+            />
+
+            {/* Three ripples, ~650ms apart, so the pulse never restarts from
+                nothing — one is always mid-flight. */}
+            {[0, 0.65, 1.3].map((delay, index) => (
+              <circle
+                key={`ring-${index}`}
+                className="bh-map-ring"
+                cx="0"
+                cy="0"
+                r={62}
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={2.5}
+                style={{ animationDelay: `${delay}s` }}
+              />
+            ))}
+
+            {/* Layered glow, widest first. */}
+            <circle className="bh-map-halo" cx="0" cy="0" r={54} fill={`url(#${haloId})`} />
+            <circle className="bh-map-core" cx="0" cy="0" r={11} fill="currentColor" fillOpacity="0.9" />
+            <circle className="bh-map-core" cx="0" cy="0" r={5} fill="#ff8a3d" />
+          </g>
+
+          {/* Depth. Three, slow, low-contrast — not a starfield. */}
+          {[
+            { x: 250, y: 420, delay: 0 },
+            { x: 700, y: 620, delay: 7 },
+            { x: 430, y: 880, delay: 14 },
+          ].map((mote, index) => (
+            <circle
+              key={`mote-${index}`}
+              className="bh-map-mote"
+              cx={mote.x}
+              cy={mote.y}
+              r={3}
+              fill="currentColor"
+              style={{ animationDelay: `${mote.delay}s` }}
+            />
+          ))}
+        </g>
+      )}
     </svg>
   );
 }
