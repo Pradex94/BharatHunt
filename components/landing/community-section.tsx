@@ -3,19 +3,7 @@ import Link from "next/link";
 import { Numeric } from "@/components/ui/typography";
 import { FadeIn } from "@/components/ui/motion";
 import { buttonVariants } from "@/components/ui/button";
-
-// Rough India silhouette (wide north, tapering to a point in the south).
-const INDIA_CLIP =
-  "polygon(26% 6%, 48% 2%, 60% 8%, 74% 10%, 88% 22%, 78% 34%, 70% 44%, 62% 62%, 54% 78%, 48% 96%, 40% 74%, 32% 60%, 22% 44%, 14% 28%, 18% 16%)";
-
-/** Abstract activity points over the map — deliberately not faces. */
-const ACTIVITY_SPOTS = [
-  { top: "20%", left: "42%", delay: "0s" },
-  { top: "35%", left: "63%", delay: "-1.5s" },
-  { top: "46%", left: "31%", delay: "-3s" },
-  { top: "61%", left: "51%", delay: "-4.5s" },
-  { top: "73%", left: "41%", delay: "-2.2s" },
-];
+import { IndiaMap } from "@/components/landing/india-map";
 
 export type CommunityStats = { products: number; makers: number; upvotes: number };
 
@@ -62,28 +50,18 @@ export function CommunitySection({ stats }: { stats: CommunityStats }) {
             </Link>
           </FadeIn>
 
-          {/* RIGHT — dotted India map */}
-          <FadeIn delay={0.1} className="relative mx-auto aspect-square w-full max-w-md">
-            <div aria-hidden className="absolute inset-[8%] rounded-full border border-primary/15" />
-            <div aria-hidden className="absolute inset-[22%] rounded-full border border-primary/10" />
+          {/* RIGHT — India, drawn from real boundary data (components/landing/india-map.tsx).
+              The previous version was a hand-written 15-point CSS polygon that
+              rendered as a triangle and omitted Kashmir entirely. */}
+          <FadeIn delay={0.1} className="relative mx-auto w-full max-w-lg">
             <div
               aria-hidden
-              className="absolute inset-0"
-              style={{
-                clipPath: INDIA_CLIP,
-                backgroundImage: "radial-gradient(rgba(255,138,61,0.9) 1.4px, transparent 1.6px)",
-                backgroundSize: "13px 13px",
-                filter: "drop-shadow(0 0 24px rgba(255,107,26,0.35))",
-              }}
+              className="absolute inset-[6%] rounded-full bg-[radial-gradient(circle,rgba(255,107,26,0.22),transparent_65%)] blur-2xl"
             />
-            {ACTIVITY_SPOTS.map((spot) => (
-              <span
-                key={spot.top + spot.left}
-                aria-hidden
-                className="animate-bh-float absolute size-2.5 rounded-full bg-primary shadow-[0_0_16px_4px_rgba(255,107,26,0.55)]"
-                style={{ top: spot.top, left: spot.left, animationDelay: spot.delay }}
-              />
-            ))}
+            <IndiaMap
+              id="community-india"
+              className="relative text-primary drop-shadow-[0_0_28px_rgba(255,107,26,0.35)]"
+            />
           </FadeIn>
         </div>
       </div>
