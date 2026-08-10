@@ -28,7 +28,7 @@
  */
 
 import { CONSENT_COOKIE } from "@/lib/cookie-consent";
-import { GTM_ID } from "@/lib/constants";
+import { GTM_ENABLED, GTM_ID } from "@/lib/constants";
 import { CONSENT_KEYS } from "./consent-keys";
 
 function consentPayload(state: "granted" | "denied"): string {
@@ -86,7 +86,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
  * to survive -- none of the three behaviours above are obvious from the source.
  */
 export function GoogleTagManager() {
-  if (!GTM_ID) return null;
+  if (!GTM_ENABLED) return null;
 
   return <script dangerouslySetInnerHTML={{ __html: bootstrapScript(GTM_ID) }} />;
 }
@@ -100,7 +100,7 @@ export function GoogleTagManager() {
  * itself; it only fires tags configured to run without them.
  */
 export function GoogleTagManagerNoScript() {
-  if (!GTM_ID) return null;
+  if (!GTM_ENABLED) return null;
 
   return (
     <noscript>

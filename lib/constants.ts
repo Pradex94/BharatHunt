@@ -51,6 +51,18 @@ export const SITE_NAME = "Bharat Hunt";
 export const GTM_ID = process.env.NEXT_PUBLIC_GTM_ID ?? "GTM-548ZQGWC";
 
 /**
+ * Whether to actually mount the tag.
+ *
+ * Off outside production by default, because `npm run dev` otherwise reports
+ * every local page view as real traffic and quietly poisons the numbers you
+ * are trying to read. Set `NEXT_PUBLIC_GTM_DEBUG=true` in `.env.local` when you
+ * need Tag Assistant to see a local page.
+ */
+export const GTM_ENABLED =
+  Boolean(GTM_ID) &&
+  (process.env.NODE_ENV === "production" || process.env.NEXT_PUBLIC_GTM_DEBUG === "true");
+
+/**
  * Where advertising inquiries go. Single source of truth for the /advertise
  * form, the chatbot, and the fallback message shown when a lead can't be
  * saved — keep the address here, not inline, so the two never drift apart.
