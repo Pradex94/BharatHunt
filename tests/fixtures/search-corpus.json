@@ -1,0 +1,72 @@
+{
+  "$comment": [
+    "Inputs for the search-normalisation parity contract. Hand-curated; every",
+    "entry earns its place by covering a rule or a case that has actually",
+    "broken. Add to this list, then run `npm run test:fixtures` to regenerate",
+    "search-golden.json and the SQL parity script.",
+    "",
+    "Expected outputs are NOT stored here on purpose -- they are generated, so",
+    "nobody hand-computes an NFKD result wrong and enshrines it."
+  ],
+  "inputs": [
+    { "input": "GrowEasy", "note": "the acceptance case: stored name" },
+    { "input": "grow easy", "note": "the acceptance case: what the user types" },
+    { "input": "Grow-Easy", "note": "hyphen separator" },
+    { "input": "grow_easy", "note": "underscore separator" },
+    { "input": "Grow.Easy", "note": "dot separator" },
+    { "input": "grow/easy", "note": "slash separator" },
+    { "input": "  grow   easy  ", "note": "runs of whitespace, leading and trailing" },
+
+    { "input": "", "note": "empty string" },
+    { "input": "   ", "note": "whitespace only -- normalises away to nothing" },
+    { "input": "-", "note": "separator only" },
+    { "input": "!!!", "note": "punctuation only" },
+
+    { "input": "AI Marketing Copilot", "note": "ordinary multi-token name" },
+    { "input": "ZenTask", "note": "camel case is not a token boundary" },
+    { "input": "UPPERCASE", "note": "case folding" },
+    { "input": "MiXeDcAsE", "note": "case folding, mixed" },
+
+    { "input": "Café", "note": "precomposed accent -- NFKD must keep the base letter" },
+    { "input": "Café", "note": "decomposed accent -- must equal the precomposed form" },
+    { "input": "naïve", "note": "diaeresis" },
+    { "input": "Zoë", "note": "diaeresis, capitalised" },
+    { "input": "señor", "note": "tilde" },
+    { "input": "Ångström", "note": "ring above, plus a second accent" },
+    { "input": "Straße", "note": "sharp s -- NFKD does NOT expand it to ss" },
+
+    { "input": "Ⅻ", "note": "Nl roman numeral -- NFKD folds it to xii, so it survives" },
+    { "input": "①②③", "note": "No circled digits -- caused a 139/140 parity failure" },
+    { "input": "²", "note": "No superscript -- NFKD folds to 2, so it survives normalize" },
+    { "input": "３", "note": "Nd fullwidth digit -- folds to 3" },
+    { "input": "٣", "note": "Nd Arabic-Indic digit -- NOT folded, so it is stripped" },
+    { "input": "½", "note": "vulgar fraction -- NFKD gives 1/2, slash then stripped" },
+    { "input": "ﬁle", "note": "fi ligature -- NFKD splits it into f and i" },
+    { "input": "㎡", "note": "squared-metre compatibility char" },
+
+    { "input": "दुकान", "note": "Devanagari -- no a-z0-9 survives, normalises to empty" },
+    { "input": "ಕನ್ನಡ", "note": "Kannada -- same" },
+    { "input": "हिंदी Store", "note": "mixed script -- only the Latin part survives" },
+    { "input": "东京", "note": "CJK -- normalises to empty" },
+    { "input": "🚀 Launch", "note": "emoji is not a letter or digit" },
+    { "input": "Product 🚀 Hunt", "note": "emoji between tokens" },
+
+    { "input": "Product2Product", "note": "digit inside a word" },
+    { "input": "3M", "note": "leading digit" },
+    { "input": "v1.2.3", "note": "version string" },
+    { "input": "C++", "note": "trailing symbols" },
+    { "input": "AT&T", "note": "ampersand" },
+    { "input": "hello@example.com", "note": "an email pasted into the search box" },
+    { "input": "https://bharathunt.org/p/groweasy", "note": "a URL pasted into the search box" },
+    { "input": "O'Reilly", "note": "apostrophe" },
+    { "input": "“smart quotes”", "note": "typographic quotes" },
+    { "input": "a\tb\nc", "note": "tab and newline as separators" },
+    { "input": " nbsp ", "note": "non-breaking space -- NFKD folds it to a plain space" },
+    { "input": "zero​width", "note": "zero-width space -- stripped, so the halves join" },
+
+    { "input": "SaaS", "note": "common category term" },
+    { "input": "No-Code", "note": "hyphenated category term" },
+    { "input": "Dev Tools", "note": "two-word category" },
+    { "input": "FinTech India", "note": "domain term" }
+  ]
+}

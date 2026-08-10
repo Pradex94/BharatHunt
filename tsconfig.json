@@ -3,6 +3,9 @@
     "target": "ES2017",
     "lib": ["dom", "dom.iterable", "esnext"],
     "allowJs": true,
+    // Node's built-in test runner resolves real files, so tests import
+    // "../lib/search.ts" with the extension. Safe alongside noEmit.
+    "allowImportingTsExtensions": true,
     "skipLibCheck": true,
     "strict": true,
     "noEmit": true,
