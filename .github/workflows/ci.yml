@@ -1,0 +1,123 @@
+name: CI
+
+# Every check a human would run before pushing, run on the push instead.
+#
+# The search-parity job is the one that earns its keep: `lib/search.ts` and
+# `public.search_normalize()` are two implementations of one rule in two
+# languages, and when they drift apart search does not error -- it quietly
+# stops matching. Only a real Postgres can catch that, so CI starts one.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  # A newer push makes an in-flight run irrelevant.
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checks:
+    name: Types, lint, tests, build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # 24 for the built-in test runner's native TypeScript support --
+          # `npm test` has no transpiler and does not want one.
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      - name: Type check
+        run: npx tsc --noEmit
+
+      - name: Lint
+        run: npx eslint app components lib services hooks tests scripts
+
+      - name: Tests
+        run: npm test
+
+      - name: Production build
+        run: npm run build
+        env:
+          # The build only needs these to exist; it never contacts either
+          # service. Real values live in Vercel.
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_Y2ktYnVpbGQtcGxhY2Vob2xkZXIk
+          CLERK_SECRET_KEY: sk_test_ci-build-placeholder
+          NEXT_PUBLIC_SUPABASE_URL: https://ci-placeholder.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-build-placeholder
+
+  search-parity:
+    name: Search normalisers agree with Postgres
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      PGURL: postgresql://postgres:postgres@localhost:5432/postgres
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      - name: Fail if the generated fixtures are stale
+        # Regenerating must be a no-op. If it rewrites anything, the committed
+        # SQL script describes rules the TypeScript side no longer follows.
+        run: |
+          npm run test:fixtures
+          git diff --exit-code -- tests/fixtures supabase/tests
+
+      - name: Prepare database
+        # The migration expects Supabase's `extensions` schema and the anon /
+        # authenticated roles; a bare Postgres has neither.
+        run: |
+          psql "$PGURL" -v ON_ERROR_STOP=1 \
+            -c "create schema if not exists extensions;" \
+            -c "create extension if not exists pg_trgm schema extensions;" \
+            -c "create role anon;" \
+            -c "create role authenticated;"
+
+      - name: Load the normaliser functions
+        # Only the three normalisers -- the rest of the migration adds generated
+        # columns to products/profiles, which do not exist in an empty database.
+        # Anchored on function names rather than line numbers so editing the
+        # migration cannot silently load the wrong thing.
+        run: |
+          set -euo pipefail
+          MIGRATION=supabase/migrations/20260809120000_product_search.sql
+          for fn in search_normalize search_normalize_array search_tokens; do
+            awk "/^create or replace function public\\.\$fn\\(/,/^\\\$\\\$;\$/" "$MIGRATION"
+          done > /tmp/normalisers.sql
+          found=$(grep -c '^create or replace function' /tmp/normalisers.sql)
+          if [ "$found" -ne 3 ]; then
+            echo "Expected 3 normaliser functions, extracted $found. Did $MIGRATION move?" >&2
+            exit 1
+          fi
+          psql "$PGURL" -v ON_ERROR_STOP=1 -f /tmp/normalisers.sql
+
+      - name: Check parity
+        # Raises an exception listing every mismatch, so one run tells the whole
+        # story rather than just the first failure.
+        run: psql "$PGURL" -v ON_ERROR_STOP=1 -f supabase/tests/search-normalize-parity.sql
