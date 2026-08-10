@@ -17,6 +17,15 @@ React 19, TS strict) + Supabase (Postgres/RLS) + Clerk auth + Tailwind v4.
 - `npm run lint` — ESLint (use `npx eslint app components lib services hooks` to
   scope to app code)
 - `npx tsc --noEmit` — type-check
+- `npm test` — Node's built-in runner over `tests/**/*.test.ts`, no database
+  needed. `npm run test:fixtures` regenerates the search-parity fixtures; the
+  SQL half is run separately (see `tests/README.md`).
+
+## Health Stack
+
+- typecheck: npx tsc --noEmit
+- lint: npx eslint app components lib services hooks tests scripts
+- test: npm test
 
 **Shell note:** on this machine the Bash tool's PATH is missing `npm`/`git` — run
 those through the PowerShell tool instead.
@@ -34,6 +43,12 @@ those through the PowerShell tool instead.
   references a user id, call `ensureProfile()` (`lib/ensure-profile.ts`)** — it
   self-heals the missing row, avoiding `products_creator_id_fkey` violations.
   It's already wired into the product/comment/upvote actions.
+- **Search normalisation is mirrored in two languages.** `lib/search.ts` and
+  `public.search_normalize()`/`search_tokens()` must stay identical. Change one,
+  change the other, then `npm run test:fixtures` and run
+  `supabase/tests/search-normalize-parity.sql` against a database. `npm test`
+  fails if the fixtures are stale but cannot see Postgres — the SQL run is the
+  step that actually proves parity. Details in `tests/README.md`.
 - **Data layer.** `services/products.ts` holds all product queries (server-only,
   imports the Supabase client). `lib/actions/*` are Server Actions. Anything a
   client component needs (category taxonomy, sorts, pricing types) lives in
