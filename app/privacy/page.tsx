@@ -16,7 +16,7 @@ export const metadata: Metadata = {
     "What Bharat Hunt collects, why we collect it, who processes it, and the choices you have over your data.",
 };
 
-const LAST_UPDATED = "3 August 2026";
+const LAST_UPDATED = "11 August 2026";
 
 const DATA_ROWS = [
   {
@@ -37,7 +37,12 @@ const DATA_ROWS = [
   {
     what: "Essential cookies",
     detail: "A session cookie that keeps you signed in, and your cookie choice.",
-    why: "To keep the platform working. No advertising or analytics cookies today.",
+    why: "To keep the platform working.",
+  },
+  {
+    what: "Analytics cookies (optional)",
+    detail: "Google Analytics, loaded through Google Tag Manager, only if you accept.",
+    why: "To see which pages get used so we know what to improve.",
   },
 ];
 
@@ -47,6 +52,10 @@ const PROCESSORS = [
   { name: "Vercel", role: "Hosting and delivery of the site." },
   { name: "Upstash", role: "Caching of product listings to keep pages fast." },
   { name: "Our email relay", role: "Delivers advertising inquiry emails." },
+  {
+    name: "Google",
+    role: "Tag Manager and Analytics — usage measurement, only after you accept.",
+  },
 ];
 
 export default function PrivacyPage() {
@@ -120,8 +129,10 @@ export default function PrivacyPage() {
         <section className="flex flex-col gap-3">
           <H2 className="text-2xl sm:text-3xl">Cookies</H2>
           <p className="leading-relaxed text-body">
-            We use essential cookies only — one to keep you signed in, one to remember your cookie
-            choice. No third-party analytics or advertising cookies are loaded today. The{" "}
+            We use two essential cookies — one to keep you signed in, one to remember your cookie
+            choice — plus Google Analytics, loaded through Google Tag Manager. The analytics side
+            runs in Consent Mode: it stores nothing on your device until you press Accept, and
+            nothing at all if you Decline. The{" "}
             <Link
               href="/cookies"
               className="font-medium text-primary transition-colors hover:underline"

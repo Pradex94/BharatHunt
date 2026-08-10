@@ -43,6 +43,14 @@ export const SITE_URL = (
 export const SITE_NAME = "Bharat Hunt";
 
 /**
+ * Google Tag Manager container. Not a secret — it ships in the page source of
+ * every site that uses one — so it lives here rather than in an env var, and
+ * `NEXT_PUBLIC_GTM_ID` overrides it when a preview needs its own container.
+ * Empty string disables the tag entirely (see `components/analytics/`).
+ */
+export const GTM_ID = process.env.NEXT_PUBLIC_GTM_ID ?? "GTM-548ZQGWC";
+
+/**
  * Where advertising inquiries go. Single source of truth for the /advertise
  * form, the chatbot, and the fallback message shown when a lead can't be
  * saved — keep the address here, not inline, so the two never drift apart.

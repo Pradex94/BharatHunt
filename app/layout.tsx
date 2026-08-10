@@ -7,6 +7,11 @@ import { Footer } from "@/components/layout/footer";
 import { CookieConsent } from "@/components/layout/cookie-consent";
 import { ChatWidget } from "@/components/chat/chat-widget";
 import { JsonLd } from "@/components/seo/json-ld";
+import {
+  GoogleTagManager,
+  GoogleTagManagerNoScript,
+} from "@/components/analytics/google-tag-manager";
+import { ConsentSync } from "@/components/analytics/consent-sync";
 import { organizationSchema, websiteSchema } from "@/lib/seo";
 import { SITE_NAME, SITE_URL } from "@/lib/constants";
 import "./globals.css";
@@ -75,7 +80,13 @@ export default function RootLayout({
   return (
     <ClerkProvider>
       <html lang="en" className={`${fontVariables} antialiased`}>
+        <head>
+          <GoogleTagManager />
+        </head>
         <body className="flex min-h-dvh flex-col">
+          {/* GTM's noscript iframe belongs immediately after <body>. */}
+          <GoogleTagManagerNoScript />
+          <ConsentSync />
           <JsonLd data={[organizationSchema(), websiteSchema()]} />
           <MotionConfig reducedMotion="user" transition={{ duration: 0.2, ease: "easeOut" }}>
             <Navbar />

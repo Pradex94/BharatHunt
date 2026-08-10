@@ -1,6 +1,8 @@
 /* Cookie Policy — static content page. The banner (CookieConsent) links here,
  * and the footer's "Cookies" link points here too. Honest about what we set:
- * essential auth + the consent cookie; no third-party analytics today. */
+ * essential auth + the consent cookie, plus Google Tag Manager, which loads
+ * under Consent Mode and stores nothing until someone accepts. Keep this page
+ * in step with components/analytics/google-tag-manager.tsx. */
 
 import type { Metadata } from "next";
 
@@ -29,10 +31,18 @@ const COOKIE_ROWS = [
     retention: "Session",
   },
   {
-    name: "Analytics",
-    purpose: "None loaded today — reserved for future, opt-in only.",
+    name: "Google Tag Manager",
+    purpose:
+      "Loads our measurement setup. Stores nothing on your device unless you accept.",
     type: "Optional",
-    retention: "—",
+    retention: "Until you accept",
+  },
+  {
+    name: "Google Analytics (_ga, _gid)",
+    purpose:
+      "Counts visits and shows which pages are used, so we know what to improve.",
+    type: "Optional",
+    retention: "Up to 2 years",
   },
 ];
 
@@ -41,7 +51,7 @@ export default function CookiesPage() {
     <Container className="max-w-3xl py-14 md:py-20">
       <Caption>Legal</Caption>
       <H1 className="mt-3">Cookie Policy</H1>
-      <p className="mt-3 text-sm text-muted">Last updated 27 July 2026</p>
+      <p className="mt-3 text-sm text-muted">Last updated 11 August 2026</p>
 
       <Lead className="mt-6">
         This page explains how Bharat Hunt uses cookies and similar technologies,
@@ -64,9 +74,16 @@ export default function CookiesPage() {
             We keep this simple. We use{" "}
             <strong className="font-semibold text-ink">essential cookies</strong>{" "}
             that the platform needs to work — most importantly to keep you signed in
-            via our authentication provider, and to remember your cookie choice. We
-            do not currently load any third-party analytics or advertising cookies;
-            if that ever changes, they will only load after you accept.
+            via our authentication provider, and to remember your cookie choice.
+          </p>
+          <p className="leading-relaxed text-body">
+            We also use{" "}
+            <strong className="font-semibold text-ink">Google Tag Manager</strong>{" "}
+            to understand how the platform is used. It runs in Google&apos;s
+            Consent Mode: until you press Accept, it is told to store nothing on
+            your device and set no analytics or advertising cookies. Press
+            Decline and it stays that way. You can change your mind at any time
+            using the controls further down this page.
           </p>
 
           <div className="mt-2 overflow-x-auto rounded-2xl border border-border">
