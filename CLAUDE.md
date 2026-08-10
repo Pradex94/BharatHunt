@@ -93,6 +93,16 @@ those through the PowerShell tool instead.
 
 ## Skill routing
 
+**Framework-version skills are advisory here, and AGENTS.md outranks them.** The
+AAS skills installed in `~/.claude/skills/` document older releases than this
+repo runs — `nextjs-app-router-patterns` targets Next.js 14+, `frontend-developer`
+targets Next.js 15; this project is on **16.2.10**, where APIs and file structure
+genuinely differ (middleware is `proxy.ts`, and so on). Use them for shape and
+vocabulary, never as an API reference: per AGENTS.md, read
+`node_modules/next/dist/docs/` before writing code. `react-best-practices` is
+the exception worth trusting — it is Vercel-maintained and mostly
+version-independent.
+
 When the user's request matches an available skill, invoke it via the Skill tool. When in doubt, invoke the skill.
 
 Key routing rules:
