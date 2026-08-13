@@ -50,6 +50,25 @@ export function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const { isLoaded, isSignedIn, user } = useUser();
   const { signOut } = useClerk();
+  const [authStalled, setAuthStalled] = useState(false);
+
+  /*
+   * Clerk loads from its own domain, and when that request never finishes --
+   * a blocked script, an offline moment, a dev server restarted underneath an
+   * open tab -- `isLoaded` stays false forever. Rendering the skeleton on that
+   * condition alone left the navbar showing two grey pills with no way to log
+   * in at all. After a short grace period we stop waiting and draw the
+   * logged-out state, which is the honest guess: `isSignedIn` is false until
+   * proven otherwise, and the buttons are plain links that work regardless.
+   */
+  useEffect(() => {
+    if (isLoaded) return;
+    const timer = setTimeout(() => setAuthStalled(true), 3000);
+    return () => clearTimeout(timer);
+  }, [isLoaded]);
+
+  // Only hold the skeleton while Clerk is plausibly still on its way.
+  const showAuthSkeleton = !isLoaded && !authStalled;
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 8);
@@ -92,7 +111,7 @@ export function Navbar() {
           <div className="hidden items-center gap-3 lg:flex">
             <SearchAutocomplete className="hidden xl:block" />
 
-            {!isLoaded ? (
+            {showAuthSkeleton ? (
               <div className="flex items-center gap-2">
                 <Skeleton className="h-9 w-16 bg-white/10" />
                 <Skeleton className="h-9 w-32 bg-white/10" />
@@ -187,7 +206,7 @@ export function Navbar() {
                 </div>
 
                 <div className="mt-auto flex flex-col gap-2 border-t border-border p-4">
-                  {!isLoaded ? (
+                  {showAuthSkeleton ? (
                     <>
                       <Skeleton className="h-9 w-full" />
                       <Skeleton className="h-9 w-full" />
