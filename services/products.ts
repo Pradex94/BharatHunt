@@ -427,14 +427,26 @@ export async function getProducts({
       case "price-high":
         query = query.order("pricing_amount", { ascending: false, nullsFirst: false });
         break;
+      // "Top rated" is the all-time community favourites board: upvotes, not
+      // `avg_rating`. The rating column is fed by the `feedback` table, which
+      // nothing in the app writes, so ordering by it left every row tied at
+      // NULL and the page came back in effectively random order.
       case "top-rated":
-        query = query.order("avg_rating", { ascending: false, nullsFirst: false });
+        query = query.order("upvote_count", { ascending: false, nullsFirst: false });
         break;
       case "newest":
       default:
         query = query.order("published_at", { ascending: false, nullsFirst: false });
         break;
     }
+
+    // Deterministic tie-break, mirroring `search_products`: without it rows
+    // with equal scores come back in whatever order Postgres happens to
+    // produce, which lets a product repeat -- or vanish -- across pages.
+    query = query
+      .order("upvote_count", { ascending: false, nullsFirst: false })
+      .order("published_at", { ascending: false, nullsFirst: false })
+      .order("id", { ascending: true });
 
     const { data, error, count } = await query.range(from, to);
 

@@ -252,7 +252,9 @@ begin
   order by
     case when sort_mode = 'relevance'  then c.relevance      end desc nulls last,
     case when sort_mode = 'trending'   then c.trend_score    end desc nulls last,
-    case when sort_mode = 'top-rated'  then c.avg_rating     end desc nulls last,
+    -- Upvotes, not avg_rating: nothing writes public.feedback, so every row
+    -- is tied at NULL there and "top rated" degenerates into random order.
+    case when sort_mode = 'top-rated'  then c.upvote_count   end desc nulls last,
     case when sort_mode = 'price-low'  then c.pricing_amount end asc  nulls last,
     case when sort_mode = 'price-high' then c.pricing_amount end desc nulls last,
     case when sort_mode = 'newest'     then c.published_at   end desc nulls last,
