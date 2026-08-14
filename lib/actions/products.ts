@@ -12,7 +12,7 @@ import { getIsAdmin } from "@/lib/admin";
 import { cacheInvalidatePrefix } from "@/lib/cache";
 import { ensureProfile } from "@/lib/ensure-profile";
 import { getUserProductCount, PRODUCTS_CACHE_PREFIX } from "@/services/products";
-import { MAX_PRODUCTS_PER_USER, PRODUCT_PLATFORMS } from "@/lib/constants";
+import { MAX_GALLERY_IMAGES, MAX_PRODUCTS_PER_USER, PRODUCT_PLATFORMS } from "@/lib/constants";
 import { hostnameOf, moderateProduct } from "@/lib/moderation";
 import { isIndiaStateCode } from "@/lib/india-states";
 import { detectStateCode } from "@/lib/request-geo";
@@ -88,7 +88,7 @@ function parseProductForm(formData: FormData): { error: string } | { fields: Par
     .map((value) => String(value).trim())
     .filter((value) => /^https?:\/\//i.test(value))
     .filter((value, index, all) => all.indexOf(value) === index)
-    .slice(0, 8);
+    .slice(0, MAX_GALLERY_IMAGES);
   const tagsRaw = String(formData.get("tags") ?? "");
 
   if (!name || name.length > 60) {

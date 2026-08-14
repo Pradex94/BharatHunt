@@ -20,7 +20,12 @@ import {
 
 import { createProduct, updateProduct, type ProductFormState } from "@/lib/actions/products";
 import { fetchUrlMetadata } from "@/lib/actions/fetch-metadata";
-import { PRODUCT_CATEGORIES, PRICING_TYPE_LABELS, PRODUCT_PLATFORMS } from "@/lib/constants";
+import {
+  MAX_GALLERY_IMAGES,
+  PRODUCT_CATEGORIES,
+  PRICING_TYPE_LABELS,
+  PRODUCT_PLATFORMS,
+} from "@/lib/constants";
 import { INDIA_STATES } from "@/lib/india-states";
 import { moderateProduct, SUBMISSION_RULES, type ModerationCode } from "@/lib/moderation";
 import type { Json } from "@/types/database";
@@ -29,7 +34,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { ProductLogo } from "@/components/products/product-logo";
-import { uploadProductImage } from "@/lib/upload";
+import { MAX_UPLOAD_BYTES, MIN_GALLERY_IMAGE_WIDTH, uploadProductImage } from "@/lib/upload";
 import { cn } from "@/lib/utils";
 
 const selectClassName =
@@ -192,7 +197,70 @@ export function ProductForm({ product, detectedState = null }: ProductFormProps)
     setGallery((prev) => prev.map((url, i) => (i === index ? e.target.value : url)));
   const removeGalleryItem = (index: number) => () =>
     setGallery((prev) => prev.filter((_, i) => i !== index));
-  const addGalleryItem = () => setGallery((prev) => [...prev, ""]);
+  const addGalleryItem = () =>
+    setGallery((prev) => (prev.length >= MAX_GALLERY_IMAGES ? prev : [...prev, ""]));
+
+  const [galleryUploading, setGalleryUploading] = useState(0);
+  const [galleryError, setGalleryError] = useState<string | null>(null);
+  const [galleryDragActive, setGalleryDragActive] = useState(false);
+
+  /**
+   * Uploads dropped/selected screenshots straight to Cloudinary and drops the
+   * resulting URLs into the gallery rows, filling any blank row before adding
+   * a new one. Files are uploaded at full resolution and rejected if they are
+   * too small to render sharply -- see MIN_GALLERY_IMAGE_WIDTH.
+   */
+  const addGalleryFiles = async (files: File[]) => {
+    if (files.length === 0) return;
+    setGalleryError(null);
+
+    const used = gallery.filter(Boolean).length;
+    const room = MAX_GALLERY_IMAGES - used;
+    if (room <= 0) {
+      setGalleryError(`You can add up to ${MAX_GALLERY_IMAGES} images.`);
+      return;
+    }
+
+    const chosen = files.slice(0, room);
+    const failures: string[] = [];
+
+    setGalleryUploading((count) => count + chosen.length);
+    for (const file of chosen) {
+      try {
+        const url = await uploadProductImage(file, { minWidth: MIN_GALLERY_IMAGE_WIDTH });
+        setGallery((prev) => {
+          const next = [...prev];
+          const blank = next.findIndex((value) => !value);
+          if (blank === -1) next.push(url);
+          else next[blank] = url;
+          return next;
+        });
+      } catch (error) {
+        failures.push(error instanceof Error ? error.message : `Couldn't upload ${file.name}.`);
+      } finally {
+        setGalleryUploading((count) => count - 1);
+      }
+    }
+
+    if (chosen.length < files.length) {
+      failures.push(`Only ${room} more image${room === 1 ? "" : "s"} would fit.`);
+    }
+    setGalleryError(failures.length > 0 ? failures.join(" ") : null);
+  };
+
+  const handleGalleryDrag = (e: React.DragEvent<HTMLLabelElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === "dragenter" || e.type === "dragover") setGalleryDragActive(true);
+    else if (e.type === "dragleave") setGalleryDragActive(false);
+  };
+
+  const handleGalleryDrop = (e: React.DragEvent<HTMLLabelElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setGalleryDragActive(false);
+    void addGalleryFiles(Array.from(e.dataTransfer.files));
+  };
 
   // Import from URL
   const [importUrl, setImportUrl] = useState(product?.website_url ?? "");
@@ -364,8 +432,8 @@ export function ProductForm({ product, detectedState = null }: ProductFormProps)
       setUploadError("Please select an image file");
       return;
     }
-    if (file.size > 5 * 1024 * 1024) {
-      setUploadError("Image must be smaller than 5MB");
+    if (file.size > MAX_UPLOAD_BYTES) {
+      setUploadError(`Image must be smaller than ${MAX_UPLOAD_BYTES / 1024 / 1024}MB`);
       return;
     }
     setImageFile(file);
@@ -780,7 +848,7 @@ export function ProductForm({ product, detectedState = null }: ProductFormProps)
                   <p className="text-sm font-medium text-foreground">
                     Click to upload or drag and drop
                   </p>
-                  <p className="text-xs text-muted-foreground">PNG, JPG, WebP up to 5MB</p>
+                  <p className="text-xs text-muted-foreground">PNG, JPG, WebP up to 10MB</p>
                 </div>
                 <input
                   type="file"
@@ -817,8 +885,61 @@ export function ProductForm({ product, detectedState = null }: ProductFormProps)
           <div className={card}>
             <h2 className="text-lg font-semibold text-foreground">Gallery images</h2>
             <p className="text-xs text-muted-foreground">
-              Screenshots and previews shown on your product page (up to 8).
+              Screenshots and previews shown on your product page (up to {MAX_GALLERY_IMAGES}).
             </p>
+
+            <label
+              onDragEnter={handleGalleryDrag}
+              onDragLeave={handleGalleryDrag}
+              onDragOver={handleGalleryDrag}
+              onDrop={handleGalleryDrop}
+              className={cn(
+                "flex cursor-pointer items-center justify-center gap-2 rounded-lg border-2 border-dashed p-6 transition-all",
+                galleryDragActive
+                  ? "border-primary bg-primary/5"
+                  : "border-border hover:bg-secondary-bg",
+              )}
+            >
+              <Upload
+                size={20}
+                className={cn(
+                  "transition-colors",
+                  galleryDragActive ? "text-primary" : "text-muted-foreground",
+                )}
+              />
+              <div className="text-center">
+                <p className="text-sm font-medium text-foreground">
+                  {galleryUploading > 0
+                    ? `Uploading ${galleryUploading} image${galleryUploading === 1 ? "" : "s"}…`
+                    : "Click to upload or drag and drop"}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  PNG, JPG, WebP up to {MAX_UPLOAD_BYTES / 1024 / 1024}MB · at least{" "}
+                  {MIN_GALLERY_IMAGE_WIDTH}px wide, so it stays sharp
+                </p>
+              </div>
+              <input
+                type="file"
+                accept="image/*"
+                multiple
+                onChange={(e) => {
+                  // Copy the FileList before clearing the input, which empties
+                  // it -- and clear it so the same file can be retried after a
+                  // rejected upload.
+                  void addGalleryFiles(Array.from(e.target.files ?? []));
+                  e.target.value = "";
+                }}
+                disabled={galleryUploading > 0 || pending}
+                className="hidden"
+              />
+            </label>
+
+            {galleryError && <p className="text-sm text-destructive">{galleryError}</p>}
+
+            {gallery.length > 0 && (
+              <p className="text-xs text-muted-foreground">Or paste image URLs:</p>
+            )}
+
             <div className="flex flex-col gap-2">
               {gallery.map((url, index) => (
                 <div key={index} className="flex items-center gap-2">
@@ -862,9 +983,10 @@ export function ProductForm({ product, detectedState = null }: ProductFormProps)
                 variant="outline"
                 size="sm"
                 onClick={addGalleryItem}
+                disabled={gallery.length >= MAX_GALLERY_IMAGES}
                 className="self-start"
               >
-                <Plus size={16} /> Add image
+                <Plus size={16} /> Add image URL
               </Button>
             </div>
           </div>
@@ -1231,8 +1353,12 @@ export function ProductForm({ product, detectedState = null }: ProductFormProps)
               </Button>
             )}
             {(step === "review" || product) && (
-              <Button type="submit" disabled={pending || uploadingImage} size="lg">
-                {uploadingImage
+              <Button
+                type="submit"
+                disabled={pending || uploadingImage || galleryUploading > 0}
+                size="lg"
+              >
+                {uploadingImage || galleryUploading > 0
                   ? "Uploading image…"
                   : pending
                     ? product

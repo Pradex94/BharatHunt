@@ -30,6 +30,13 @@ export const NAV_LINKS: NavLink[] = [
 export const MAX_PRODUCTS_PER_USER = 3;
 
 /**
+ * Gallery screenshots per product. Enforced in the submit form (so makers see
+ * the ceiling) and again server-side in `lib/actions/products.ts` (so it is
+ * real). Shared from here to stop the two drifting apart.
+ */
+export const MAX_GALLERY_IMAGES = 8;
+
+/**
  * Canonical public origin — the single source of truth for absolute URLs used
  * by metadata (`metadataBase`), the sitemap, robots.txt, and JSON-LD. Override
  * per-environment with `NEXT_PUBLIC_SITE_URL` (e.g. a preview or custom domain);
