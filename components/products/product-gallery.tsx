@@ -6,6 +6,21 @@
 import { useState } from "react";
 
 import { cn } from "@/lib/utils";
+import { cloudinarySrcSet, cloudinaryVariant } from "@/lib/cloudinary";
+
+/*
+ * The gallery sits in a `max-w-2xl` column, so the main image is drawn at most
+ * ~640 CSS pixels wide. These widths cover that at 1x, 2x and 3x — the browser
+ * picks by device pixel ratio, which is what stops a sharp screenshot from
+ * rendering soft on a retina display. `q_auto:best` on the main image because
+ * it is the one people actually look at; thumbnails get the cheaper tier.
+ */
+const MAIN_WIDTHS = [640, 1280, 1920];
+const MAIN_SIZES = "(min-width: 704px) 640px, calc(100vw - 2rem)";
+
+/** h-16 at 16:9 is ~114px wide. */
+const THUMB_WIDTHS = [128, 256, 384];
+const THUMB_SIZES = "114px";
 
 export function ProductGallery({ images }: { images: string[] }) {
   const [active, setActive] = useState(0);
@@ -20,8 +35,11 @@ export function ProductGallery({ images }: { images: string[] }) {
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         key={current}
-        src={current}
+        src={cloudinaryVariant(current, MAIN_WIDTHS[0], "best")}
+        srcSet={cloudinarySrcSet(current, MAIN_WIDTHS, "best")}
+        sizes={MAIN_SIZES}
         alt=""
+        decoding="async"
         className="aspect-video w-full rounded-xl border border-border bg-secondary-bg object-cover"
       />
 
@@ -42,7 +60,15 @@ export function ProductGallery({ images }: { images: string[] }) {
               )}
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={url} alt="" className="size-full object-cover" />
+              <img
+                src={cloudinaryVariant(url, THUMB_WIDTHS[0])}
+                srcSet={cloudinarySrcSet(url, THUMB_WIDTHS)}
+                sizes={THUMB_SIZES}
+                alt=""
+                loading="lazy"
+                decoding="async"
+                className="size-full object-cover"
+              />
             </button>
           ))}
         </div>
