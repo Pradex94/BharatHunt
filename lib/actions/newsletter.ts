@@ -12,8 +12,6 @@
  * via the service role.
  */
 
-import { after } from "next/server";
-
 import { createClient } from "@/lib/supabase/server";
 import { sendEmail } from "@/lib/email";
 import { buildNewsletterWelcome } from "@/lib/emails/newsletter-welcome";
@@ -58,16 +56,26 @@ export async function subscribeToNewsletter(
     return { error: "Couldn't sign you up just now. Please try again." };
   }
 
-  // The welcome email is a nicety, not part of the transaction: the address is
-  // already safely stored, and a mail outage must not read as a failed signup.
-  // `after` runs it once the response has been flushed, so "Subscribed" appears
-  // immediately rather than waiting on the mail provider.
-  after(async () => {
-    const sent = await sendEmail({ to: email, ...buildNewsletterWelcome(email) });
-    if (!sent.ok) {
-      console.error(`[newsletter] welcome email not delivered: ${sent.error}`);
-    }
-  });
+  /*
+   * Sent inline rather than from `after()`.
+   *
+   * It was scheduled with `after()` originally, so the button could flip before
+   * the mail provider answered. That cost us the email entirely: the row landed
+   * and the welcome never arrived, with nothing in the logs either way, because
+   * a callback that never runs cannot report that it did not run. The same
+   * pattern was swallowing the product-launch receipt.
+   *
+   * Awaiting costs a few hundred milliseconds on a form that is already doing a
+   * round trip, and buys two things worth more than that: the send actually
+   * happens, and when it fails it says so in the logs.
+   *
+   * Still fail-open. The address is already stored by this point, so a mail
+   * outage is not a failed signup and must not be reported as one.
+   */
+  const sent = await sendEmail({ to: email, ...buildNewsletterWelcome(email) });
+  if (!sent.ok) {
+    console.error(`[newsletter] welcome email not delivered to ${email}: ${sent.error}`);
+  }
 
   return { ok: true };
 }

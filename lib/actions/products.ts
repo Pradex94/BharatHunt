@@ -2,7 +2,6 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { after } from "next/server";
 import { auth, currentUser } from "@clerk/nextjs/server";
 import type { PostgrestError } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
@@ -251,12 +250,15 @@ async function findDuplicateLaunch(
  * the request's auth context and has to be resolved before `redirect` unwinds
  * the action.
  *
- * The send itself is handed to `after`, which runs once the response has been
- * flushed and still fires when `redirect` throws. That keeps a slow or dead
- * mail provider off the critical path: the maker lands on their product page
- * immediately either way. Failures are logged, never thrown — the product is
- * already published, and losing the receipt must not look like a failed
- * launch. Matches the fail-open contract in lib/email.ts.
+ * The send is awaited rather than handed to `after`. `after` kept it off the
+ * critical path in theory; in practice the callback never ran in production and
+ * the receipt was lost silently — no email, and no log line saying why, since a
+ * callback that does not run cannot report its own absence.
+ *
+ * Awaiting adds the provider round trip (a few hundred milliseconds, capped by
+ * the 15s timeout in lib/email.ts) before the redirect. Failures are logged,
+ * never thrown — the product is already published, and losing the receipt must
+ * not look like a failed launch. Matches the fail-open contract in lib/email.ts.
  */
 async function sendLaunchReceipt(product: {
   name: string;
@@ -286,13 +288,11 @@ async function sendLaunchReceipt(product: {
   const to = recipient;
   const email = buildProductLaunchEmail(product, makerName);
 
-  after(async () => {
-    const sent = await sendEmail({ to, ...email });
-    // Log the slug, not the address — this lands in shared platform logs.
-    if (!sent.ok) {
-      console.error(`[launch-email] "${product.slug}" was not delivered: ${sent.error}`);
-    }
-  });
+  const sent = await sendEmail({ to, ...email });
+  // Log the slug, not the address — this lands in shared platform logs.
+  if (!sent.ok) {
+    console.error(`[launch-email] "${product.slug}" was not delivered: ${sent.error}`);
+  }
 }
 
 export async function createProduct(
