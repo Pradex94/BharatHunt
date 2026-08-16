@@ -1,6 +1,7 @@
 import "server-only";
 
 import { Redis } from "@upstash/redis";
+import { headers } from "next/headers";
 
 /**
  * Redis cache service (Upstash REST — serverless-friendly, no connection
@@ -26,6 +27,36 @@ function getRedis(): Redis | null {
 /** Whether a Redis backend is configured (useful for diagnostics). */
 export function isCacheEnabled(): boolean {
   return getRedis() !== null;
+}
+
+/**
+ * Best-effort fixed-window limiter for public writes. It is intentionally
+ * fail-open when Redis is unavailable: availability is preferable to turning
+ * a cache/integration outage into a site-wide form outage.
+ */
+export async function allowRequest(
+  key: string,
+  limit: number,
+  windowSeconds: number,
+): Promise<boolean> {
+  const redis = getRedis();
+  if (!redis) return true;
+
+  try {
+    const count = await redis.incr(key);
+    if (count === 1) await redis.expire(key, windowSeconds);
+    return count <= limit;
+  } catch {
+    return true;
+  }
+}
+
+/** Stable enough client key for Vercel requests; never logs or persists the IP itself. */
+export async function requestRateLimitKey(scope: string): Promise<string> {
+  const requestHeaders = await headers();
+  const forwarded = requestHeaders.get("x-forwarded-for")?.split(",", 1)[0]?.trim();
+  const ip = forwarded || requestHeaders.get("x-real-ip") || "unknown";
+  return `ratelimit:${scope}:${ip}`;
 }
 
 /**

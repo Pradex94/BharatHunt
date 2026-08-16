@@ -12,6 +12,11 @@ import { CommunitySection } from "@/components/landing/community-section";
 import { Newsletter } from "@/components/landing/newsletter";
 import { getLaunchStateCounts, getPlatformStats, getTopUpvotedProducts } from "@/services/products";
 
+// The homepage reads live Supabase data through a Clerk-authenticated server
+// client. That client uses request headers for its access token, so this route
+// must be rendered dynamically rather than prerendered during the build.
+export const dynamic = "force-dynamic";
+
 export const metadata = {
   // The layout no longer sets a site-wide canonical, so the homepage declares
   // its own rather than relying on Google to infer one.
