@@ -102,20 +102,12 @@ jobs:
       - name: Load the normaliser functions
         # Only the three normalisers -- the rest of the migration adds generated
         # columns to products/profiles, which do not exist in an empty database.
-        # Anchored on function names rather than line numbers so editing the
-        # migration cannot silently load the wrong thing.
+        # The extraction lives in a script with its own test rather than in
+        # shell here: escaping a regex through YAML into bash into awk is how
+        # this step failed the first time it ran.
         run: |
-          set -euo pipefail
-          MIGRATION=supabase/migrations/20260809120000_product_search.sql
-          for fn in search_normalize search_normalize_array search_tokens; do
-            awk "/^create or replace function public\\.\$fn\\(/,/^\\\$\\\$;\$/" "$MIGRATION"
-          done > /tmp/normalisers.sql
-          found=$(grep -c '^create or replace function' /tmp/normalisers.sql)
-          if [ "$found" -ne 3 ]; then
-            echo "Expected 3 normaliser functions, extracted $found. Did $MIGRATION move?" >&2
-            exit 1
-          fi
-          psql "$PGURL" -v ON_ERROR_STOP=1 -f /tmp/normalisers.sql
+          node scripts/extract-search-functions.mjs > "$RUNNER_TEMP/normalisers.sql"
+          psql "$PGURL" -v ON_ERROR_STOP=1 -f "$RUNNER_TEMP/normalisers.sql"
 
       - name: Check parity
         # Raises an exception listing every mismatch, so one run tells the whole
