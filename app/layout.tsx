@@ -15,6 +15,7 @@ import { ConsentSync } from "@/components/analytics/consent-sync";
 import { organizationSchema, websiteSchema } from "@/lib/seo";
 import { SITE_NAME, SITE_URL } from "@/lib/constants";
 import "./globals.css";
+import NextTopLoader from "nextjs-toploader";
 
 // Inter is the whole voice here — bold headlines, regular body, medium labels.
 // It drives both --font-sans and --font-display (headings just use heavier weight).
@@ -88,7 +89,10 @@ export default function RootLayout({
           <GoogleTagManagerNoScript />
           <ConsentSync />
           <JsonLd data={[organizationSchema(), websiteSchema()]} />
-          <MotionConfig reducedMotion="user" transition={{ duration: 0.2, ease: "easeOut" }}>
+          <MotionConfig
+            reducedMotion="user"
+            transition={{ duration: 0.2, ease: "easeOut" }}
+          >
             <Navbar />
             <main className="flex flex-1 flex-col">{children}</main>
             <Footer />
@@ -96,6 +100,12 @@ export default function RootLayout({
             <ChatWidget />
           </MotionConfig>
         </body>
+        <NextTopLoader
+          showSpinner={false}
+          color="var(--color-primary)"
+          zIndex={999}
+          height={3}
+        />
       </html>
     </ClerkProvider>
   );
