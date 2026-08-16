@@ -16,6 +16,7 @@
  */
 
 import { createClient } from "@/lib/supabase/server";
+import { allowRequest, requestRateLimitKey } from "@/lib/cache";
 import { ADS_EMAIL } from "@/lib/constants";
 import { sendEmail } from "@/lib/email";
 import {
@@ -27,11 +28,41 @@ import {
 export type AdInquiryState = { ok?: boolean; error?: string } | undefined;
 
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+const TURNSTILE_VERIFY_URL = "https://challenges.cloudflare.com/turnstile/v0/siteverify";
+
+async function verifyTurnstile(token: string): Promise<boolean> {
+  const secret = process.env.TURNSTILE_SECRET_KEY;
+  if (!secret || !token) return false;
+
+  try {
+    const response = await fetch(TURNSTILE_VERIFY_URL, {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ secret, response: token }),
+      cache: "no-store",
+    });
+    const result = (await response.json()) as { success?: boolean };
+    return result.success === true;
+  } catch {
+    return false;
+  }
+}
 
 export async function submitAdInquiry(
   _prevState: AdInquiryState,
   formData: FormData,
 ): Promise<AdInquiryState> {
+  const captchaToken = String(formData.get("cf-turnstile-response") ?? "");
+  if (!(await verifyTurnstile(captchaToken))) {
+    return { error: "Please complete the security check and try again." };
+  }
+
+  // This action sends two emails per accepted submission. Keep the window
+  // deliberately generous for legitimate advertisers, but expensive for a
+  // bot that repeatedly refreshes/submits the form.
+  const allowed = await allowRequest(await requestRateLimitKey("ad-inquiry"), 5, 3600);
+  if (!allowed) return { error: "Too many submissions. Please try again later." };
+
   const name = String(formData.get("name") ?? "").trim();
   const email = String(formData.get("email") ?? "").trim();
   const company = String(formData.get("company") ?? "").trim();

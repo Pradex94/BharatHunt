@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useCallback, useState } from "react";
 import { CheckCircle2 } from "lucide-react";
 
 import { submitAdInquiry, type AdInquiryState } from "@/lib/actions/ad-inquiry";
@@ -10,15 +10,18 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { TurnstileWidget } from "@/components/advertise/turnstile-widget";
 
 const selectClassName =
   "h-10 w-full rounded-lg border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
 
 export function AdvertiseInquiryForm() {
+  const [captchaToken, setCaptchaToken] = useState("");
   const [state, formAction, pending] = useActionState<AdInquiryState, FormData>(
     submitAdInquiry,
     undefined,
   );
+  const handleCaptchaToken = useCallback((token: string) => setCaptchaToken(token), []);
 
   if (state?.ok) {
     return (
@@ -84,8 +87,10 @@ export function AdvertiseInquiryForm() {
 
       {state?.error && <p className="text-sm text-destructive">{state.error}</p>}
 
+      <TurnstileWidget onTokenChange={handleCaptchaToken} />
+
       <div className="flex flex-col items-start gap-2">
-        <Button type="submit" disabled={pending} size="lg">
+        <Button type="submit" disabled={pending || !captchaToken} size="lg">
           {pending ? "Sending…" : "Get started"}
         </Button>
         <p className="text-xs text-muted">
