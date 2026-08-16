@@ -3,6 +3,7 @@
  * how-it-works, and a lead-capture inquiry form (→ lib/actions/ad-inquiry). */
 
 import type { Metadata } from "next";
+import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowRight, Check, Code2, IndianRupee, MessageSquare, Palette } from "lucide-react";
 
@@ -40,6 +41,8 @@ const STEPS = [
 ];
 
 export default async function AdvertisePage() {
+  notFound();
+
   const stats = await getPlatformStats();
 
   const statCards = [
