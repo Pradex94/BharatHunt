@@ -10,7 +10,11 @@ import { FeatureSection } from "@/components/landing/feature-section";
 import { TopProducts } from "@/components/landing/top-products";
 import { CommunitySection } from "@/components/landing/community-section";
 import { Newsletter } from "@/components/landing/newsletter";
-import { getLaunchStateCounts, getPlatformStats, getTopUpvotedProducts } from "@/services/products";
+import {
+  getLaunchStateCounts,
+  getPlatformStats,
+  getTopUpvotedProducts,
+} from "@/services/products";
 
 // The homepage reads live Supabase data through a Clerk-authenticated server
 // client. That client uses request headers for its access token, so this route
@@ -22,6 +26,9 @@ export const metadata = {
   // its own rather than relying on Google to infer one.
   alternates: { canonical: "/" },
 };
+
+// Revalidate page data every 12 hours (43200 seconds) via ISR
+export const revalidate = 43200;
 
 export default async function Home() {
   const [ranked, stats, launchCounts] = await Promise.all([
