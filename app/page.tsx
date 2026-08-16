@@ -10,13 +10,20 @@ import { FeatureSection } from "@/components/landing/feature-section";
 import { TopProducts } from "@/components/landing/top-products";
 import { CommunitySection } from "@/components/landing/community-section";
 import { Newsletter } from "@/components/landing/newsletter";
-import { getLaunchStateCounts, getPlatformStats, getTopUpvotedProducts } from "@/services/products";
+import {
+  getLaunchStateCounts,
+  getPlatformStats,
+  getTopUpvotedProducts,
+} from "@/services/products";
 
 export const metadata = {
   // The layout no longer sets a site-wide canonical, so the homepage declares
   // its own rather than relying on Google to infer one.
   alternates: { canonical: "/" },
 };
+
+// Revalidate page data every 12 hours (43200 seconds) via ISR
+export const revalidate = 43200;
 
 export default async function Home() {
   const [ranked, stats, launchCounts] = await Promise.all([
