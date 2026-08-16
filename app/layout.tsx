@@ -99,13 +99,13 @@ export default function RootLayout({
             <CookieConsent />
             <ChatWidget />
           </MotionConfig>
+          <NextTopLoader
+            showSpinner={false}
+            color="var(--color-primary)"
+            zIndex={999}
+            height={3}
+          />
         </body>
-        <NextTopLoader
-          showSpinner={false}
-          color="var(--color-primary)"
-          zIndex={999}
-          height={3}
-        />
       </html>
     </ClerkProvider>
   );
