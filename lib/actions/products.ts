@@ -10,6 +10,7 @@ import { isMissingColumnError } from "@/lib/supabase/errors";
 import { getIsAdmin } from "@/lib/admin";
 import { cacheInvalidatePrefix } from "@/lib/cache";
 import { ensureProfile } from "@/lib/ensure-profile";
+import { checkRateLimitByUser } from "@/lib/rate-limit";
 import { getUserProductCount, PRODUCTS_CACHE_PREFIX } from "@/services/products";
 import { MAX_GALLERY_IMAGES, MAX_PRODUCTS_PER_USER, PRODUCT_PLATFORMS } from "@/lib/constants";
 import { hostnameOf, moderateProduct } from "@/lib/moderation";
@@ -305,6 +306,17 @@ export async function createProduct(
     redirect("/login");
   }
 
+  /*
+   * Distinct from MAX_PRODUCTS_PER_USER below. That is a lifetime cap on rows
+   * that survive; it says nothing about attempt rate, and delete-then-resubmit
+   * cycles straight past it. This bounds the rate, including for admins, who
+   * are exempt from the launch cap.
+   */
+  const rate = await checkRateLimitByUser("productCreate", userId);
+  if (!rate.ok) {
+    return { error: rate.message };
+  }
+
   const supabase = createClient();
 
   // Enforce the per-maker launch limit before doing any work — admins are exempt.
@@ -467,6 +479,11 @@ export async function updateProduct(
     redirect("/login");
   }
 
+  const rate = await checkRateLimitByUser("productUpdate", userId);
+  if (!rate.ok) {
+    return { error: rate.message };
+  }
+
   const supabase = createClient();
 
   const parsed = parseProductForm(formData);
@@ -594,6 +611,11 @@ export async function deleteProduct(
 
   if (!userId) {
     redirect("/login");
+  }
+
+  const rate = await checkRateLimitByUser("productDelete", userId);
+  if (!rate.ok) {
+    return { error: rate.message };
   }
 
   const supabase = createClient();

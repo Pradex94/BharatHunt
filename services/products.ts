@@ -1,5 +1,5 @@
 import { cache } from "react";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createPublicClient } from "@/lib/supabase/server";
 import { isMissingColumnError } from "@/lib/supabase/errors";
 import { cacheRemember } from "@/lib/cache";
 import type { ProductCardProduct } from "@/components/products/product-card";
@@ -188,7 +188,7 @@ const LANDING_PRODUCT_COLUMNS =
  */
 export async function getTopUpvotedProducts(limit = 6): Promise<LandingProduct[]> {
   return cacheRemember(`${PRODUCTS_CACHE_PREFIX}top-upvoted:${limit}`, AGGREGATE_TTL, async () => {
-    const supabase = createClient();
+    const supabase = createPublicClient();
     const { data, error } = await supabase
       .from("products")
       .select(LANDING_PRODUCT_COLUMNS)
@@ -505,7 +505,7 @@ export async function getPlatformStats(): Promise<{
   upvotes: number;
 }> {
   return cacheRemember(`${PRODUCTS_CACHE_PREFIX}platform-stats`, AGGREGATE_TTL, async () => {
-    const supabase = createClient();
+    const supabase = createPublicClient();
     const { data, error } = await supabase
       .from("products")
       .select("creator_id, upvote_count")
@@ -609,7 +609,7 @@ export async function getCategoryCounts(): Promise<Record<string, number>> {
  */
 export async function getLaunchStateCounts(): Promise<Record<string, number>> {
   return cacheRemember(`${PRODUCTS_CACHE_PREFIX}launch-state-counts`, AGGREGATE_TTL, async () => {
-    const supabase = createClient();
+    const supabase = createPublicClient();
     const { data, error } = await supabase
       .from("products")
       .select("launch_state")

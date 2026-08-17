@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { checkRateLimitByIp } from "@/lib/rate-limit";
 import { PRODUCT_CATEGORIES, slugForCategory } from "@/lib/constants";
 import {
   isSuggestable,
@@ -25,6 +26,20 @@ export async function fetchSearchSuggestions(query: string): Promise<SearchSugge
 
   const term = query.trim();
   if (!isSuggestable(term)) {
+    return empty;
+  }
+
+  /*
+   * The only unauthenticated endpoint here that reaches Postgres on every call,
+   * which makes it the cheapest thing on the site to abuse. The client
+   * debounces at 250ms, so a real user issues a few per minute; 60/min leaves
+   * fast typists untouched while capping a script.
+   *
+   * Degrades to empty suggestions rather than an error: this feeds a dropdown,
+   * and a silent empty list is a better failure than a red box under the input.
+   */
+  const limit = await checkRateLimitByIp("search");
+  if (!limit.ok) {
     return empty;
   }
 
