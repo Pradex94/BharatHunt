@@ -15,7 +15,7 @@ import { lookup } from "node:dns/promises";
 import net from "node:net";
 
 import { auth } from "@clerk/nextjs/server";
-import { checkRateLimitByUser } from "@/lib/rate-limit";
+import { checkRateLimitByIpAndUser } from "@/lib/rate-limit";
 
 import {
   bySizeDesc,
@@ -97,7 +97,7 @@ export async function fetchUrlMetadata(rawUrl: string): Promise<FetchMetadataRes
    * egress cost per call and an amplification primitive pointed at third
    * parties, so it gets the tightest authenticated limit on the site.
    */
-  const rate = await checkRateLimitByUser("metadataFetch", userId);
+  const rate = await checkRateLimitByIpAndUser("metadataFetch", userId);
   if (!rate.ok) return { ok: false, error: rate.message };
 
   let normalized: string;

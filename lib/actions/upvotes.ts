@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@clerk/nextjs/server";
 import { createClient } from "@/lib/supabase/server";
 import { ensureProfile } from "@/lib/ensure-profile";
-import { checkRateLimitByUser } from "@/lib/rate-limit";
+import { checkRateLimitByIpAndUser } from "@/lib/rate-limit";
 
 export type UpvoteActionState = { error?: string } | undefined;
 
@@ -18,7 +18,7 @@ export async function toggleUpvote(productId: string): Promise<UpvoteActionState
 
   // A vote is one row plus a counter update, and the button is trivially
   // scriptable once you hold a session. 30/min is far above human tapping.
-  const limit = await checkRateLimitByUser("upvote", userId);
+  const limit = await checkRateLimitByIpAndUser("upvote", userId);
   if (!limit.ok) {
     return { error: limit.message };
   }

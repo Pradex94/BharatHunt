@@ -10,7 +10,7 @@ import { isMissingColumnError } from "@/lib/supabase/errors";
 import { getIsAdmin } from "@/lib/admin";
 import { cacheInvalidatePrefix } from "@/lib/cache";
 import { ensureProfile } from "@/lib/ensure-profile";
-import { checkRateLimitByUser } from "@/lib/rate-limit";
+import { checkRateLimitByIpAndUser } from "@/lib/rate-limit";
 import { getUserProductCount, PRODUCTS_CACHE_PREFIX } from "@/services/products";
 import { MAX_GALLERY_IMAGES, MAX_PRODUCTS_PER_USER, PRODUCT_PLATFORMS } from "@/lib/constants";
 import { hostnameOf, moderateProduct } from "@/lib/moderation";
@@ -312,7 +312,7 @@ export async function createProduct(
    * cycles straight past it. This bounds the rate, including for admins, who
    * are exempt from the launch cap.
    */
-  const rate = await checkRateLimitByUser("productCreate", userId);
+  const rate = await checkRateLimitByIpAndUser("productCreate", userId);
   if (!rate.ok) {
     return { error: rate.message };
   }
@@ -479,7 +479,7 @@ export async function updateProduct(
     redirect("/login");
   }
 
-  const rate = await checkRateLimitByUser("productUpdate", userId);
+  const rate = await checkRateLimitByIpAndUser("productUpdate", userId);
   if (!rate.ok) {
     return { error: rate.message };
   }
@@ -613,7 +613,7 @@ export async function deleteProduct(
     redirect("/login");
   }
 
-  const rate = await checkRateLimitByUser("productDelete", userId);
+  const rate = await checkRateLimitByIpAndUser("productDelete", userId);
   if (!rate.ok) {
     return { error: rate.message };
   }
