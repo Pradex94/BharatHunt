@@ -1,35 +1,53 @@
 import { Container } from "@/components/ui/container";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ProductListSkeleton } from "@/components/products/product-card-skeleton";
 
+/**
+ * Marketplace loading state.
+ *
+ * Mirrors app/marketplace/page.tsx's structure exactly: the same
+ * `lg:grid-cols-[240px_1fr]` shell, the sidebar column, the sticky toolbar and
+ * a single-column card list. The previous version rendered a 3-column card
+ * grid with no sidebar, so the real page reflowed the entire viewport the
+ * moment it arrived — the skeleton was the CLS.
+ */
 export default function MarketplaceLoading() {
   return (
-    <Container className="flex flex-1 flex-col gap-6 py-10">
-      <Skeleton className="h-8 w-48" />
-
-      <div className="flex flex-col gap-4">
-        <Skeleton className="h-9 w-full max-w-md" />
-        <div className="hidden items-center justify-between gap-4 md:flex">
-          <div className="flex flex-wrap gap-2">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <Skeleton key={i} className="h-8 w-24" />
-            ))}
-          </div>
-          <Skeleton className="h-8 w-48" />
+    <Container className="grid grid-cols-1 gap-10 py-10 lg:grid-cols-[240px_1fr] lg:items-start">
+      {/* Sidebar — hidden below lg, exactly as the real one is. */}
+      <aside className="hidden lg:flex lg:flex-col lg:gap-7">
+        <div className="flex flex-col gap-3">
+          <Skeleton className="h-3 w-20" />
+          {Array.from({ length: 8 }).map((_, i) => (
+            <Skeleton key={i} className="h-9 w-full rounded-lg" />
+          ))}
         </div>
-        <Skeleton className="h-9 w-full md:hidden" />
-      </div>
+        <div className="flex flex-col gap-3">
+          <Skeleton className="h-3 w-16" />
+          {Array.from({ length: 3 }).map((_, i) => (
+            <Skeleton key={i} className="h-5 w-28" />
+          ))}
+        </div>
+        <Skeleton className="h-36 w-full rounded-lg" />
+      </aside>
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {Array.from({ length: 12 }).map((_, i) => (
-          <div key={i} className="flex gap-4 rounded-2xl border border-border bg-card p-4">
-            <Skeleton className="size-14 shrink-0 rounded-xl" />
-            <div className="flex min-w-0 flex-1 flex-col gap-2">
-              <Skeleton className="h-4 w-3/4" />
-              <Skeleton className="h-3.5 w-full" />
-              <Skeleton className="mt-2 h-3.5 w-1/2" />
-            </div>
+      <div className="flex flex-col gap-5">
+        {/* h1: text-3xl sm:text-4xl */}
+        <Skeleton className="h-9 w-64 sm:h-10" />
+
+        {/* Toolbar: search on its own row below sm, then pills + filters. */}
+        <div className="flex flex-col gap-3 border-b border-border py-3 sm:flex-row sm:items-center">
+          <Skeleton className="h-11 flex-1 rounded-md" />
+          <div className="flex items-center gap-2">
+            <Skeleton className="h-10 w-56 rounded-md" />
+            <Skeleton className="h-10 w-24 shrink-0 rounded-md lg:hidden" />
           </div>
-        ))}
+        </div>
+
+        {/* "N products" count line */}
+        <Skeleton className="h-4 w-28" />
+
+        <ProductListSkeleton count={8} />
       </div>
     </Container>
   );

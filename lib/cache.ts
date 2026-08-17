@@ -30,6 +30,17 @@ export function isCacheEnabled(): boolean {
 }
 
 /**
+ * The resolved Redis client, or null when unconfigured.
+ *
+ * Exported for lib/rate-limit.ts, which must tell "no Redis" apart from "Redis
+ * allowed this": `allowRequest` below collapses both to `true`, which is right
+ * for a cache and wrong for a limiter.
+ */
+export function getRedisClient(): Redis | null {
+  return getRedis();
+}
+
+/**
  * Best-effort fixed-window limiter for public writes. It is intentionally
  * fail-open when Redis is unavailable: availability is preferable to turning
  * a cache/integration outage into a site-wide form outage.
