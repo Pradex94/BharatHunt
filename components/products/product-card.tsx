@@ -106,7 +106,7 @@ export function ProductCard({
             <span
               className={cn(
                 "shrink-0 rounded-full px-2 py-0.5 text-xs font-medium whitespace-nowrap",
-                PRICING_BADGE[product.pricing_type] ?? "bg-muted text-muted",
+                PRICING_BADGE[product.pricing_type] ?? "bg-secondary-bg text-muted",
               )}
             >
               {PRICING_LABEL[product.pricing_type] ?? product.pricing_type}

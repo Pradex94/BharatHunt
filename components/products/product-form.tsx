@@ -807,7 +807,7 @@ export function ProductForm({ product, detectedState = null }: ProductFormProps)
             </p>
 
             {imagePreview && (
-              <div className="relative w-full overflow-hidden rounded-lg border border-input bg-muted">
+              <div className="relative w-full overflow-hidden rounded-lg border border-input bg-secondary-bg">
                 {/* The uploaded file is a square logo, so show it whole. */}
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
