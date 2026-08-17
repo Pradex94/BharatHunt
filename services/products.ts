@@ -560,7 +560,18 @@ export async function getProductsByCreator(userId: string): Promise<MakerProduct
     .order("created_at", { ascending: false });
 
   if (error) {
-    throw new Error(`Failed to load your products: ${error.message}`);
+    // Next replaces thrown messages with an opaque digest in production, so the
+    // cause has to be recorded here or it is lost. Code and message only — no
+    // user id, which is what makes this row personal data.
+    console.error(
+      JSON.stringify({
+        event: "dashboard_products_query_failed",
+        code: error.code ?? null,
+        message: error.message,
+        at: new Date().toISOString(),
+      }),
+    );
+    throw new Error("Failed to load your products.");
   }
   return (data ?? []) as MakerProduct[];
 }

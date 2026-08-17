@@ -27,7 +27,34 @@ export type RateLimitPolicy = {
  * signup sends mail through a paid provider; a metadata fetch makes this server
  * issue an outbound HTTP request to a caller-chosen URL.
  */
+/** Read a positive integer from the environment, falling back to `fallback`. */
+function envInt(name: string, fallback: number): number {
+  const raw = process.env[name];
+  if (!raw) return fallback;
+  const parsed = Number.parseInt(raw, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
 export const RATE_LIMITS = {
+  /*
+   * The global safety net, applied per IP to every application request in
+   * proxy.ts — page loads, RSC payloads and Server Actions alike.
+   *
+   * This is the ceiling that makes "one IP sends thousands of requests"
+   * impossible regardless of which endpoint is targeted; the endpoint policies
+   * below are the finer control beneath it. Sized well above real browsing (a
+   * page view costs a handful of requests, so an active human sits in the tens
+   * per minute) and well below what a script needs to be useful.
+   *
+   * Overridable per environment because the right number depends on real
+   * traffic, which is only observable in production.
+   */
+  globalIp: {
+    limit: envInt("RATE_LIMIT_GLOBAL_IP_MAX", 300),
+    windowSeconds: envInt("RATE_LIMIT_GLOBAL_IP_WINDOW", 60),
+    message: "Too many requests. Please try again shortly.",
+  },
+
   /** Public, cached, cheap — generous so real browsing is never touched. */
   search: { limit: 60, windowSeconds: 60, message: "Too many searches. Please slow down." },
   loadMore: { limit: 120, windowSeconds: 60, message: "Too many requests. Please slow down." },

@@ -1,8 +1,10 @@
 import "server-only";
 
+import { Ratelimit } from "@upstash/ratelimit";
 import { headers } from "next/headers";
 
 import { getRedisClient } from "@/lib/cache";
+import { clientIpFrom } from "@/lib/rate-limit-ip";
 import {
   consumeLocal,
   RATE_LIMITS,
@@ -14,36 +16,68 @@ import {
 /**
  * Server-side rate limiting.
  *
- * Why this exists on top of `allowRequest` in lib/cache.ts: that helper returns
- * `true` whenever Redis is not configured. That is the right call for a *cache*
- * — a cache outage should not take the site down — but as a limiter it means
- * the protection silently evaporates in any environment without Upstash
- * credentials (local, CI, a preview with the integration detached). A limiter
- * that can neither fail closed nor fall back in-process is not a limiter.
+ * Backed by `@upstash/ratelimit` on the Upstash Redis this project already
+ * uses. Distributed by construction: the counter lives in Redis, so it is
+ * shared across every serverless instance rather than being per-process.
  *
- * So: Redis when it is there (distributed, correct across instances), and a
- * bounded in-process map when it is not. The in-process tier only sees one
- * serverless instance's traffic, so it is weaker than Redis — but it is a real
- * ceiling rather than none, and it makes the limits testable without a network
- * dependency. Redis *errors* (as opposed to absence) still fall back the same
- * way, because a transient Upstash blip must not start rejecting real writes.
+ * **Sliding window, not fixed.** A fixed window lets a caller spend a full
+ * budget in the last instant of one window and another immediately in the
+ * next — two budgets back to back, which is exactly the "1000 requests in two
+ * seconds" burst this is meant to stop. The sliding window weights the previous
+ * window's count by how much of it still overlaps, so the burst is counted
+ * rather than reset away. This replaces the INCR/EXPIRE fixed window that was
+ * here before.
  *
- * Every limit here is enforced inside the server action. None of it depends on
- * client state, and none of it is bypassable by editing the request.
+ * **The in-process tier is a fallback, never the production limiter.** When
+ * Redis is unconfigured (local dev, CI) the bounded map in rate-limit-core
+ * keeps the limits non-zero and testable. On Vercel with Upstash configured it
+ * is never the active path. A Redis *error* also degrades there rather than
+ * failing closed, because a transient Upstash blip must not become a site-wide
+ * write outage.
+ *
+ * Nothing here depends on client state, and none of it is bypassable by editing
+ * the request.
  */
+
+/** One Ratelimit instance per policy, built lazily and reused across requests. */
+const limiters = new Map<RateLimitName, Ratelimit>();
+
+/*
+ * Short-circuits repeat offenders without a Redis round-trip: once a key is
+ * known-blocked for the current window, this answers directly. It is what stops
+ * a flood from becoming one Upstash call per request — the attacker's traffic
+ * is the traffic that stops costing anything. Never the source of truth; it
+ * only ever withholds a request that Redis already rejected.
+ */
+const ephemeralCache = new Map<string, number>();
+
+function getLimiter(name: RateLimitName): Ratelimit | null {
+  const redis = getRedisClient();
+  if (!redis) return null;
+
+  const existing = limiters.get(name);
+  if (existing) return existing;
+
+  const policy: RateLimitPolicy = RATE_LIMITS[name];
+  const limiter = new Ratelimit({
+    redis,
+    limiter: Ratelimit.slidingWindow(policy.limit, `${policy.windowSeconds} s`),
+    prefix: `ratelimit:${name}`,
+    // Surfaces per-endpoint reject counts in the Upstash console — the "which
+    // endpoint is being attacked" view, without building a dashboard.
+    analytics: true,
+    ephemeralCache,
+  });
+  limiters.set(name, limiter);
+  return limiter;
+}
 
 // ── Identity ─────────────────────────────────────────────────────────────
 
-/**
- * Client IP from the proxy headers Vercel sets. Used only as a limiter key —
- * never logged, never persisted. `x-forwarded-for` is client-settable in
- * principle, but Vercel overwrites it at the edge, so the leftmost entry is the
- * real peer.
- */
+/** `clientIpFrom` against the current request's headers. */
 export async function clientIp(): Promise<string> {
   const requestHeaders = await headers();
-  const forwarded = requestHeaders.get("x-forwarded-for")?.split(",", 1)[0]?.trim();
-  return forwarded || requestHeaders.get("x-real-ip") || "unknown";
+  return clientIpFrom((name) => requestHeaders.get(name));
 }
 
 // ── Public API ───────────────────────────────────────────────────────────
@@ -51,47 +85,32 @@ export async function clientIp(): Promise<string> {
 /**
  * Consume one unit against `name` for `identifier` (a user id, or an IP).
  *
- * Returns a result rather than throwing, so each caller can shape its own
- * response — server actions fold it into their `{ error }` state.
+ * Returns a result rather than throwing, so each caller shapes its own
+ * response — server actions fold it into `{ error }`, the proxy returns a 429.
  */
 export async function checkRateLimit(
   name: RateLimitName,
   identifier: string,
 ): Promise<RateLimitResult> {
   const policy: RateLimitPolicy = RATE_LIMITS[name];
-  const key = `ratelimit:${name}:${identifier}`;
-  const redis = getRedisClient();
+  const limiter = getLimiter(name);
 
-  // No Redis configured — use the in-process ceiling rather than waving
-  // everything through, which is what the old cache-backed helper did.
-  if (!redis) return consumeLocal(key, policy);
+  if (!limiter) {
+    return consumeLocal(`ratelimit:${name}:${identifier}`, policy);
+  }
 
   try {
-    const count = await redis.incr(key);
-    if (count === 1) await redis.expire(key, policy.windowSeconds);
-
-    // TTL tells the caller when the window actually resets. -1/-2 mean the key
-    // has no expiry or vanished between calls; re-arm rather than report a
-    // nonsense Retry-After.
-    let retryAfter = policy.windowSeconds;
-    if (count > policy.limit) {
-      const ttl = await redis.ttl(key);
-      if (ttl > 0) retryAfter = ttl;
-      else await redis.expire(key, policy.windowSeconds);
-    }
-
-    const ok = count <= policy.limit;
+    const { success, limit, remaining, reset } = await limiter.limit(identifier);
     return {
-      ok,
-      limit: policy.limit,
-      remaining: Math.max(0, policy.limit - count),
-      retryAfter,
-      message: ok ? "" : policy.message,
+      ok: success,
+      limit,
+      remaining: Math.max(0, remaining),
+      // `reset` is an epoch-ms timestamp; Retry-After wants whole seconds.
+      retryAfter: Math.max(1, Math.ceil((reset - Date.now()) / 1000)),
+      message: success ? "" : policy.message,
     };
   } catch {
-    // A Redis blip must not become a write outage. Degrade to the in-process
-    // ceiling, which still bounds a single instance.
-    return consumeLocal(key, policy);
+    return consumeLocal(`ratelimit:${name}:${identifier}`, policy);
   }
 }
 
@@ -108,5 +127,25 @@ export async function checkRateLimitByUser(
   return checkRateLimit(name, `user:${userId}`);
 }
 
+/**
+ * Both ceilings for one authenticated write: the account's own budget, and the
+ * budget of the address it arrived from.
+ *
+ * A per-user limit alone is bypassed by rotating accounts; a per-IP limit alone
+ * is bypassed by one account working from many addresses. Whichever is
+ * exhausted first wins, and the IP check runs first so a flood is stopped
+ * before the account's budget is even consulted.
+ */
+export async function checkRateLimitByIpAndUser(
+  name: RateLimitName,
+  userId: string,
+): Promise<RateLimitResult> {
+  const byIp = await checkRateLimitByIp(name);
+  if (!byIp.ok) return byIp;
+  return checkRateLimitByUser(name, userId);
+}
+
 export { RATE_LIMITS, __resetLocalRateLimiter } from "@/lib/rate-limit-core";
 export type { RateLimitName, RateLimitPolicy, RateLimitResult } from "@/lib/rate-limit-core";
+
+export { clientIpFrom, anonymizeIp } from "@/lib/rate-limit-ip";

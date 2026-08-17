@@ -17,7 +17,7 @@ import { Container } from "@/components/ui/container";
 import { Logo } from "@/components/layout/logo";
 import { SearchAutocomplete } from "@/components/layout/search-autocomplete";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { UserAvatar } from "@/components/layout/user-avatar";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -33,16 +33,6 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
-
-function getInitials(name: string) {
-  const initials = name
-    .trim()
-    .split(/\s+/)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase())
-    .join("");
-  return initials || "?";
-}
 
 export function Navbar() {
   const router = useRouter();
@@ -131,9 +121,7 @@ export function Navbar() {
                       />
                     }
                   >
-                    <Avatar size="sm">
-                      <AvatarFallback>{getInitials(displayName)}</AvatarFallback>
-                    </Avatar>
+                    <UserAvatar user={user} displayName={displayName} />
                     <span className="max-w-24 truncate">{displayName}</span>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
@@ -219,9 +207,7 @@ export function Navbar() {
                   ) : isSignedIn ? (
                     <>
                       <div className="flex items-center gap-2 px-1 py-1">
-                        <Avatar size="sm">
-                          <AvatarFallback>{getInitials(displayName)}</AvatarFallback>
-                        </Avatar>
+                        <UserAvatar user={user} displayName={displayName} />
                         <span className="truncate text-sm font-medium text-ink">
                           {displayName}
                         </span>

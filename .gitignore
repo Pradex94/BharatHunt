@@ -52,3 +52,7 @@ skills-lock.json
 
 .vercel
 .env*
+
+# local test server output
+server.log
+server.err.log

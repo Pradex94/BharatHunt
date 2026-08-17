@@ -240,7 +240,7 @@ export default async function ProductPage({
               <span
                 className={cn(
                   "mt-1 shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium",
-                  PRICING_BADGE[product.pricing_type] ?? "bg-muted text-muted",
+                  PRICING_BADGE[product.pricing_type] ?? "bg-secondary-bg text-muted",
                 )}
               >
                 {PRICING_LABEL[product.pricing_type] ?? product.pricing_type}

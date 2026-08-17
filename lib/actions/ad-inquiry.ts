@@ -20,7 +20,7 @@ import { auth } from "@clerk/nextjs/server";
 
 import { createClient } from "@/lib/supabase/server";
 import { ensureProfile } from "@/lib/ensure-profile";
-import { checkRateLimitByUser } from "@/lib/rate-limit";
+import { checkRateLimitByIpAndUser } from "@/lib/rate-limit";
 import { ADS_EMAIL } from "@/lib/constants";
 import { sendEmail } from "@/lib/email";
 import {
@@ -72,7 +72,7 @@ export async function submitAdInquiry(
   //     session is mandatory -- rotating IPs no longer buys an attacker a
   //     fresh budget. The ceiling is high enough that a human retrying a
   //     failed challenge never reaches it.
-  const attempts = await checkRateLimitByUser("adInquiryAttempts", userId);
+  const attempts = await checkRateLimitByIpAndUser("adInquiryAttempts", userId);
   if (!attempts.ok) {
     return { error: attempts.message };
   }
@@ -85,7 +85,7 @@ export async function submitAdInquiry(
   // (2) Submission gate, after the captcha. This action sends two emails per
   //     accepted submission. Keep the window deliberately generous for
   //     legitimate advertisers, but expensive for a bot that gets past (1).
-  const allowed = await checkRateLimitByUser("adInquiry", userId);
+  const allowed = await checkRateLimitByIpAndUser("adInquiry", userId);
   if (!allowed.ok) return { error: allowed.message };
 
   const name = String(formData.get("name") ?? "").trim();
