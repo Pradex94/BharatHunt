@@ -43,7 +43,15 @@ CLERK_WEBHOOK_SIGNING_SECRET=<your-clerk-webhook-signing-secret>
 SENDGROVE_API_KEY=<keyId>:<keySecret>         # sent as the X-API-Key header
 EMAIL_FROM=Bharat Hunt <ads@bharathunt.org>   # must be a VERIFIED sender
 EMAIL_FALLBACK_FROM=Bharat Hunt <info@bharathunt.org>   # optional; see below
+
+# Cloudflare Turnstile — captcha on the /advertise inquiry form (REQUIRED for that form)
+NEXT_PUBLIC_TURNSTILE_SITE_KEY=<your-turnstile-site-key>
+TURNSTILE_SECRET_KEY=<your-turnstile-secret-key>
 ```
+
+Turnstile is **required and fail-closed**: `submitAdInquiry` rejects every submission when `TURNSTILE_SECRET_KEY` is unset, so without both keys the /advertise form is not merely unprotected — it cannot accept a lead at all. When the site key is missing the form replaces itself with an email fallback rather than rendering a button that can never succeed. Create a widget at [Cloudflare Turnstile](https://dash.cloudflare.com/?to=/:account/turnstile) and add your domain (plus `localhost` for dev).
+
+Sending an advertising inquiry **requires a logged-in account**. `submitAdInquiry` rejects anonymous callers, the lead is stored against the submitter's `user_id`, and the RLS insert policy on `ad_inquiries` only accepts a row whose `user_id` matches the caller's Clerk id — so the `20260817000000_ad_inquiries_require_login` migration must be applied before the form can store anything.
 
 Email is **optional and fail-open**: without `SENDGROVE_API_KEY` the /advertise form still stores the lead in Supabase and shows the success state — it just logs that no mail was sent.
 
