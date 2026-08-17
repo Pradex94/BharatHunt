@@ -102,8 +102,13 @@ export default async function MarketplacePage({
             the hairline marks the toolbar edge once it detaches. */}
         <div className="sticky top-16 z-30 flex flex-col gap-3 border-b border-border bg-background py-3 sm:flex-row sm:items-center">
           <SearchInput />
-          <div className="flex items-center gap-2">
-            <SortPills />
+          {/* The three sort pills alone are wider than a 375px phone, so the
+              row scrolls horizontally and only the Filters button is pinned —
+              nothing gets pushed off-screen and the page never side-scrolls. */}
+          <div className="flex min-w-0 items-center gap-2">
+            <div className="no-scrollbar -mx-1 min-w-0 flex-1 overflow-x-auto px-1 sm:mx-0 sm:flex-initial sm:px-0">
+              <SortPills />
+            </div>
             <MobileFilters categoryCounts={categoryCounts} totalCount={totalCategoryCount} />
           </div>
         </div>

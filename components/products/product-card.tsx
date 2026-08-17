@@ -89,10 +89,13 @@ export function ProductCard({
       <div className="flex min-w-0 flex-1 flex-col gap-1.5">
         <div className="flex items-start justify-between gap-2">
           <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-            <HeadingTag className="min-w-0 font-sans text-base font-semibold tracking-normal text-ink">
+            {/* The clip lives on the heading, not the link: `truncate` needs a
+                block box, and on the inline <a> it let long names overrun the
+                card on narrow screens. */}
+            <HeadingTag className="min-w-0 truncate font-sans text-base font-semibold tracking-normal text-ink">
               <Link
                 href={productPath}
-                className="truncate transition-colors duration-200 group-hover:text-primary"
+                className="transition-colors duration-200 group-hover:text-primary"
               >
                 {product.name}
               </Link>

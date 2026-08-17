@@ -38,7 +38,7 @@ import { MAX_UPLOAD_BYTES, MIN_GALLERY_IMAGE_WIDTH, uploadProductImage } from "@
 import { cn } from "@/lib/utils";
 
 const selectClassName =
-  "h-10 w-full rounded-lg border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30";
+  "h-10 w-full rounded-lg border border-input bg-transparent px-3 text-base outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 md:text-sm dark:bg-input/30";
 
 /**
  * The form is split into steps (Product-Hunt style) because the full field set

@@ -232,11 +232,11 @@ export default async function ProductPage({
         ]}
       />
       <FadeIn className="flex flex-col gap-6">
-        <div className="flex gap-5">
+        <div className="flex gap-4 sm:gap-5">
           <ProductLogo src={product.hero_image_url} name={product.name} size="lg" />
           <div className="flex min-w-0 flex-1 flex-col gap-2">
             <div className="flex items-start justify-between gap-3">
-              <H1 className="text-3xl sm:text-4xl">{product.name}</H1>
+              <H1 className="text-2xl break-words sm:text-4xl">{product.name}</H1>
               <span
                 className={cn(
                   "mt-1 shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium",
@@ -337,7 +337,7 @@ export default async function ProductPage({
         <ProductGallery images={(product.screenshot_urls as string[] | null) ?? []} />
 
         {product.description && (
-          <p className="max-w-[65ch] text-base leading-[1.65] whitespace-pre-wrap text-body">
+          <p className="max-w-[65ch] text-base leading-[1.65] break-words whitespace-pre-wrap text-body">
             {product.description}
           </p>
         )}

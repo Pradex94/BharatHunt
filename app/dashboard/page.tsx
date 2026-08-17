@@ -72,7 +72,7 @@ export default async function DashboardPage() {
   ];
 
   return (
-    <main className="min-h-screen bg-background py-12 md:py-16">
+    <main className="min-h-dvh bg-background py-12 md:py-16">
       <Container>
         <div className="mx-auto flex w-full max-w-5xl flex-col gap-8">
           {/* Header */}

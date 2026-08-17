@@ -25,7 +25,7 @@ export function MobileFilters({
   return (
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger
-        render={<Button type="button" variant="outline" className="gap-2 lg:hidden" />}
+        render={<Button type="button" variant="outline" className="shrink-0 gap-2 lg:hidden" />}
       >
         <SlidersHorizontalIcon className="size-4" aria-hidden="true" />
         Filters

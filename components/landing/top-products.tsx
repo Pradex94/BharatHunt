@@ -48,7 +48,7 @@ export function TopProducts({ products, startRank = 1, heading = "Most upvoted" 
                 className="shadow-sm"
               />
               <div className="flex flex-1 flex-col gap-1">
-                <h3 className="font-bold tracking-tight text-ink transition-colors group-hover:text-primary">
+                <h3 className="font-bold tracking-tight break-words text-ink transition-colors group-hover:text-primary">
                   {product.name}
                 </h3>
                 <p className="line-clamp-2 text-sm leading-snug text-body">{product.tagline}</p>
