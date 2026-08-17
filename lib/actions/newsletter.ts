@@ -13,7 +13,7 @@
  */
 
 import { createClient } from "@/lib/supabase/server";
-import { allowRequest, requestRateLimitKey } from "@/lib/cache";
+import { checkRateLimitByIp } from "@/lib/rate-limit";
 import { sendEmail } from "@/lib/email";
 import { buildNewsletterWelcome } from "@/lib/emails/newsletter-welcome";
 
@@ -35,8 +35,10 @@ export async function subscribeToNewsletter(
     return { ok: true };
   }
 
-  const allowed = await allowRequest(await requestRateLimitKey("newsletter"), 3, 3600);
-  if (!allowed) return { error: "Too many signups. Please try again later." };
+  // Signed-out endpoint that sends real email, so it is keyed by IP and gets
+  // the strictest policy in RATE_LIMITS.
+  const rate = await checkRateLimitByIp("newsletter");
+  if (!rate.ok) return { error: rate.message };
 
   const email = String(formData.get("email") ?? "")
     .trim()

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { auth } from "@clerk/nextjs/server";
 import { createClient } from "@/lib/supabase/server";
 import { ensureProfile } from "@/lib/ensure-profile";
+import { checkRateLimitByUser } from "@/lib/rate-limit";
 
 export type CommentFormState = { error?: string } | undefined;
 
@@ -26,6 +27,13 @@ export async function addComment(
 
   if (!userId) {
     return { error: "You must be logged in to comment." };
+  }
+
+  // Checked after auth so the limiter is keyed by identity rather than by IP,
+  // and before any database work so a flood costs one Redis INCR.
+  const limit = await checkRateLimitByUser("comment", userId);
+  if (!limit.ok) {
+    return { error: limit.message };
   }
 
   const supabase = createClient();

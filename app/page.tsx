@@ -16,18 +16,26 @@ import {
   getTopUpvotedProducts,
 } from "@/services/products";
 
-// The homepage reads live Supabase data through a Clerk-authenticated server
-// client. That client uses request headers for its access token, so this route
-// must be rendered dynamically rather than prerendered during the build.
-export const dynamic = "force-dynamic";
-
 export const metadata = {
   // The layout no longer sets a site-wide canonical, so the homepage declares
   // its own rather than relying on Google to infer one.
   alternates: { canonical: "/" },
 };
 
-// Revalidate page data every 12 hours (43200 seconds) via ISR
+/*
+ * ISR, and it now actually applies.
+ *
+ * This route previously declared BOTH `dynamic = "force-dynamic"` and this
+ * `revalidate`. `force-dynamic` wins, so the revalidate below was dead code and
+ * every homepage hit re-rendered from scratch: Clerk token round-trip, then
+ * three Supabase aggregates, before a single byte of HTML was flushed. That
+ * server time sat directly in front of the LCP paint.
+ *
+ * `force-dynamic` was there because these reads went through the Clerk
+ * authenticated Supabase client. They are the same for every visitor and pass
+ * anon RLS, so they now use `createPublicClient()` and this page prerenders and
+ * revalidates on a 12-hour cycle as originally intended.
+ */
 export const revalidate = 43200;
 
 export default async function Home() {

@@ -15,6 +15,7 @@ import { lookup } from "node:dns/promises";
 import net from "node:net";
 
 import { auth } from "@clerk/nextjs/server";
+import { checkRateLimitByUser } from "@/lib/rate-limit";
 
 import {
   bySizeDesc,
@@ -89,6 +90,15 @@ const IMAGE_EXTENSION = /\.(png|svg|webp|jpe?g|ico|avif|gif)(\?|#|$)/i;
 export async function fetchUrlMetadata(rawUrl: string): Promise<FetchMetadataResult> {
   const { userId } = await auth();
   if (!userId) return { ok: false, error: "Please sign in to import from a URL." };
+
+  /*
+   * This action makes *this server* issue an outbound HTTP request to a URL the
+   * caller supplies, then follows redirects and probes for an icon. That is
+   * egress cost per call and an amplification primitive pointed at third
+   * parties, so it gets the tightest authenticated limit on the site.
+   */
+  const rate = await checkRateLimitByUser("metadataFetch", userId);
+  if (!rate.ok) return { ok: false, error: rate.message };
 
   let normalized: string;
   try {
