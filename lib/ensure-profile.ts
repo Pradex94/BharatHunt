@@ -1,5 +1,6 @@
 import { auth, currentUser } from "@clerk/nextjs/server";
 import { createClient } from "@/lib/supabase/server";
+import { checkEmail, DISPOSABLE_EMAIL_MESSAGE } from "@/lib/disposable-email";
 
 /**
  * Guarantees a `profiles` row exists for the signed-in Clerk user, returning
@@ -38,6 +39,30 @@ export async function ensureProfile(): Promise<string | null> {
     user?.username ||
     email?.split("@")[0] ||
     "New user";
+
+  /*
+   * Same gate as the webhook, on the other path that creates a profile. This
+   * one is the self-healing fallback, so it runs for users whose webhook never
+   * fired — closing it here stops a disposable-domain account from acquiring a
+   * profile simply by attempting a write.
+   *
+   * Only reached when no profile exists yet (the fast path above returns
+   * early), so an existing member is never re-evaluated and never locked out
+   * if their domain is added to the list later.
+   */
+  const verdict = checkEmail(email);
+  if (!verdict.ok && verdict.reason === "disposable") {
+    console.warn(
+      JSON.stringify({
+        event: "profile_blocked",
+        reason: "disposable_email",
+        domain: email?.split("@").pop() ?? "unknown",
+        endpoint: "ensureProfile",
+        at: new Date().toISOString(),
+      }),
+    );
+    throw new Error(DISPOSABLE_EMAIL_MESSAGE);
+  }
 
   const base = (user?.username || email?.split("@")[0] || `user_${userId.slice(-8)}`)
     .toLowerCase()

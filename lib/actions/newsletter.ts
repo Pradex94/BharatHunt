@@ -14,6 +14,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { checkRateLimitByIp } from "@/lib/rate-limit";
+import { checkEmail } from "@/lib/disposable-email";
 import { sendEmail } from "@/lib/email";
 import { buildNewsletterWelcome } from "@/lib/emails/newsletter-welcome";
 
@@ -45,6 +46,17 @@ export async function subscribeToNewsletter(
     .toLowerCase();
 
   if (!EMAIL_RE.test(email) || email.length > MAX_EMAIL_LENGTH) {
+    return { error: "Please enter a valid email address." };
+  }
+
+  /*
+   * This endpoint sends a welcome email through a paid provider, so a
+   * disposable address here is a way to burn send quota rather than a way to
+   * get an account. Rejected with the same wording as a malformed address:
+   * confirming "that domain is on a list" tells a prober which domains still
+   * work, and the rate limit above already makes enumeration slow.
+   */
+  if (!checkEmail(email).ok) {
     return { error: "Please enter a valid email address." };
   }
 
