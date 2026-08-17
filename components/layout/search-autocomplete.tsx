@@ -27,8 +27,20 @@ type Option = { key: string; href: string; label: string };
  * Submitting always goes to /marketplace, so the full ranked result set stays
  * one Enter away whether or not anything is highlighted.
  */
-export function SearchAutocomplete({ className }: { className?: string }) {
+export function SearchAutocomplete({
+  className,
+  tone = "dark",
+  onNavigate,
+}: {
+  className?: string;
+  /** "dark" is the navbar over the near-black bar; "light" is inside the
+   * mobile menu sheet, which is a normal light popover surface. */
+  tone?: "dark" | "light";
+  /** Fired once a destination is chosen, so a host sheet can close itself. */
+  onNavigate?: () => void;
+}) {
   const router = useRouter();
+  const isDark = tone === "dark";
   const listboxId = useId();
 
   const [query, setQuery] = useState("");
@@ -100,8 +112,11 @@ export function SearchAutocomplete({ className }: { className?: string }) {
     return () => document.removeEventListener("mousedown", onPointerDown);
   }, []);
 
-  // The navbar advertises "/" as the shortcut, so make it work.
+  // The navbar advertises "/" as the shortcut, so make it work. Only the
+  // navbar copy claims it, so only that instance binds it — two listeners
+  // would fight over focus once the mobile menu is mounted.
   useEffect(() => {
+    if (!isDark) return;
     function onKeyDown(event: KeyboardEvent) {
       const target = event.target as HTMLElement | null;
       const typing =
@@ -115,12 +130,13 @@ export function SearchAutocomplete({ className }: { className?: string }) {
     }
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, []);
+  }, [isDark]);
 
   function goTo(href: string) {
     setOpen(false);
     setActiveIndex(-1);
     router.push(href);
+    onNavigate?.();
   }
 
   function submit() {
@@ -169,7 +185,10 @@ export function SearchAutocomplete({ className }: { className?: string }) {
       >
         <Search
           aria-hidden="true"
-          className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-white/40"
+          className={cn(
+            "pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2",
+            isDark ? "text-white/40" : "text-muted",
+          )}
         />
         <input
           ref={inputRef}
@@ -188,11 +207,20 @@ export function SearchAutocomplete({ className }: { className?: string }) {
           aria-activedescendant={activeKey ? `${listboxId}-${activeKey}` : undefined}
           aria-autocomplete="list"
           autoComplete="off"
-          className="h-10 w-56 rounded-xl border border-white/15 bg-white/10 pr-9 pl-9 text-sm text-white outline-none transition-colors placeholder:text-white/40 focus-visible:border-primary/60"
+          className={cn(
+            "h-11 rounded-xl border pl-9 text-base outline-none transition-colors md:h-10 md:text-sm",
+            isDark
+              ? "w-56 border-white/15 bg-white/10 pr-9 text-white placeholder:text-white/40 focus-visible:border-primary/60"
+              : "w-full border-border bg-background pr-3 text-ink placeholder:text-muted focus-visible:border-primary",
+          )}
         />
-        <kbd className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 rounded border border-white/15 bg-white/10 px-1.5 text-xs text-white/50">
-          /
-        </kbd>
+        {/* The "/" hint is desktop-only — there's no physical key to press
+            on the phone where the light variant renders. */}
+        {isDark && (
+          <kbd className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 rounded border border-white/15 bg-white/10 px-1.5 text-xs text-white/50">
+            /
+          </kbd>
+        )}
       </form>
 
       {showPanel && (
@@ -200,7 +228,10 @@ export function SearchAutocomplete({ className }: { className?: string }) {
           id={listboxId}
           role="listbox"
           aria-label="Search suggestions"
-          className="absolute top-full right-0 z-50 mt-2 w-80 overflow-hidden rounded-xl border border-border bg-card py-1.5 shadow-[0_20px_50px_-20px_rgba(23,20,15,0.45)]"
+          className={cn(
+            "absolute top-full z-50 mt-2 max-h-[50dvh] overflow-y-auto overflow-x-hidden rounded-xl border border-border bg-card py-1.5 shadow-[0_20px_50px_-20px_rgba(23,20,15,0.45)]",
+            isDark ? "right-0 w-80" : "inset-x-0",
+          )}
         >
           <Section title="Products">
             {suggestions.products.map((product) => (

@@ -66,7 +66,7 @@ export function Hero({ topProduct, stats }: HeroProps) {
             supports and helps them grow.
           </p>
 
-          <div className="flex flex-col gap-3 sm:flex-row">
+          <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row">
             <Link href="/submit" className={buttonVariants({ size: "lg" })}>
               Launch Your Product
             </Link>
@@ -105,7 +105,7 @@ function TopLaunchCard({ product }: { product: HeroProps["topProduct"] & {} }) {
   ];
 
   return (
-    <div className="animate-bh-float rounded-[2rem] border border-border bg-card p-8 text-left shadow-[0_30px_70px_-28px_rgba(23,20,15,0.28)] sm:p-10">
+    <div className="animate-bh-float rounded-[2rem] border border-border bg-card p-5 text-left shadow-[0_30px_70px_-28px_rgba(23,20,15,0.28)] sm:p-10">
       <div className="flex items-center justify-between gap-4">
         <span className="rounded-full bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary">
           Leading today
@@ -122,32 +122,33 @@ function TopLaunchCard({ product }: { product: HeroProps["topProduct"] & {} }) {
           size="lg"
           className="shadow-sm"
         />
-        <h2 className="min-w-0 truncate text-3xl font-bold tracking-tight text-ink sm:text-4xl">
+        <h2 className="min-w-0 truncate text-2xl font-bold tracking-tight text-ink sm:text-4xl">
           {product.name}
         </h2>
       </div>
 
       <p className="mt-4 line-clamp-2 text-lg leading-relaxed text-body">{product.tagline}</p>
 
-      <dl className="mt-8 grid grid-cols-3 gap-3 sm:gap-4">
+      <dl className="mt-8 grid grid-cols-3 gap-2 sm:gap-4">
         {metrics.map(({ icon: Icon, value, label }) => (
-          <div key={label} className="rounded-2xl bg-secondary-bg p-4 text-center">
+          <div key={label} className="rounded-2xl bg-secondary-bg p-2.5 text-center sm:p-4">
             <dd className="flex items-center justify-center gap-1 text-ink">
-              <Icon className="size-5 shrink-0 text-primary" aria-hidden="true" />
-              <Numeric className="text-2xl font-bold sm:text-3xl">
+              <Icon className="size-4 shrink-0 text-primary sm:size-5" aria-hidden="true" />
+              <Numeric className="text-lg font-bold sm:text-3xl">
                 {value.toLocaleString("en-IN")}
               </Numeric>
             </dd>
-            <dt className="mt-1 text-sm text-muted">{label}</dt>
+            <dt className="mt-1 text-xs text-muted sm:text-sm">{label}</dt>
           </div>
         ))}
       </dl>
 
       <Link
         href={`/products/${product.slug}`}
-        className="btn-gradient mt-8 flex h-14 w-full items-center justify-center gap-2 rounded-2xl text-base font-semibold"
+        className="btn-gradient mt-8 flex h-14 w-full items-center justify-center gap-2 rounded-2xl px-4 text-base font-semibold"
       >
-        View {product.name} <ArrowRight className="size-5" aria-hidden="true" />
+        <span className="min-w-0 truncate">View {product.name}</span>
+        <ArrowRight className="size-5 shrink-0" aria-hidden="true" />
       </Link>
     </div>
   );

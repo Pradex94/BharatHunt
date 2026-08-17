@@ -179,7 +179,7 @@ export function Navbar() {
                     variant="ghost"
                     size="icon"
                     aria-label="Open menu"
-                    className="text-white hover:bg-white/10 hover:text-white"
+                    className="size-11 text-white hover:bg-white/10 hover:text-white"
                   />
                 }
               >
@@ -191,13 +191,18 @@ export function Navbar() {
                 </SheetHeader>
 
                 <div className="flex flex-col gap-4 px-4">
+                  <SearchAutocomplete
+                    tone="light"
+                    onNavigate={() => setMobileOpen(false)}
+                  />
+
                   <nav aria-label="Primary" className="flex flex-col gap-1">
                     {NAV_LINKS.map((link) => (
                       <Link
                         key={link.href}
                         href={link.href}
                         onClick={() => setMobileOpen(false)}
-                        className="rounded-md px-3 py-2 text-sm font-medium text-body transition-colors duration-200 hover:bg-secondary-bg hover:text-ink"
+                        className="flex min-h-11 items-center rounded-md px-3 py-2 text-sm font-medium text-body transition-colors duration-200 hover:bg-secondary-bg hover:text-ink"
                       >
                         {link.label}
                       </Link>
@@ -205,7 +210,7 @@ export function Navbar() {
                   </nav>
                 </div>
 
-                <div className="mt-auto flex flex-col gap-2 border-t border-border p-4">
+                <div className="mt-auto flex flex-col gap-2 border-t border-border p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
                   {showAuthSkeleton ? (
                     <>
                       <Skeleton className="h-9 w-full" />

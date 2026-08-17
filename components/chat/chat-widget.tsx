@@ -81,7 +81,7 @@ export function ChatWidget() {
             onKeyDown={(e) => {
               if (e.key === "Escape") setOpen(false);
             }}
-            className="fixed right-4 bottom-24 z-50 flex h-[70vh] max-h-[560px] w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-3xl border border-border bg-card shadow-hover sm:right-6 sm:w-[380px]"
+            className="fixed right-4 bottom-[calc(6rem+var(--bh-consent-h,0px))] z-50 flex h-[70dvh] max-h-[560px] w-[calc(100dvw-2rem)] flex-col overflow-hidden rounded-3xl border border-border bg-card shadow-hover sm:right-6 sm:w-[380px]"
           >
             {/* Header */}
             <div className="flex items-center gap-3 border-b border-border bg-surface-dark px-4 py-3.5">
@@ -139,7 +139,7 @@ export function ChatWidget() {
                 onChange={(e) => setInput(e.target.value)}
                 placeholder="Ask a question…"
                 aria-label="Type your question"
-                className="h-10 flex-1 rounded-full border border-border bg-background px-4 text-sm text-ink outline-none transition-colors placeholder:text-muted focus-visible:border-primary"
+                className="h-11 flex-1 rounded-full border border-border bg-background px-4 text-base text-ink outline-none transition-colors placeholder:text-muted focus-visible:border-primary sm:h-10 sm:text-sm"
               />
               <button
                 type="submit"
@@ -160,7 +160,7 @@ export function ChatWidget() {
         onClick={() => setOpen((v) => !v)}
         aria-label={open ? "Close assistant" : "Open assistant"}
         aria-expanded={open}
-        className="btn-gradient fixed right-4 bottom-6 z-50 flex size-14 items-center justify-center rounded-full sm:right-6"
+        className="btn-gradient fixed right-4 bottom-[calc(1.5rem+var(--bh-consent-h,0px))] z-50 flex size-14 items-center justify-center rounded-full transition-[bottom] duration-200 ease-out sm:right-6"
       >
         <AnimatePresence mode="wait" initial={false}>
           {open ? (

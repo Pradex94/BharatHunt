@@ -51,7 +51,7 @@ export function Newsletter() {
               placeholder="Enter your email"
               aria-label="Email address"
               aria-invalid={state?.error ? true : undefined}
-              className="h-11 flex-1 rounded-xl border border-border bg-background px-4 text-sm text-ink outline-none transition-colors placeholder:text-muted-soft focus-visible:border-primary disabled:opacity-60 sm:w-64"
+              className="h-11 flex-1 rounded-xl border border-border bg-background px-4 text-base text-ink outline-none transition-colors placeholder:text-muted-soft focus-visible:border-primary disabled:opacity-60 sm:w-64 sm:text-sm"
             />
             <button
               type="submit"

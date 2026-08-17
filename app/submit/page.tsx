@@ -34,7 +34,7 @@ export default async function SubmitPage() {
   const atLimit = !isAdmin && count >= MAX_PRODUCTS_PER_USER;
 
   return (
-    <main className="min-h-screen bg-background py-12 md:py-16">
+    <main className="min-h-dvh bg-background py-12 md:py-16">
       <Container>
         <div className="mx-auto w-full max-w-5xl">
           {/* Header */}

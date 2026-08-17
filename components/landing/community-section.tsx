@@ -33,7 +33,7 @@ export function CommunitySection({ stats, launchCounts }: CommunitySectionProps)
           className="pointer-events-none absolute inset-0 bg-[radial-gradient(120%_120%_at_100%_0%,rgba(255,107,26,0.32),transparent_55%)]"
         />
 
-        <div className="relative grid items-center gap-10 p-8 sm:p-12 lg:grid-cols-2 lg:p-16">
+        <div className="relative grid items-center gap-10 p-6 sm:p-12 lg:grid-cols-2 lg:p-16">
           {/* LEFT — copy + real counts */}
           <FadeIn className="flex flex-col gap-6">
             <h2 className="max-w-[18ch] text-3xl font-bold tracking-tight sm:text-4xl">
@@ -43,13 +43,13 @@ export function CommunitySection({ stats, launchCounts }: CommunitySectionProps)
               Bharat Hunt is early, and that is the point &mdash; launch now and your product
               gets read, tried and talked about instead of buried.
             </p>
-            <dl className="mt-2 grid grid-cols-3 gap-6">
+            <dl className="mt-2 grid grid-cols-3 gap-3 sm:gap-6">
               {cards.map((card) => (
-                <div key={card.label} className="flex flex-col gap-1">
-                  <dd className="text-3xl font-bold text-primary">
+                <div key={card.label} className="flex min-w-0 flex-col gap-1">
+                  <dd className="text-2xl font-bold text-primary sm:text-3xl">
                     <Numeric>{card.value.toLocaleString("en-IN")}</Numeric>
                   </dd>
-                  <dt className="text-sm text-on-dark-soft">{card.label}</dt>
+                  <dt className="text-xs text-on-dark-soft sm:text-sm">{card.label}</dt>
                 </div>
               ))}
             </dl>

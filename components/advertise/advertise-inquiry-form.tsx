@@ -26,7 +26,7 @@ const panelClassName =
   "flex flex-col items-center gap-3 rounded-2xl border border-border bg-card p-8 text-center";
 
 const selectClassName =
-  "h-10 w-full rounded-lg border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
+  "h-10 w-full rounded-lg border border-input bg-transparent px-3 text-base outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 md:text-sm";
 
 export function AdvertiseInquiryForm() {
   const { isLoaded, isSignedIn, user } = useUser();

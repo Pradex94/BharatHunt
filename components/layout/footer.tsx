@@ -82,10 +82,10 @@ const FOOTER_COLUMNS = [
 export function Footer() {
   return (
     <footer className="border-t border-border bg-card">
-      <Container className="py-14 md:py-16">
-        <div className="grid gap-10 md:grid-cols-[1.4fr_repeat(4,1fr)]">
+      <Container className="py-12 md:py-16">
+        <div className="grid grid-cols-2 gap-x-6 gap-y-9 md:grid-cols-[1.4fr_repeat(4,1fr)] md:gap-10">
           {/* Brand column */}
-          <div className="flex flex-col gap-4">
+          <div className="col-span-2 flex flex-col gap-4 md:col-span-1">
             <Logo />
             <p className="max-w-xs text-sm leading-relaxed text-body">
               The best place to launch, discover and grow innovative products.
@@ -113,7 +113,7 @@ export function Footer() {
                   <li key={link.label}>
                     <Link
                       href={link.href}
-                      className="text-sm text-body transition-colors duration-200 hover:text-primary"
+                      className="inline-flex min-h-8 items-center text-sm text-body transition-colors duration-200 hover:text-primary"
                     >
                       {link.label}
                     </Link>
@@ -124,13 +124,13 @@ export function Footer() {
           ))}
 
           {/* Connect column */}
-          <div className="flex flex-col gap-3">
+          <div className="col-span-2 flex flex-col gap-3 md:col-span-1">
             <h3 className="text-sm font-bold tracking-tight text-ink">Connect</h3>
             <div className="flex flex-col gap-0.5">
               <span className="text-xs text-muted">General</span>
               <a
                 href="mailto:info@bharathunt.org"
-                className="text-sm text-body transition-colors duration-200 hover:text-primary"
+                className="text-sm break-all text-body transition-colors duration-200 hover:text-primary"
               >
                 info@bharathunt.org
               </a>
@@ -139,7 +139,7 @@ export function Footer() {
               <span className="text-xs text-muted">Advertising</span>
               <a
                 href={`mailto:${ADS_EMAIL}`}
-                className="text-sm text-body transition-colors duration-200 hover:text-primary"
+                className="text-sm break-all text-body transition-colors duration-200 hover:text-primary"
               >
                 {ADS_EMAIL}
               </a>

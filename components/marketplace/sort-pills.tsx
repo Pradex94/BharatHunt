@@ -40,7 +40,7 @@ export function SortPills() {
   const options: ProductSort[] = searching ? ["relevance", ...VISIBLE_SORTS] : VISIBLE_SORTS;
 
   return (
-    <div className="flex gap-0.5 rounded-md border border-border bg-background p-1">
+    <div className="flex w-max gap-0.5 rounded-md border border-border bg-background p-1">
       {options.map((value) => (
         <button
           key={value}

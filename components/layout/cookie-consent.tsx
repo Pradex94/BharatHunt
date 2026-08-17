@@ -4,6 +4,7 @@
  * Non-blocking card: Accept all / Decline, with a link to the Cookie Policy.
  * The choice is stored in a cookie (see lib/cookie-consent) so it persists. */
 
+import { useEffect, useRef } from "react";
 import Link from "next/link";
 import { AnimatePresence, motion } from "framer-motion";
 import { Cookie } from "lucide-react";
@@ -15,10 +16,34 @@ import { useConsent, useIsHydrated } from "@/hooks/use-cookie-consent";
 export function CookieConsent() {
   const consent = useConsent();
   const hydrated = useIsHydrated();
+  const cardRef = useRef<HTMLDivElement>(null);
 
   // Hidden during SSR/hydration (no flash for visitors who already chose) and
   // once a choice exists. `setConsent` fires the store event → this re-renders.
   const visible = hydrated && consent === null;
+
+  /*
+   * Publish how much room the banner is taking at the bottom of the screen so
+   * the floating chat launcher can sit above it instead of on top of its
+   * buttons. Measured rather than hard-coded: the card is one row on desktop
+   * and a three-deep stack on a phone, and the copy can wrap either way.
+   */
+  useEffect(() => {
+    const node = cardRef.current;
+    const root = document.documentElement;
+    if (!node) {
+      root.style.removeProperty("--bh-consent-h");
+      return;
+    }
+    const observer = new ResizeObserver(() => {
+      root.style.setProperty("--bh-consent-h", `${node.offsetHeight}px`);
+    });
+    observer.observe(node);
+    return () => {
+      observer.disconnect();
+      root.style.removeProperty("--bh-consent-h");
+    };
+  }, [visible]);
 
   function choose(value: ConsentValue) {
     setConsent(value);
@@ -37,7 +62,10 @@ export function CookieConsent() {
           transition={{ duration: 0.25, ease: "easeOut" }}
           className="fixed inset-x-0 bottom-0 z-50 px-4 pb-4 sm:px-6 sm:pb-6"
         >
-          <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 rounded-2xl border border-border bg-card p-5 shadow-hover sm:flex-row sm:items-center sm:gap-6 sm:p-6">
+          <div
+            ref={cardRef}
+            className="mx-auto flex w-full max-w-3xl flex-col gap-4 rounded-2xl border border-border bg-card p-5 shadow-hover sm:flex-row sm:items-center sm:gap-6 sm:p-6"
+          >
             <span
               aria-hidden="true"
               className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"
@@ -60,11 +88,20 @@ export function CookieConsent() {
               </p>
             </div>
 
-            <div className="flex shrink-0 items-center gap-2">
-              <Button variant="outline" size="sm" onClick={() => choose("declined")}>
+            {/* Full-width targets on a phone: at `size="sm"` these are 32px
+                tall and, side by side in a narrow card, small enough to mis-tap. */}
+            <div className="flex shrink-0 items-center gap-2 *:flex-1 sm:*:flex-initial">
+              <Button
+                variant="outline"
+                onClick={() => choose("declined")}
+                className="h-11 sm:h-8 sm:px-3.5 sm:text-[0.8rem]"
+              >
                 Decline
               </Button>
-              <Button size="sm" onClick={() => choose("accepted")}>
+              <Button
+                onClick={() => choose("accepted")}
+                className="h-11 sm:h-8 sm:px-3.5 sm:text-[0.8rem]"
+              >
                 Accept all
               </Button>
             </div>
