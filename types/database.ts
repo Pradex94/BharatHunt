@@ -23,6 +23,7 @@ export type Database = {
           message: string | null
           name: string
           package: string | null
+          user_id: string | null
         }
         Insert: {
           company?: string | null
@@ -32,6 +33,7 @@ export type Database = {
           message?: string | null
           name: string
           package?: string | null
+          user_id?: string | null
         }
         Update: {
           company?: string | null
@@ -41,8 +43,17 @@ export type Database = {
           message?: string | null
           name?: string
           package?: string | null
+          user_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "ad_inquiries_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       newsletter_subscribers: {
         Row: {

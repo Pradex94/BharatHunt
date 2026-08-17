@@ -1,14 +1,6 @@
 import { clerkMiddleware } from "@clerk/nextjs/server";
-import { NextResponse } from "next/server";
 
-export default clerkMiddleware((_auth, request) => {
-  // /advertise was removed, but old Server Action clients can continue to
-  // replay POST requests to that path. Reject them before Next.js or any
-  // email/database code gets a chance to run.
-  if (request.nextUrl.pathname === "/advertise") {
-    return new NextResponse(null, { status: 410 });
-  }
-});
+export default clerkMiddleware();
 
 /**
  * Clerk's recommended matcher, verbatim from
