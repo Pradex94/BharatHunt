@@ -9,22 +9,30 @@ This document describes the product image upload functionality added to BharatHu
 ### 1. **Direct Image Upload**
 - Founders can select and upload images directly from their computer
 - Images are stored securely in Cloudinary
-- Maximum file size: 5MB
+- Maximum file size: 10MB (`MAX_UPLOAD_BYTES` in `lib/upload.ts`) — raised from 5MB
+  because full-resolution screenshots were being compressed to fit, which is the
+  blur the delivery transforms exist to avoid
+- Gallery screenshots must be at least 800px wide (`MIN_GALLERY_IMAGE_WIDTH`);
+  vector images, which report no intrinsic width, are exempt
 - Automatic image optimization and delivery via Cloudinary CDN
 
-### 2. **Image Preview**
+### 2. **Hero Image + Gallery**
+- One hero image plus up to `MAX_GALLERY_IMAGES` gallery screenshots
+- Gallery files upload as they are picked; the hero uploads on submit
+
+### 3. **Image Preview**
 - Real-time preview of the selected image before submission
 - Shows file name and size information
 - Option to remove and re-select image
 
-### 3. **Fallback URL Input**
+### 4. **Fallback URL Input**
 - Users can still provide image URLs if they prefer
 - URL input is disabled when a file is selected
 - Maintains backward compatibility with existing URL-based submissions
 
-### 4. **Error Handling**
+### 5. **Error Handling**
 - File type validation (must be an image)
-- File size validation (max 5MB)
+- File size validation (max 10MB) and minimum-width validation for gallery images
 - Clear error messages for validation failures
 - Upload error handling with user-friendly messages
 
@@ -98,15 +106,31 @@ NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET=your_unsigned_upload_preset
 
 ## Future Enhancements
 
-1. **Cloudinary Transformations**
-   - Automatic resizing to specific dimensions
-   - Automatic format selection (WebP/AVIF) based on browser support
-   - Adding watermarks or overlays
+1. **Signed uploads**
+   - The preset is unsigned, so the cloud name and preset in the page source let
+     anyone upload to this account. A server route that signs upload params with
+     `CLOUDINARY_API_SECRET` would close that, at the cost of one round trip.
 
-2. **Multiple Images**
-   - Support for multiple screenshots using Cloudinary's bulk upload capabilities
+2. **Watermarks or overlays**
+   - Resizing and AVIF/WebP selection already ship — see `lib/cloudinary.ts`,
+     which builds `f_auto,q_auto,c_limit` variants and 1x/2x/3x srcSets at
+     delivery time. Watermarking would slot in the same way.
 
 ## Troubleshooting
+
+### Upload fails with "Upload preset must be whitelisted for unsigned uploads"
+
+The preset named by `NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET` exists, but its
+**Signing Mode is `Signed`**. `lib/upload.ts` posts from the browser with no
+signature, so Cloudinary refuses it. (A preset that did not exist at all would
+fail with *"Upload preset not found"* instead — the wording tells you which
+problem you have.)
+
+**Solution**: Cloudinary console → **Settings → Upload → Upload presets** → your
+preset → **Signing Mode: Unsigned** → Save. Nothing in this repo can override
+it; `Signed` is Cloudinary's default for new presets, so this bites again every
+time a preset is recreated. Check the environment too — production reads the
+variables from Vercel, not from `.env.local`.
 
 ### Upload fails with "Invalid cloud name"
 
@@ -131,6 +155,10 @@ Uploads an image file to Cloudinary and returns the secure URL.
 
 **Returns:**
 - Promise<string>: Secure URL of the uploaded image
+
+**Options:**
+- `minWidth` (number): reject images narrower than this. Pass
+  `MIN_GALLERY_IMAGE_WIDTH` for gallery screenshots; omit for logos and vectors.
 
 **Example:**
 ```typescript
