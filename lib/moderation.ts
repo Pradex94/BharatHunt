@@ -544,9 +544,49 @@ function isShouting(text: string): boolean {
   return upper / letters.length > 0.8;
 }
 
-const PHONE = /(?:\+?\d[\s-]?){9,}/;
+/*
+ * Phone numbers, matched by shape rather than by digit count.
+ *
+ * The previous pattern was `(?:\+?\d[\s-]?){9,}` — nine or more digits with
+ * optional single separators — which matches any long run of digits, not a
+ * phone number. "Covering 2023 2024 2025 2026", "Handles 123456789 rows per
+ * second" and "Track 100000000 transactions" were all rejected as contact
+ * bait. Real numbers have structure, so match that instead:
+ *
+ *   - an explicit international prefix with grouping (+91 98765 43210), or
+ *   - a bare Indian mobile: ten digits starting 6-9.
+ *
+ * A plain large integer now passes, which is the common legitimate case in a
+ * tagline. The cost is that a bare ten-digit foreign number can slip through;
+ * that is the right trade on a marketplace where makers quote scale figures.
+ */
+const PHONE = /\+\d{1,3}[\s-]?\d{2,5}(?:[\s-]?\d{2,5}){1,3}|\b[6-9]\d{9}\b/;
+
 const EMAIL = /[\w.+-]+@[\w-]+\.[a-z]{2,}/i;
-const CONTACT_BAIT = /\b(?:whats\s?app|telegram|dm\s+me|call\s+now|contact\s+us\s+on)\b/i;
+
+/*
+ * Contact bait: a solicitation to take the conversation off-platform.
+ *
+ * The previous pattern listed the bare words "whatsapp" and "telegram", which
+ * blocked an entire legitimate product category — on an Indian marketplace,
+ * "WhatsApp CRM", "WhatsApp Business API" and "Telegram bot builder" are
+ * products, not contact details. The platform name is a noun; the bait is the
+ * verb. So match the solicitation ("dm me", "whatsapp me", "contact us on")
+ * and let the platform name alone through.
+ */
+const CONTACT_BAIT = new RegExp(
+  [
+    // "dm me", "pm us"
+    String.raw`\b(?:dm|pm)\s+(?:me|us)\b`,
+    // "whatsapp me", "telegram us", "call me", "ping us", "mail me"
+    String.raw`\b(?:whats\s?app|telegram|call|text|ping|message|msg|mail|email)\s+(?:me|us)\b`,
+    // "contact us on", "reach me at", "message us via"
+    String.raw`\b(?:contact|reach|dm|message|ping)\s+(?:me|us)\s+(?:on|at|via)\b`,
+    // bare urgency
+    String.raw`\bcall\s+now\b`,
+  ].join("|"),
+  "i",
+);
 
 // ── The gate ─────────────────────────────────────────────────────────────
 
