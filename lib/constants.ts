@@ -58,16 +58,41 @@ export const SITE_NAME = "Bharat Hunt";
 export const GTM_ID = process.env.NEXT_PUBLIC_GTM_ID ?? "GTM-548ZQGWC";
 
 /**
- * Whether to actually mount the tag.
+ * GA4 measurement ID (`G-XXXXXXXXXX`), from GA4 Admin > Data streams > your web
+ * stream. Like the container ID it is not a secret, but unlike it there is no
+ * sensible default to hardcode — an ID belongs to one property, and shipping
+ * someone else's would silently send this site's traffic to their reports. So
+ * it comes from `NEXT_PUBLIC_GA_ID` and GA4 stays off until that is set.
+ *
+ * GA4 is loaded here in code rather than as a tag inside the GTM container.
+ * Both work; this way the measurement setup is version-controlled, reviewable,
+ * and gated by the same consent bootstrap as everything else, instead of
+ * living as UI state in an account only one person can see. The trade-off is
+ * that a GA4 tag must NOT also be added in the GTM UI, or every page view is
+ * counted twice.
+ */
+export const GA_ID = process.env.NEXT_PUBLIC_GA_ID ?? "";
+
+/**
+ * Whether to actually mount the Google tags.
  *
  * Off outside production by default, because `npm run dev` otherwise reports
  * every local page view as real traffic and quietly poisons the numbers you
  * are trying to read. Set `NEXT_PUBLIC_GTM_DEBUG=true` in `.env.local` when you
- * need Tag Assistant to see a local page.
+ * need Tag Assistant or the GA4 DebugView to see a local page.
  */
-export const GTM_ENABLED =
-  Boolean(GTM_ID) &&
-  (process.env.NODE_ENV === "production" || process.env.NEXT_PUBLIC_GTM_DEBUG === "true");
+const ANALYTICS_ENABLED =
+  process.env.NODE_ENV === "production" || process.env.NEXT_PUBLIC_GTM_DEBUG === "true";
+
+export const GTM_ENABLED = ANALYTICS_ENABLED && Boolean(GTM_ID);
+
+export const GA_ENABLED = ANALYTICS_ENABLED && Boolean(GA_ID);
+
+/**
+ * Whether anything needs the shared bootstrap script (consent defaults + the
+ * loaders). Either tag alone is reason enough to emit it.
+ */
+export const GOOGLE_TAGS_ENABLED = GTM_ENABLED || GA_ENABLED;
 
 /**
  * Where advertising inquiries go. Single source of truth for the /advertise
