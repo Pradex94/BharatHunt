@@ -133,16 +133,25 @@ export async function checkRateLimitByUser(
  *
  * A per-user limit alone is bypassed by rotating accounts; a per-IP limit alone
  * is bypassed by one account working from many addresses. Whichever is
- * exhausted first wins, and the IP check runs first so a flood is stopped
- * before the account's budget is even consulted.
+ * exhausted first wins, and the IP verdict is reported first so a flood reads
+ * as a flood.
+ *
+ * The two checks are issued together rather than one after the other. They were
+ * sequential so a blocked IP never touched the account's budget; that cost
+ * every legitimate write two serial Upstash round trips on its critical path,
+ * and the budget it saved belonged to whoever was already being blocked. Both
+ * counters now count the attempt, which only ever makes a limit stricter --
+ * never looser -- and halves the latency this adds to a launch.
  */
 export async function checkRateLimitByIpAndUser(
   name: RateLimitName,
   userId: string,
 ): Promise<RateLimitResult> {
-  const byIp = await checkRateLimitByIp(name);
-  if (!byIp.ok) return byIp;
-  return checkRateLimitByUser(name, userId);
+  const [byIp, byUser] = await Promise.all([
+    checkRateLimitByIp(name),
+    checkRateLimitByUser(name, userId),
+  ]);
+  return byIp.ok ? byUser : byIp;
 }
 
 export { RATE_LIMITS, __resetLocalRateLimiter } from "@/lib/rate-limit-core";

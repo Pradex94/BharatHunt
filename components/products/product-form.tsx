@@ -289,6 +289,25 @@ export function ProductForm({ product, detectedState = null }: ProductFormProps)
   // Launch-rule failure caught before we hit the server (same rules, same module).
   const [ruleError, setRuleError] = useState<string | null>(null);
 
+  /*
+   * Publishing is four phases, not one: local validation, a Cloudinary upload,
+   * the server action, then the navigation to the new product page. The
+   * `pending` flag from `useActionState` only covers the third — so the button
+   * used to re-enable in the gaps, and, worse, went back to reading "Publish
+   * product" the moment the action returned, while the redirect it triggered
+   * was still in flight. That is the slowest phase and the one that most looks
+   * like nothing happened, which is exactly when a maker clicks again.
+   *
+   * The lock holds whichever action result was current when the maker clicked,
+   * and the submit counts as live until the result moves on from it. A rejected
+   * launch returns a brand-new `{ error }` object, so it releases the lock by
+   * itself; a successful one never returns at all, so the indicator stays up
+   * through the redirect. Comparing results this way keeps it to one render —
+   * clearing a boolean from an effect would cost a second pass.
+   */
+  const [submitLock, setSubmitLock] = useState<{ result: ProductFormState } | null>(null);
+  const submitting = submitLock !== null && submitLock.result === state;
+
   const stepIndex = STEPS.findIndex((entry) => entry.id === step);
 
   const productLinks = [
@@ -311,6 +330,18 @@ export function ProductForm({ product, detectedState = null }: ProductFormProps)
       errorRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
     }
   }, [activeError]);
+
+  /** The submit is in flight — covers the action *and* the redirect after it. */
+  const publishing = submitting || pending;
+  /** Anything that must block a second submit, uploads included. */
+  const busy = publishing || uploadingImage || galleryUploading > 0;
+  // Only the hero upload can run inside a submit — a gallery upload in flight
+  // makes the form `busy`, which turns the submit away before it starts.
+  const busyLabel = uploadingImage
+    ? "Uploading your image…"
+    : product
+      ? "Saving your changes…"
+      : "Publishing your launch…";
 
   function validateStep(id: StepId): string | null {
     if (id === "main") {
@@ -503,6 +534,12 @@ export function ProductForm({ product, detectedState = null }: ProductFormProps)
   };
 
   const handleFormSubmit = async (submitData: FormData) => {
+    // A second submit while the first is still running would publish the
+    // product twice. The button is disabled and the overlay is up, but Enter on
+    // the review step reaches this handler regardless of both.
+    if (busy) return;
+    setSubmitLock({ result: state });
+
     // Required fields live on specific steps, and the stepper lets a maker jump
     // straight to Review. Check them here so an incomplete form points at the
     // field to fix instead of bouncing off the server with a generic message.
@@ -512,6 +549,7 @@ export function ProductForm({ product, detectedState = null }: ProductFormProps)
         setRuleError(null);
         setStepError(problem);
         goToStep(id, { scroll: false });
+        setSubmitLock(null);
         return;
       }
     }
@@ -542,6 +580,7 @@ export function ProductForm({ product, detectedState = null }: ProductFormProps)
       // Send them to the step that actually holds the problem — without
       // scrolling to the top, so the reason stays on screen.
       goToStep(STEP_FOR_RULE[check.code], { scroll: false });
+      setSubmitLock(null);
       return;
     }
     setRuleError(null);
@@ -554,10 +593,13 @@ export function ProductForm({ product, detectedState = null }: ProductFormProps)
       } catch (error) {
         setUploadError(error instanceof Error ? error.message : "Failed to upload image");
         setUploadingImage(false);
+        setSubmitLock(null);
         return;
       }
       setUploadingImage(false);
     }
+    // `submitting` stays set from here: it now hands off to `pending`, and then
+    // covers the redirect that `pending` does not.
     formAction(submitData);
   };
 
@@ -574,6 +616,33 @@ export function ProductForm({ product, detectedState = null }: ProductFormProps)
 
   return (
     <div className="grid gap-8 lg:grid-cols-[220px_minmax(0,1fr)]">
+      {/*
+        A launch is a handful of round trips even at its fastest, and the
+        redirect at the end is the slowest part of it. This makes the wait
+        visible and — because it sits over the whole viewport — makes a second
+        click physically impossible rather than merely discouraged.
+
+        The spinner is decorative: the global prefers-reduced-motion rule in
+        globals.css freezes it, so the label is what actually carries the news.
+      */}
+      {publishing && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-surface-dark/70 p-6 backdrop-blur-sm"
+          role="status"
+          aria-live="polite"
+        >
+          <div className="flex flex-col items-center gap-3 rounded-2xl border border-border bg-card px-8 py-7 text-center shadow-xl">
+            <Loader2 size={28} className="animate-spin text-primary" aria-hidden="true" />
+            <p className="text-sm font-semibold text-ink">{busyLabel}</p>
+            <p className="text-xs text-muted">
+              {product
+                ? "Saving your product — this only takes a moment."
+                : "Setting up your product page — this only takes a moment."}
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Step nav — a sidebar on desktop, a scrollable chip row on mobile */}
       <nav aria-label="Launch steps" className="lg:sticky lg:top-20 lg:self-start">
         <ol className="flex gap-2 overflow-x-auto pb-2 lg:flex-col lg:gap-1 lg:overflow-visible lg:pb-0">
@@ -617,6 +686,7 @@ export function ProductForm({ product, detectedState = null }: ProductFormProps)
 
       <form
         action={handleFormSubmit}
+        aria-busy={publishing}
         // Every panel is mounted but hidden with `display:none`, and the browser
         // refuses to *report* a validation failure on a control it can't focus —
         // it just aborts the submit and logs "An invalid form control ... is not
@@ -900,7 +970,7 @@ export function ProductForm({ product, detectedState = null }: ProductFormProps)
                   type="file"
                   accept="image/*"
                   onChange={handleImageSelect}
-                  disabled={uploadingImage || pending}
+                  disabled={uploadingImage || busy}
                   className="hidden"
                 />
               </label>
@@ -975,7 +1045,7 @@ export function ProductForm({ product, detectedState = null }: ProductFormProps)
                   void addGalleryFiles(Array.from(e.target.files ?? []));
                   e.target.value = "";
                 }}
-                disabled={galleryUploading > 0 || pending}
+                disabled={galleryUploading > 0 || busy}
                 className="hidden"
               />
             </label>
@@ -1399,20 +1469,21 @@ export function ProductForm({ product, detectedState = null }: ProductFormProps)
               </Button>
             )}
             {(step === "review" || product) && (
-              <Button
-                type="submit"
-                disabled={pending || uploadingImage || galleryUploading > 0}
-                size="lg"
-              >
-                {uploadingImage || galleryUploading > 0
-                  ? "Uploading image…"
-                  : pending
-                    ? product
-                      ? "Saving…"
-                      : "Publishing…"
-                    : product
-                      ? "Save changes"
-                      : "Publish product"}
+              <Button type="submit" disabled={busy} size="lg" aria-busy={busy}>
+                {busy ? (
+                  <>
+                    <Loader2 size={16} className="animate-spin" aria-hidden="true" />
+                    {uploadingImage || galleryUploading > 0
+                      ? "Uploading image…"
+                      : product
+                        ? "Saving…"
+                        : "Publishing…"}
+                  </>
+                ) : product ? (
+                  "Save changes"
+                ) : (
+                  "Publish product"
+                )}
               </Button>
             )}
           </div>

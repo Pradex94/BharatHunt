@@ -7,7 +7,7 @@ import type { PostgrestError } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { isMissingColumnError } from "@/lib/supabase/errors";
-import { getIsAdmin } from "@/lib/admin";
+import { getIsAdmin, isAdminUser } from "@/lib/admin";
 import { cacheInvalidatePrefix } from "@/lib/cache";
 import { ensureProfile } from "@/lib/ensure-profile";
 import { checkRateLimitByIpAndUser } from "@/lib/rate-limit";
@@ -284,12 +284,17 @@ async function findDuplicateLaunch(
   return null;
 }
 
+/** The Clerk user record, as `currentUser()` resolves it. */
+type ClerkUser = Awaited<ReturnType<typeof currentUser>>;
+
 /**
  * Emails the maker their launch receipt.
  *
- * The address comes from Clerk — `profiles` doesn't store one — so this needs
- * the request's auth context and has to be resolved before `redirect` unwinds
- * the action.
+ * The address comes from Clerk — `profiles` doesn't store one — so the caller
+ * passes the user record it already fetched. It used to call `currentUser()`
+ * itself, which is an uncached HTTP call to Clerk's Backend API, and the same
+ * launch had already made one for the admin check: two serial round trips for
+ * one user record.
  *
  * The send is awaited rather than handed to `after`. `after` kept it off the
  * critical path in theory; in practice the callback never ran in production and
@@ -297,36 +302,29 @@ async function findDuplicateLaunch(
  * callback that does not run cannot report its own absence.
  *
  * Awaiting adds the provider round trip (a few hundred milliseconds, capped by
- * the 15s timeout in lib/email.ts) before the redirect. Failures are logged,
- * never thrown — the product is already published, and losing the receipt must
- * not look like a failed launch. Matches the fail-open contract in lib/email.ts.
+ * the 15s timeout in lib/email.ts) before the redirect; the caller overlaps it
+ * with cache invalidation so it is not simply added on top. Failures are
+ * logged, never thrown — the product is already published, and losing the
+ * receipt must not look like a failed launch. Matches the fail-open contract in
+ * lib/email.ts.
  */
-async function sendLaunchReceipt(product: {
-  name: string;
-  tagline: string;
-  slug: string;
-  category: string;
-  launchState: string | null;
-}): Promise<void> {
-  let recipient: string | undefined;
-  let makerName: string | null = null;
+async function sendLaunchReceipt(
+  product: {
+    name: string;
+    tagline: string;
+    slug: string;
+    category: string;
+    launchState: string | null;
+  },
+  user: ClerkUser,
+): Promise<void> {
+  // Clerk accounts can exist without a primary email (phone-only sign-up), and
+  // `user` is null when the lookup failed — either way there is nobody to mail.
+  const to = user?.primaryEmailAddress?.emailAddress;
+  if (!to) return;
 
-  try {
-    const user = await currentUser();
-    recipient = user?.primaryEmailAddress?.emailAddress;
-    makerName =
-      [user?.firstName, user?.lastName].filter(Boolean).join(" ") || user?.username || null;
-  } catch (error) {
-    console.error("[launch-email] could not read the maker's address from Clerk:", error);
-    return;
-  }
-
-  if (!recipient) {
-    // Clerk accounts can exist without a primary email (phone-only sign-up).
-    return;
-  }
-
-  const to = recipient;
+  const makerName =
+    [user.firstName, user.lastName].filter(Boolean).join(" ") || user.username || null;
   const email = buildProductLaunchEmail(product, makerName);
 
   const sent = await sendEmail({ to, ...email });
@@ -334,6 +332,38 @@ async function sendLaunchReceipt(product: {
   if (!sent.ok) {
     console.error(`[launch-email] "${product.slug}" was not delivered: ${sent.error}`);
   }
+}
+
+/**
+ * Every existing slug that could collide with `baseSlug`, in one round trip.
+ *
+ * Slug selection used to probe candidates one at a time — a sequential query
+ * per attempt, on the critical path of every launch, just to learn that the
+ * obvious slug was free. Reading the neighbourhood once and picking locally
+ * costs the same single query whether the name is unique or contested.
+ */
+async function takenSlugsNear(
+  supabase: ReturnType<typeof createClient>,
+  baseSlug: string,
+): Promise<Set<string>> {
+  const { data } = await supabase
+    .from("products")
+    .select("slug")
+    .like("slug", `${escapeLike(baseSlug)}%`)
+    .limit(100);
+  return new Set((data ?? []).map((row) => row.slug));
+}
+
+/** The first free slug for this name: `name`, else `name-xxxx`. */
+function resolveSlug(baseSlug: string, taken: Set<string>): string {
+  if (!taken.has(baseSlug)) return baseSlug;
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const candidate = `${baseSlug}-${Math.random().toString(36).slice(2, 6)}`;
+    if (!taken.has(candidate)) return candidate;
+  }
+  // 100 rows cannot exhaust a 36^4 suffix space, but never hand back a slug we
+  // know is taken — the insert would just fail on the unique index.
+  return `${baseSlug}-${Date.now().toString(36)}`;
 }
 
 export async function createProduct(
@@ -359,16 +389,8 @@ export async function createProduct(
 
   const supabase = createClient();
 
-  // Enforce the per-maker launch limit before doing any work — admins are exempt.
-  if (!(await getIsAdmin())) {
-    const existingCount = await getUserProductCount(userId);
-    if (existingCount >= MAX_PRODUCTS_PER_USER) {
-      return {
-        error: `You've reached the ${MAX_PRODUCTS_PER_USER}-product launch limit. Delete an existing product to launch a new one.`,
-      };
-    }
-  }
-
+  // Free checks first: a malformed or rule-breaking form is rejected without
+  // spending a single round trip on it.
   const parsed = parseProductForm(formData);
   if ("error" in parsed) {
     return parsed;
@@ -381,12 +403,52 @@ export async function createProduct(
     return { error: moderation.message };
   }
 
-  const duplicate = await findDuplicateLaunch(supabase, {
-    name: parsed.fields.name,
-    websiteUrl: parsed.fields.websiteUrl,
-  });
+  const baseSlug = slugify(parsed.fields.name);
+
+  /*
+   * Everything a launch has to look up before it can be written, issued at
+   * once. None of these depend on each other, and run one after another they
+   * were five serial network hops (Clerk, then four Postgres queries) that the
+   * maker sat through with a spinner. Each verdict is still applied below in
+   * the same order as before, so the message a rejected launch gets is
+   * unchanged — only the waiting is.
+   */
+  const [user, existingCount, duplicate, profileError, takenSlugs] = await Promise.all([
+    // A Clerk blip costs the admin exemption and the receipt, not the launch.
+    currentUser().catch((error: unknown) => {
+      console.error("[launch] could not read the maker's Clerk record:", error);
+      return null;
+    }),
+    getUserProductCount(userId),
+    findDuplicateLaunch(supabase, {
+      name: parsed.fields.name,
+      websiteUrl: parsed.fields.websiteUrl,
+    }),
+    // Make sure the creator has a profile row before inserting — products.creator_id
+    // has a FK to profiles.id, and the Clerk webhook may not have run for this user.
+    ensureProfile().then(
+      () => null,
+      (error: unknown) =>
+        error instanceof Error
+          ? error.message
+          : "Could not prepare your profile. Please try again.",
+    ),
+    takenSlugsNear(supabase, baseSlug),
+  ]);
+
+  // Enforce the per-maker launch limit — admins are exempt.
+  if (!isAdminUser(user) && existingCount >= MAX_PRODUCTS_PER_USER) {
+    return {
+      error: `You've reached the ${MAX_PRODUCTS_PER_USER}-product launch limit. Delete an existing product to launch a new one.`,
+    };
+  }
+
   if (duplicate) {
     return { error: duplicate };
+  }
+
+  if (profileError) {
+    return { error: profileError };
   }
 
   const {
@@ -421,30 +483,7 @@ export async function createProduct(
   // cleared the field, `launchState` is null and nothing is stored.
   const detectedState = launchState ? await detectStateCode() : null;
 
-  // Make sure the creator has a profile row before inserting — products.creator_id
-  // has a FK to profiles.id, and the Clerk webhook may not have run for this user.
-  try {
-    await ensureProfile();
-  } catch (profileError) {
-    return {
-      error:
-        profileError instanceof Error
-          ? profileError.message
-          : "Could not prepare your profile. Please try again.",
-    };
-  }
-
-  const baseSlug = slugify(name);
-  let slug = baseSlug;
-  for (let attempt = 0; attempt < 5; attempt++) {
-    const { data: existing } = await supabase
-      .from("products")
-      .select("id")
-      .eq("slug", slug)
-      .maybeSingle();
-    if (!existing) break;
-    slug = `${baseSlug}-${Math.random().toString(36).slice(2, 6)}`;
-  }
+  const slug = resolveSlug(baseSlug, takenSlugs);
 
   const basePayload = {
     creator_id: userId,
@@ -491,18 +530,18 @@ export async function createProduct(
     return { error: error?.message ?? "Could not publish your product. Please try again." };
   }
 
-  // A new product changes lists, featured, counts, stats and the sitemap.
-  await cacheInvalidatePrefix(PRODUCTS_CACHE_PREFIX);
+  /*
+   * The product exists now; the rest is bookkeeping the maker is only waiting
+   * on because it has to finish before the redirect. Run it together rather
+   * than stacking a Redis SCAN sweep on top of an email round trip.
+   */
+  await Promise.all([
+    // A new product changes lists, featured, counts, stats and the sitemap.
+    cacheInvalidatePrefix(PRODUCTS_CACHE_PREFIX),
+    sendLaunchReceipt({ name, tagline, slug: product.slug, category, launchState }, user),
+  ]);
   // …and it's a new row on the maker's dashboard.
   revalidatePath("/dashboard");
-
-  await sendLaunchReceipt({
-    name,
-    tagline,
-    slug: product.slug,
-    category,
-    launchState,
-  });
 
   redirect(`/products/${product.slug}`);
 }
@@ -537,11 +576,17 @@ export async function updateProduct(
     return { error: moderation.message };
   }
 
-  const duplicate = await findDuplicateLaunch(supabase, {
-    name: parsed.fields.name,
-    websiteUrl: parsed.fields.websiteUrl,
-    excludeId: productId,
-  });
+  // Independent of each other, and both were on the critical path of every
+  // save — the admin check is a Clerk API call, the duplicate check two
+  // Postgres queries.
+  const [isAdmin, duplicate] = await Promise.all([
+    getIsAdmin(),
+    findDuplicateLaunch(supabase, {
+      name: parsed.fields.name,
+      websiteUrl: parsed.fields.websiteUrl,
+      excludeId: productId,
+    }),
+  ]);
   if (duplicate) {
     return { error: duplicate };
   }
@@ -574,7 +619,6 @@ export async function updateProduct(
 
   // Admins may edit any product (service-role client bypasses RLS); everyone
   // else is scoped to their own rows.
-  const isAdmin = await getIsAdmin();
   const db = isAdmin ? createServiceClient() : supabase;
 
   const basePayload = {
