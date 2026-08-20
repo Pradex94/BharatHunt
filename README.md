@@ -47,6 +47,15 @@ EMAIL_FALLBACK_FROM=Bharat Hunt <info@bharathunt.org>   # optional; see below
 # Cloudflare Turnstile — captcha on the /advertise inquiry form (REQUIRED for that form)
 NEXT_PUBLIC_TURNSTILE_SITE_KEY=<your-turnstile-site-key>
 TURNSTILE_SECRET_KEY=<your-turnstile-secret-key>
+
+# Cloudinary — image uploads on /submit (REQUIRED to upload; URL paste still works without it)
+NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME=<your-cloud-name>
+NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET=<your-UNSIGNED-upload-preset>
+
+# Analytics — optional. Neither is a secret; both ship in the page source.
+NEXT_PUBLIC_GA_ID=G-XXXXXXXXXX          # GA4 measurement ID; unset = GA4 off
+NEXT_PUBLIC_GTM_ID=GTM-XXXXXXX          # overrides the default container
+NEXT_PUBLIC_GTM_DEBUG=true              # mount the tags in dev too (see below)
 ```
 
 Turnstile is **required and fail-closed**: `submitAdInquiry` rejects every submission when `TURNSTILE_SECRET_KEY` is unset, so without both keys the /advertise form is not merely unprotected — it cannot accept a lead at all. When the site key is missing the form replaces itself with an email fallback rather than rendering a button that can never succeed. Create a widget at [Cloudflare Turnstile](https://dash.cloudflare.com/?to=/:account/turnstile) and add your domain (plus `localhost` for dev).
@@ -55,9 +64,54 @@ Sending an advertising inquiry **requires a logged-in account**. `submitAdInquir
 
 Email is **optional and fail-open**: without `SENDGROVE_API_KEY` the /advertise form still stores the lead in Supabase and shows the success state — it just logs that no mail was sent.
 
+### Image uploads (Cloudinary)
+
+`lib/upload.ts` posts straight from the browser to Cloudinary as an **unsigned**
+upload, so the preset it names must be set to `Unsigned` in the Cloudinary
+console (**Settings → Upload → Upload presets → your preset → Signing Mode**).
+A preset left on the default `Signed` fails every upload with:
+
+```
+Upload preset must be whitelisted for unsigned uploads
+```
+
+That is a console setting, not a code change — nothing in this repo can override
+it. Both variables are missing from `.env.local` by default, in which case the
+uploader refuses politely ("Image uploads aren't configured") and makers can
+still paste image URLs.
+
+> **Unsigned means public.** The cloud name and preset ship in the page source,
+> so anyone can upload to that preset. Keep the preset restricted in Cloudinary
+> (allowed formats, max file size, a dedicated folder), or move to signed
+> uploads via a server route if abuse shows up.
+
 > **Verify the sender, not just the domain.** Sendgrove rejects an unverified `from` with `403 FORBIDDEN` even when the domain is authenticated: *"Authenticating the domain (bharathunt.org) alone is not enough."* Add the exact address under **Senders & Domains** and confirm the OTP it emails you.
 
 `EMAIL_FALLBACK_FROM` covers the gap while a new sender is still pending verification: if `EMAIL_FROM` comes back unverified, the send is retried once from the fallback and a warning is logged. Once the intended address is verified the fallback stops being used, and you can drop the variable.
+
+### Analytics
+
+Google Tag Manager and GA4 both load from a single bootstrap script in
+`components/analytics/google-tag-manager.tsx`, under **Consent Mode v2**: the
+tags always load, but `ad_storage`, `ad_user_data`, `ad_personalization` and
+`analytics_storage` default to *denied* and only flip to granted when a visitor
+accepts the cookie banner. Until then GA4 sends cookieless pings and stores
+nothing on the device — which is what `/cookies` promises in writing, so keep
+that page in step with any change here.
+
+Both tags are **off outside production** unless `NEXT_PUBLIC_GTM_DEBUG=true`, so
+local browsing does not land in the reports.
+
+Two things are worth knowing before touching the setup:
+
+- **GA4 is configured in code, not in the GTM container.** Do not also add a GA4
+  tag in the GTM UI — the two would each count every page view. `NEXT_PUBLIC_GA_ID`
+  is the single switch.
+- **Turn off Enhanced measurement's "Page changes based on browser history
+  events"** (GA4 Admin → Data streams → your stream → Enhanced measurement). The
+  App Router navigates via `history.pushState`, and `components/analytics/ga-page-views.tsx`
+  already sends a `page_view` for every route. Leaving the GA4 setting on double-counts
+  every navigation.
 
 Clerk is wired to Supabase as a [third-party auth provider](https://clerk.com/docs/integrations/databases/supabase): the browser/server Supabase clients attach the Clerk session token, and RLS policies authorize against the JWT's `sub` claim (see `supabase/migrations/`).
 

@@ -3,6 +3,7 @@
  * ui: ported from Claude Design mockup "Marketplace.dc.html" (project fe806209)
  */
 
+import type { Metadata } from "next";
 import Link from "next/link";
 import { after } from "next/server";
 import { auth } from "@clerk/nextjs/server";
@@ -24,19 +25,48 @@ import {
 import { PRODUCT_CATEGORIES, PRODUCT_SORTS, type ProductSort } from "@/lib/constants";
 import { recordSearch } from "@/lib/search-analytics";
 
-export const metadata = {
-  title: "Marketplace",
-  description:
-    "Browse and discover the latest software, tools, and lifetime deals launched by founders on Bharat Hunt. Filter by category, pricing, and popularity.",
-  alternates: { canonical: "/marketplace" },
-};
-
 type MarketplaceSearchParams = Promise<{
   category?: string;
   sort?: string;
   q?: string;
   pricing?: string;
+  page?: string;
 }>;
+
+/** `?page=` as a positive integer; anything else is page 1. */
+function pageFrom(raw: string | undefined): number {
+  const parsed = Number(raw);
+  return Number.isInteger(parsed) && parsed > 1 ? parsed : 1;
+}
+
+/**
+ * The canonical has to be page-aware or pagination is self-defeating: a static
+ * `/marketplace` on every page tells Google that page 2 is a duplicate of page
+ * 1, so it drops page 2 and never follows the twelve product links only page 2
+ * carries. Page 2+ therefore points at itself.
+ *
+ * Filtered views still collapse to `/marketplace`. A category or pricing filter
+ * is a re-slice of the same catalogue rather than new content, and those
+ * combinations multiply into far more URLs than they are worth indexing.
+ */
+export async function generateMetadata({
+  searchParams,
+}: {
+  searchParams: MarketplaceSearchParams;
+}): Promise<Metadata> {
+  const params = await searchParams;
+  const page = pageFrom(params.page);
+  const filtered = Boolean(params.category || params.pricing || params.q);
+
+  return {
+    title: page > 1 ? `Marketplace — page ${page}` : "Marketplace",
+    description:
+      "Browse and discover the latest software, tools, and lifetime deals launched by founders on Bharat Hunt. Filter by category, pricing, and popularity.",
+    alternates: {
+      canonical: page > 1 && !filtered ? `/marketplace?page=${page}` : "/marketplace",
+    },
+  };
+}
 
 export default async function MarketplacePage({
   searchParams,
@@ -62,9 +92,15 @@ export default async function MarketplacePage({
   const pricing = params.pricing ? params.pricing.split(",").filter(Boolean) : undefined;
 
   const filters = { category, sort, q, pricing };
+  // Previously hardcoded to 1, which made `?page=` inert: every paginated URL
+  // rendered page 1, so the only product links a crawler could ever reach were
+  // the first twelve. Everything past them sat in the sitemap with no link
+  // pointing at it, which is exactly what Search Console reports as
+  // "Discovered - currently not indexed".
+  const page = pageFrom(params.page);
 
   const [{ products, totalCount }, categoryCounts] = await Promise.all([
-    getProducts({ ...filters, page: 1 }),
+    getProducts({ ...filters, page }),
     getCategoryCounts(),
   ]);
 
@@ -85,7 +121,7 @@ export default async function MarketplacePage({
   );
 
   const totalCategoryCount = Object.values(categoryCounts).reduce((sum, n) => sum + n, 0);
-  const hasMore = totalCount > PRODUCTS_PAGE_SIZE;
+  const hasMore = totalCount > page * PRODUCTS_PAGE_SIZE;
 
   return (
     <Container className="grid grid-cols-1 gap-10 py-10 lg:grid-cols-[240px_1fr] lg:items-start">
@@ -153,8 +189,9 @@ export default async function MarketplacePage({
           </div>
         ) : (
           <ProductList
-            key={`${category ?? "all"}:${sort}:${q ?? ""}:${(pricing ?? []).join(",")}`}
+            key={`${category ?? "all"}:${sort}:${q ?? ""}:${(pricing ?? []).join(",")}:${page}`}
             initialProducts={products}
+            initialPage={page}
             initialUpvotedIds={[...upvotedIds]}
             initialHasMore={hasMore}
             filters={filters}

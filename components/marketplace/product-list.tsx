@@ -10,18 +10,26 @@ export function ProductList({
   initialProducts,
   initialUpvotedIds,
   initialHasMore,
+  initialPage = 1,
   filters,
   isLoggedIn,
 }: {
   initialProducts: ProductCardProduct[];
   initialUpvotedIds: string[];
   initialHasMore: boolean;
+  /**
+   * The page the server actually rendered. Load more continues from here, so
+   * arriving on `/marketplace?page=3` and pressing it fetches page 4 rather
+   * than page 2 -- which would have shown products already on screen and
+   * skipped the rest entirely.
+   */
+  initialPage?: number;
   filters: Omit<GetProductsParams, "page">;
   isLoggedIn: boolean;
 }) {
   const [products, setProducts] = useState(initialProducts);
   const [upvotedIds, setUpvotedIds] = useState(new Set(initialUpvotedIds));
-  const [page, setPage] = useState(1);
+  const [page, setPage] = useState(initialPage);
   const [hasMore, setHasMore] = useState(initialHasMore);
   const [isPending, startTransition] = useTransition();
 

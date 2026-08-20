@@ -17,6 +17,7 @@ import net from "node:net";
 import { auth } from "@clerk/nextjs/server";
 import { checkRateLimitByIpAndUser } from "@/lib/rate-limit";
 
+import { imageSizeFromBytes, squareLogoSize } from "@/lib/image-size";
 import {
   bySizeDesc,
   extractMetadata,
@@ -84,6 +85,17 @@ function describeHttpFailure(status: number): string {
 
 /** Icon resolution: how many candidates we'll actually HTTP-check, and how long each may take. */
 const MAX_ICON_PROBES = 6;
+/** Enough header for every format in lib/image-size.ts, JPEG's segment walk included. */
+const ICON_HEADER_BYTES = 32 * 1024;
+/**
+ * Stop probing once a candidate is at least this wide. The avatar renders at
+ * roughly 200px, so 180 — Apple's touch-icon size, and the most common real
+ * logo on the web — is where extra pixels stop being visible and extra requests
+ * stop being worth their latency.
+ */
+const GOOD_ICON_PX = 180;
+/** What we ask Google's favicon service for; it serves the best it holds up to this. */
+const GOOGLE_ICON_PX = 256;
 const ICON_PROBE_TIMEOUT_MS = 4000;
 const IMAGE_EXTENSION = /\.(png|svg|webp|jpe?g|ico|avif|gif)(\?|#|$)/i;
 
@@ -115,9 +127,12 @@ export async function fetchUrlMetadata(rawUrl: string): Promise<FetchMetadataRes
     }
 
     // The declared favicon is often missing, a dead link, or a bare .ico. Walk
-    // the candidates (manifest icons included) and keep the first that really
-    // serves an image, so makers get a logo instead of a broken avatar.
-    data.icon = await resolveIcon(iconCandidates, manifestUrl, finalUrl);
+    // the candidates (manifest icons included) and keep the *largest* that
+    // really serves an image, so makers get a sharp logo rather than whichever
+    // one the page happened to list first.
+    const icon = await resolveIcon(iconCandidates, manifestUrl, finalUrl);
+    data.icon = icon.url;
+    data.iconPixels = icon.pixels;
     // Don't let the icon double as a "screenshot" if we fell back to og:image.
     data.images = data.images.filter((image) => image !== data.icon);
 
@@ -154,7 +169,8 @@ function minimalImport(url: string, reason: string): FetchMetadataResult {
       description: "",
       tagline: "",
       category: null,
-      icon: `https://www.google.com/s2/favicons?sz=128&domain=${encodeURIComponent(host)}`,
+      icon: `https://www.google.com/s2/favicons?sz=${GOOGLE_ICON_PX}&domain=${encodeURIComponent(host)}`,
+      iconPixels: null,
       images: [],
       siteName: null,
     },
@@ -296,11 +312,19 @@ async function manifestIcons(manifestUrl: string): Promise<string[]> {
   }
 }
 
-/** True when `url` responds with an actual image. */
-async function isLiveImage(url: string): Promise<boolean> {
+/**
+ * Fetches enough of `url` to read the image header and returns the size of the
+ * square logo it could produce. `null` means it is not a usable image; `0`
+ * means it is an image whose header we could not parse.
+ *
+ * Only a prefix is read. Dimensions live in the first bytes of every format
+ * `lib/image-size.ts` handles, so there is no reason to pull whole images down
+ * a request path that is already on a timeout budget.
+ */
+async function probeIconSize(url: string): Promise<number | null> {
   try {
     const parsed = new URL(url);
-    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return false;
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return null;
     await assertPublicHost(parsed.hostname);
 
     const controller = new AbortController();
@@ -310,43 +334,110 @@ async function isLiveImage(url: string): Promise<boolean> {
         headers: { ...BROWSER_HEADERS, Accept: "image/*,*/*;q=0.8" },
         signal: controller.signal,
       });
-      // Read no further than the headers — we only care that it exists.
-      await res.body?.cancel();
-      if (!res.ok) return false;
-      const type = res.headers.get("content-type") ?? "";
-      if (type.startsWith("image/")) return true;
-      // Plenty of servers mislabel .ico as octet-stream; trust the extension.
-      return type.includes("octet-stream") && IMAGE_EXTENSION.test(url);
+      if (!res.ok) {
+        await res.body?.cancel();
+        return null;
+      }
+
+      const type = (res.headers.get("content-type") ?? "").toLowerCase();
+      const looksLikeImage =
+        type.startsWith("image/") ||
+        // Plenty of servers mislabel .ico as octet-stream; trust the extension.
+        (type.includes("octet-stream") && IMAGE_EXTENSION.test(url));
+      if (!looksLikeImage) {
+        await res.body?.cancel();
+        return null;
+      }
+
+      const prefix = await readImageHeader(res, ICON_HEADER_BYTES);
+      const size = imageSizeFromBytes(prefix, type);
+      // A live image we cannot measure still beats nothing, but it must never
+      // outrank one we did measure — hence the deliberate 0.
+      return size ? squareLogoSize(size) : 0;
     } finally {
       clearTimeout(timer);
     }
   } catch {
-    return false;
+    return null;
   }
 }
 
+/** The first `maxBytes` of a response body. */
+async function readImageHeader(res: Response, maxBytes: number): Promise<Uint8Array> {
+  const reader = res.body?.getReader();
+  if (!reader) return new Uint8Array();
+
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    while (total < maxBytes) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+      total += value.length;
+    }
+  } finally {
+    await reader.cancel().catch(() => {});
+  }
+
+  const out = new Uint8Array(Math.min(total, maxBytes));
+  let offset = 0;
+  for (const chunk of chunks) {
+    if (offset >= out.length) break;
+    out.set(chunk.subarray(0, out.length - offset), offset);
+    offset += chunk.length;
+  }
+  return out;
+}
+
 /**
- * Picks the first candidate that actually serves an image, pulling in manifest
- * icons first. Falls back to Google's favicon service (which synthesises one
- * for any domain) so the form always gets something.
+ * Picks the **largest** icon a site offers, not the first one that responds.
+ *
+ * The old version took the first candidate that merely existed, which is how
+ * paytm.com produced a blurry logo: the page points both its `rel="icon"` and
+ * its `apple-touch-icon` at the same 16x16 `favicon.ico`, so the winner was a
+ * perfectly valid image at a twelfth of the size it gets rendered at. Nothing
+ * in the pipeline noticed, because nothing was looking at resolution.
+ * Declaration order says nothing about sharpness, so it is measured instead.
+ *
+ * Probing stops early once something comfortably sharp turns up, so the common
+ * case — a site whose 192px or 512px PWA icon is listed first — still costs a
+ * single request.
  */
 async function resolveIcon(
   candidates: string[],
   manifestUrl: string | null,
   baseUrl: string,
-): Promise<string | null> {
+): Promise<{ url: string | null; pixels: number | null }> {
   const fromManifest = manifestUrl ? await manifestIcons(manifestUrl) : [];
   // Manifest icons sit behind apple-touch-icon but ahead of everything else.
   const ordered = [candidates[0], ...fromManifest, ...candidates.slice(1)]
     .filter((href): href is string => Boolean(href))
     .filter((href, index, all) => all.indexOf(href) === index);
 
+  let best: { url: string; size: number } | null = null;
+
   for (const candidate of ordered.slice(0, MAX_ICON_PROBES)) {
-    if (await isLiveImage(candidate)) return candidate;
+    const size = await probeIconSize(candidate);
+    if (size === null) continue;
+    if (!best || size > best.size) best = { url: candidate, size };
+    if (best.size >= GOOD_ICON_PX) return { url: best.url, pixels: best.size };
   }
 
+  // Nothing the page declares is sharp enough for an avatar. Google's favicon
+  // service often holds larger artwork for a domain than the site links to, so
+  // it is worth measuring rather than assuming it is better or worse.
   const host = safeHostname(baseUrl);
-  return host ? `https://www.google.com/s2/favicons?sz=128&domain=${encodeURIComponent(host)}` : null;
+  if (host) {
+    const fallback = `https://www.google.com/s2/favicons?sz=${GOOGLE_ICON_PX}&domain=${encodeURIComponent(host)}`;
+    const size = await probeIconSize(fallback);
+    if (size !== null && (!best || size > best.size)) return { url: fallback, pixels: size };
+    if (!best) return { url: fallback, pixels: null };
+  }
+
+  // `0` is the "live but unmeasurable" marker from probeIconSize; report it as
+  // unknown rather than as a zero-pixel image.
+  return { url: best?.url ?? null, pixels: best && best.size > 0 ? best.size : null };
 }
 
 // ── Private-range detection ──────────────────────────────────────────────

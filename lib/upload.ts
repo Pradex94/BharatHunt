@@ -19,6 +19,17 @@ export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
  */
 export const MIN_GALLERY_IMAGE_WIDTH = 800;
 
+/**
+ * The narrowest a product logo may be before it visibly blurs.
+ *
+ * The avatar is drawn at roughly 200 CSS pixels, so a retina screen asks for
+ * ~400 real ones; 180 (Apple's touch-icon size) is the floor below which the
+ * softness is obvious rather than marginal. Sites that publish only a 16 or
+ * 32px `favicon.ico` fall well under it, which is exactly the case the URL
+ * importer now warns about instead of silently accepting.
+ */
+export const MIN_LOGO_PIXELS = 180;
+
 /** Reads a file's real pixel dimensions without uploading it. */
 async function readImageSize(file: File): Promise<{ width: number; height: number }> {
   const objectUrl = URL.createObjectURL(file);

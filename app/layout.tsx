@@ -12,6 +12,7 @@ import {
   GoogleTagManagerNoScript,
 } from "@/components/analytics/google-tag-manager";
 import { ConsentSync } from "@/components/analytics/consent-sync";
+import { GaPageViews } from "@/components/analytics/ga-page-views";
 import { organizationSchema, websiteSchema } from "@/lib/seo";
 import { SITE_NAME, SITE_URL } from "@/lib/constants";
 import "./globals.css";
@@ -88,6 +89,7 @@ export default function RootLayout({
           {/* GTM's noscript iframe belongs immediately after <body>. */}
           <GoogleTagManagerNoScript />
           <ConsentSync />
+          <GaPageViews />
           <JsonLd data={[organizationSchema(), websiteSchema()]} />
           <MotionConfig
             reducedMotion="user"
