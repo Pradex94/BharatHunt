@@ -18,6 +18,16 @@ export type ProductMetadata = {
   category: string | null;
   /** Square logo/favicon for the product avatar (→ hero_image_url). */
   icon: string | null;
+  /**
+   * Measured width of `icon` in pixels, or `null` when it could not be read.
+   *
+   * Carried through so the form can say plainly that the logo it found is too
+   * small, instead of handing the maker a blurry avatar and staying quiet about
+   * it. Some sites genuinely publish nothing better — paytm.com's only logo is
+   * a 32px favicon — and in that case the honest move is to ask for an upload,
+   * not to pretend the import succeeded.
+   */
+  iconPixels: number | null;
   /** Wide preview image(s) for the product gallery (→ screenshot_urls). */
   images: string[];
   siteName: string | null;
@@ -141,7 +151,10 @@ export function extractMetadata(html: string, baseUrl: string): ExtractedMetadat
     .filter((href): href is string => Boolean(href))
     .filter((href, index, all) => all.indexOf(href) === index);
 
-  const name = (siteName || titleName || title || "").trim();
+  // Capped, because a title with no separator at all becomes the name wholesale
+  // and the server rejects anything past 60 characters. Truncating at a word
+  // boundary gives the maker something to edit rather than a hard refusal.
+  const name = clampName(siteName || titleName || title || "");
 
   return {
     url: baseUrl,
@@ -153,6 +166,7 @@ export function extractMetadata(html: string, baseUrl: string): ExtractedMetadat
     tagline: titleTagline || description,
     category: inferCategory([name, titleTagline, description, named["keywords"] ?? ""].join(" ")),
     icon: null, // resolved by resolveIcon() once we can make requests
+    iconPixels: null,
     images,
     siteName,
     iconCandidates,
@@ -160,8 +174,26 @@ export function extractMetadata(html: string, baseUrl: string): ExtractedMetadat
   };
 }
 
-/** Separators sites use between a product name and its pitch in <title>. */
-const TITLE_SEPARATOR = /\s+[|–—·:]\s+|\s+-\s+/;
+/** The longest a product name may be — matches the server check in lib/actions/products.ts. */
+export const MAX_NAME_LENGTH = 60;
+
+/**
+ * Separators sites use between a product name and its pitch in <title>.
+ *
+ * The colon is deliberately allowed to sit flush against the brand. Every other
+ * separator here needs whitespace on both sides, and requiring it of the colon
+ * too missed the single most common title format there is -- "Paytm: Secure &
+ * Fast UPI Payments, Recharge Mobile & Pay Bills" never split, so the whole
+ * 62-character title became the product name and the server rejected the launch
+ * with "Name is required and must be 60 characters or fewer."
+ *
+ * Trailing whitespace is still required, which is what keeps `https://` and
+ * clock times like `10:30` from being treated as separators.
+ *
+ * The hyphen keeps both spaces on purpose: a bare `-` is far more often part of
+ * a word ("e-commerce", "all-in-one") than a separator.
+ */
+const TITLE_SEPARATOR = /\s+[|–—·]\s+|\s*:\s+|\s+-\s+/;
 
 /**
  * Splits "Acme | The fastest way to ship" into a name and a tagline.
@@ -193,6 +225,23 @@ export function splitTitle(
   return first.length <= second.length
     ? { name: first, tagline: second }
     : { name: second, tagline: first };
+}
+
+/**
+ * Trims a name to `MAX_NAME_LENGTH`, preferring the last word boundary so the
+ * result reads like a name rather than a string cut mid-word. No ellipsis: this
+ * lands in an editable input, and a maker should not have to delete one.
+ */
+export function clampName(raw: string): string {
+  const clean = collapse(raw).trim();
+  if (clean.length <= MAX_NAME_LENGTH) return clean;
+
+  const cut = clean.slice(0, MAX_NAME_LENGTH);
+  const lastSpace = cut.lastIndexOf(" ");
+  // Only honour a word boundary that keeps most of the budget; otherwise a
+  // long first word would shrink the name to almost nothing.
+  const trimmed = lastSpace > MAX_NAME_LENGTH * 0.6 ? cut.slice(0, lastSpace) : cut;
+  return trimmed.replace(/[\s\-–—·:,|]+$/, "").trim();
 }
 
 /** `description` from any JSON-LD block on the page. */

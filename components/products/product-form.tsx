@@ -34,7 +34,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { ProductLogo } from "@/components/products/product-logo";
-import { MAX_UPLOAD_BYTES, MIN_GALLERY_IMAGE_WIDTH, uploadProductImage } from "@/lib/upload";
+import {
+  MAX_UPLOAD_BYTES,
+  MIN_GALLERY_IMAGE_WIDTH,
+  MIN_LOGO_PIXELS,
+  uploadProductImage,
+} from "@/lib/upload";
+import { MAX_NAME_LENGTH } from "@/lib/metadata-extract";
 import { cn } from "@/lib/utils";
 
 const selectClassName =
@@ -44,9 +50,14 @@ const selectClassName =
  * The form is split into steps (Product-Hunt style) because the full field set
  * is long enough to be intimidating in one scroll. Every panel stays MOUNTED
  * and is hidden with `display:none`, so a single <form> still submits every
- * field in one go — which is why no input carries `required`: the browser
- * refuses to validate a control it can't focus. Step gating is done in
- * `validateStep`, and the server re-checks everything regardless.
+ * field in one go.
+ *
+ * That means NO browser constraint validation anywhere in here: a hidden
+ * control that fails validation can't be focused, so the browser silently
+ * aborts the submit instead of reporting it. Hence no `required`, and hence
+ * `noValidate` on the <form> below — `type="url"`/`pattern`/`min` would each
+ * kill Publish the same way. Step gating is done in `validateStep`, and the
+ * server re-checks everything regardless.
  */
 const STEPS = [
   { id: "main", label: "Main info", icon: Rocket },
@@ -304,6 +315,13 @@ export function ProductForm({ product, detectedState = null }: ProductFormProps)
   function validateStep(id: StepId): string | null {
     if (id === "main") {
       if (!formData.name.trim()) return "Add your product's name.";
+      // The input's maxLength only constrains typing. Import-from-URL writes
+      // this field programmatically, which maxLength does not police, so an
+      // over-long name used to sail past every client check and come back as a
+      // server error on the review step -- with nothing pointing at the field.
+      if (formData.name.trim().length > MAX_NAME_LENGTH) {
+        return `Shorten the name to ${MAX_NAME_LENGTH} characters or fewer.`;
+      }
       if (!formData.tagline.trim()) return "Add a tagline so people know what it does.";
       if (!formData.category) return "Choose a category.";
     }
@@ -411,6 +429,20 @@ export function ProductForm({ product, detectedState = null }: ProductFormProps)
         !data.icon && "logo",
         !data.category && "category",
       ].filter((label): label is string => Boolean(label));
+
+      // A logo can be present and still be unusable. Plenty of sites publish
+      // nothing but a 16 or 32px favicon — paytm.com is one — and blowing that
+      // up to a 200px avatar is where the blur comes from. Say so rather than
+      // letting the maker discover it on their live product page.
+      if (data.icon && data.iconPixels !== null && data.iconPixels < MIN_LOGO_PIXELS) {
+        setImportMsg({
+          type: "warning",
+          text:
+            `That site only publishes a ${data.iconPixels}px logo, which will look blurry. ` +
+            `Upload a square image at least ${MIN_LOGO_PIXELS}px wide instead.`,
+        });
+        return;
+      }
 
       setImportMsg(
         missing.length === 0
@@ -585,6 +617,15 @@ export function ProductForm({ product, detectedState = null }: ProductFormProps)
 
       <form
         action={handleFormSubmit}
+        // Every panel is mounted but hidden with `display:none`, and the browser
+        // refuses to *report* a validation failure on a control it can't focus —
+        // it just aborts the submit and logs "An invalid form control ... is not
+        // focusable" to the console. A half-typed `type="url"` field four steps
+        // back was therefore enough to make Publish look dead with no error at
+        // all. Validation is ours to do: `validateStep` gates the steps,
+        // `moderateProduct` runs before submit, and the server re-checks
+        // everything including URL shape.
+        noValidate
         // Every panel is mounted, so a stray Enter on step 1 would otherwise
         // publish the whole form. Only the review step may submit that way.
         onKeyDown={(event) => {
@@ -629,7 +670,12 @@ export function ProductForm({ product, detectedState = null }: ProductFormProps)
             </p>
             <div className="flex flex-col gap-2 sm:flex-row">
               <Input
-                type="url"
+                // Deliberately not type="url": `fetchUrlMetadata` normalises a
+                // bare `example.com` for you, so browser URL validation would
+                // only reject input that actually works.
+                type="text"
+                inputMode="url"
+                autoComplete="url"
                 value={importUrl}
                 onChange={(e) => setImportUrl(e.target.value)}
                 onKeyDown={(e) => {
@@ -681,12 +727,12 @@ export function ProductForm({ product, detectedState = null }: ProductFormProps)
               <Input
                 id="name"
                 name="name"
-                maxLength={60}
+                maxLength={MAX_NAME_LENGTH}
                 value={formData.name}
                 onChange={handleInputChange}
                 placeholder="AI Code Reviewer"
               />
-              <p className="text-xs text-muted-foreground">{formData.name.length}/60</p>
+              <p className="text-xs text-muted-foreground">{formData.name.length}/{MAX_NAME_LENGTH}</p>
             </div>
 
             <div className="flex flex-col gap-1.5">

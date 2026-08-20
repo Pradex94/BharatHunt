@@ -23,10 +23,40 @@ export type ProductFormState = { error?: string } | undefined;
 
 const PRICING_TYPES = ["free", "freemium", "paid"];
 
-/** Trim a form value and keep it only if it's an http(s) URL, else null. */
+/**
+ * Normalise a maker-supplied link to an http(s) URL, or null if it can't be one.
+ *
+ * A bare `example.com` gets `https://`, the way the metadata importer and
+ * `hostnameOf` already treat pasted domains — the submit form carries no browser
+ * URL validation (see the note in product-form.tsx), so this is the only place
+ * that shape is settled. Anything carrying a non-http scheme is dropped, which
+ * keeps `javascript:`/`data:` out of the hrefs product pages render.
+ */
+function normalizeUrl(raw: string): string | null {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+
+  const hasScheme = /^[a-z][a-z0-9+.-]*:/i.test(trimmed);
+  if (hasScheme && !/^https?:\/\//i.test(trimmed)) return null;
+  // Strip the leading slashes of a protocol-relative `//example.com` first,
+  // otherwise prefixing gives the malformed `https:////example.com`.
+  const withScheme = hasScheme ? trimmed : `https://${trimmed.replace(/^\/+/, "")}`;
+
+  try {
+    const parsed = new URL(withScheme);
+    // A hostname with no dot is a typo or an intranet name, not a product link.
+    if (!parsed.hostname.includes(".")) return null;
+  } catch {
+    return null;
+  }
+  // Return the maker's own string (plus any scheme we added) rather than
+  // `URL.toString()`, so already-valid links are stored exactly as entered.
+  return withScheme;
+}
+
+/** Trim a form value and keep it only if it's usable as an http(s) URL. */
 function cleanUrl(value: FormDataEntryValue | null): string | null {
-  const raw = String(value ?? "").trim();
-  return /^https?:\/\//i.test(raw) ? raw : null;
+  return normalizeUrl(String(value ?? ""));
 }
 
 /** Trim and cap a free-text field, returning null when empty. */
@@ -80,8 +110,12 @@ function parseProductForm(formData: FormData): { error: string } | { fields: Par
   const description = String(formData.get("description") ?? "").trim();
   const category = String(formData.get("category") ?? "").trim();
   const pricingType = String(formData.get("pricingType") ?? "free");
-  const websiteUrl = String(formData.get("websiteUrl") ?? "").trim();
-  const githubUrl = String(formData.get("githubUrl") ?? "").trim();
+  // Raw, so we can tell "left blank" apart from "typed something unusable"
+  // below — a link that silently vanishes is worse than a message.
+  const websiteUrlRaw = String(formData.get("websiteUrl") ?? "").trim();
+  const githubUrlRaw = String(formData.get("githubUrl") ?? "").trim();
+  const websiteUrl = normalizeUrl(websiteUrlRaw);
+  const githubUrl = normalizeUrl(githubUrlRaw);
   const heroImageUrl = String(formData.get("heroImageUrl") ?? "").trim();
   const screenshotUrls = formData
     .getAll("screenshotUrls")
@@ -102,6 +136,12 @@ function parseProductForm(formData: FormData): { error: string } | { fields: Par
   }
   if (!PRICING_TYPES.includes(pricingType)) {
     return { error: "Invalid pricing type." };
+  }
+  if (websiteUrlRaw && !websiteUrl) {
+    return { error: "That website link doesn't look right — use a full address like example.com." };
+  }
+  if (githubUrlRaw && !githubUrl) {
+    return { error: "That GitHub link doesn't look right — use a full address like github.com/you/repo." };
   }
 
   const tags = tagsRaw
@@ -138,8 +178,8 @@ function parseProductForm(formData: FormData): { error: string } | { fields: Par
       description: description || null,
       category,
       pricingType,
-      websiteUrl: websiteUrl || null,
-      githubUrl: githubUrl || null,
+      websiteUrl,
+      githubUrl,
       videoUrl: cleanUrl(formData.get("videoUrl")),
       heroImageUrl: heroImageUrl || null,
       screenshotUrls,

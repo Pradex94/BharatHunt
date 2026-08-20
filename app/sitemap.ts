@@ -1,8 +1,13 @@
 import type { MetadataRoute } from "next";
 
+import { BLOG_POSTS } from "@/lib/blog";
 import { CATEGORIES, SITE_URL } from "@/lib/constants";
 import { isIndexableProduct } from "@/lib/seo";
-import { getAllPublishedProductSlugs, getCategoryCounts } from "@/services/products";
+import {
+  getAllPublishedProductSlugs,
+  getCategoryCounts,
+  PRODUCTS_PAGE_SIZE,
+} from "@/services/products";
 
 /**
  * Dynamic sitemap: stable marketing/discovery routes plus every published
@@ -44,9 +49,21 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.6,
   }));
 
+  // Every post, not just the index. `/blog` was listed on its own, so the
+  // posts themselves were reachable only by following a link from it -- and a
+  // crawler that never got round to `/blog` never learned they existed.
+  const blogRoutes: MetadataRoute.Sitemap = BLOG_POSTS.map((post) => ({
+    url: `${SITE_URL}/blog/${post.slug}`,
+    lastModified: new Date(post.date),
+    changeFrequency: "yearly",
+    priority: 0.5,
+  }));
+
+  const published = await getAllPublishedProductSlugs();
+
   // Same indexability rule the product page applies (lib/seo.ts), so the
   // sitemap never lists a page that marks itself noindex.
-  const products = (await getAllPublishedProductSlugs()).filter(isIndexableProduct);
+  const products = published.filter(isIndexableProduct);
   const productRoutes: MetadataRoute.Sitemap = products.map((product) => ({
     url: `${SITE_URL}/products/${product.slug}`,
     lastModified: new Date(product.lastModified),
@@ -54,5 +71,28 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.8,
   }));
 
-  return [...staticRoutes, ...categoryRoutes, ...productRoutes];
+  // `/marketplace` renders one page of products at a time, so page 1 links to
+  // twelve of them and nothing links to the rest. Listing the remaining pages
+  // gives every product a crawlable page that actually links to it, instead of
+  // leaving it discoverable only as a bare sitemap entry -- which Search
+  // Console reports as "Discovered - currently not indexed" and rarely crawls.
+  // Counted from all published products, since that is what the page lists.
+  const pageCount = Math.ceil(published.length / PRODUCTS_PAGE_SIZE);
+  const marketplaceRoutes: MetadataRoute.Sitemap = Array.from(
+    { length: Math.max(0, pageCount - 1) },
+    (_, index) => ({
+      url: `${SITE_URL}/marketplace?page=${index + 2}`,
+      lastModified: now,
+      changeFrequency: "daily" as const,
+      priority: 0.5,
+    }),
+  );
+
+  return [
+    ...staticRoutes,
+    ...categoryRoutes,
+    ...blogRoutes,
+    ...marketplaceRoutes,
+    ...productRoutes,
+  ];
 }
