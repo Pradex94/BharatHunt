@@ -52,8 +52,8 @@ export default async function Home() {
   return (
     <>
       <Hero topProduct={leader ?? null} stats={stats} />
-      <FeatureSection />
       <TopProducts products={rest} startRank={2} heading="Also climbing" />
+      <FeatureSection />
       <CommunitySection stats={stats} launchCounts={launchCounts} />
       <Newsletter />
     </>
