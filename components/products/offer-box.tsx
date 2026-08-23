@@ -6,6 +6,8 @@
 import { useEffect, useRef, useState } from "react";
 import { Check, Copy, Tag } from "lucide-react";
 
+import { formatDate } from "@/lib/format-date";
+
 export function OfferBox({
   code,
   description,
@@ -30,11 +32,14 @@ export function OfferBox({
   // Format the expiry deterministically from props (no `Date.now()` during
   // render — the repo's purity rule forbids it). Hiding a lapsed offer is done
   // upstream on the server page.
-  const expiryDate = expiresAt ? new Date(expiresAt) : null;
-  const expiryLabel =
-    expiryDate && !Number.isNaN(expiryDate.getTime())
-      ? expiryDate.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })
-      : null;
+  //
+  // Deterministic has to mean across *runtimes*, not just across renders. This
+  // is a client component, so it renders twice: once in a Vercel function on
+  // UTC/en-US and once in the visitor's browser on their own locale and zone.
+  // `toLocaleDateString(undefined, …)` asked each for its own default and got
+  // two different strings — a hydration mismatch, which makes React throw away
+  // the server-rendered tree and log error #418.
+  const expiryLabel = formatDate(expiresAt);
 
   async function copyCode() {
     if (!code) return;

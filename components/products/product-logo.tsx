@@ -1,3 +1,7 @@
+"use client";
+
+import { useState } from "react";
+
 import { cn } from "@/lib/utils";
 
 /**
@@ -17,6 +21,18 @@ import { cn } from "@/lib/utils";
  *
  * A real logo sits on white so it reads as the maker's own mark; only the
  * initial-letter fallback uses a tinted circle.
+ *
+ * 3. **The URL may simply be dead.** Most of these point at hosts we do not
+ *    control -- a maker's favicon, a scraped icon -- and those rot: the domain
+ *    lapses, the file moves, hotlinking gets blocked. Rendering the <img>
+ *    regardless left a broken-image glyph in the circle forever. `onError`
+ *    falls back to the same initial-letter mark used when there is no logo at
+ *    all, so a launch degrades instead of breaking.
+ *
+ *    This is the second line of defence, not the first: `resolveIcon` in
+ *    lib/actions/fetch-metadata.ts is what keeps unverified URLs from being
+ *    stored to begin with. This one catches the URLs that were fine at import
+ *    and died later, which no amount of import-time checking can prevent.
  */
 
 const SIZES = {
@@ -41,21 +57,39 @@ export function ProductLogo({
   className,
 }: ProductLogoProps) {
   const { box, pad, text } = SIZES[size];
+  const [failed, setFailed] = useState(false);
+  // Re-rendering with a different src must clear a previous failure, otherwise
+  // a recycled instance in a list would inherit the last product's verdict.
+  const [attempted, setAttempted] = useState(src);
+  if (attempted !== src) {
+    setAttempted(src);
+    setFailed(false);
+  }
+
+  // A single nullable value rather than a separate boolean, so TypeScript
+  // narrows it for the <img> below instead of needing a cast.
+  const logoSrc = failed ? null : (src ?? null);
 
   return (
     <span
       className={cn(
         "flex shrink-0 items-center justify-center overflow-hidden rounded-full font-semibold",
         box,
-        src
+        logoSrc
           ? "border border-border bg-white"
           : cn("bg-surface-cream-strong text-muted", text),
         className,
       )}
     >
-      {src ? (
+      {logoSrc ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={src} alt="" loading={loading} className={cn("size-full object-contain", pad)} />
+        <img
+          src={logoSrc}
+          alt=""
+          loading={loading}
+          onError={() => setFailed(true)}
+          className={cn("size-full object-contain", pad)}
+        />
       ) : (
         name.slice(0, 1).toUpperCase()
       )}
