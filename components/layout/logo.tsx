@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
 
 import { cn } from "@/lib/utils";
 
@@ -15,9 +14,15 @@ function BrandMark() {
 }
 
 /**
- * Bharat Hunt lockup. Shows the built-in "B" mark by default and upgrades to the
- * custom icon at `public/brand-icon.png` automatically once that file exists —
- * so a missing file never renders a broken image.
+ * Bharat Hunt lockup.
+ *
+ * This used to probe for an optional `public/brand-icon.png` on mount and
+ * upgrade to it if the request succeeded. That file is not in the repo and is
+ * not coming back -- `app/icon.tsx` replaced it -- so the probe never upgraded
+ * anything and simply spent a guaranteed 404 on every page load, on every
+ * route, for every visitor. There is no way to ask a browser "does this file
+ * exist?" without making a request that fails when it does not, so the feature
+ * and its console error had to go together.
  */
 export function Logo({
   href = "/",
@@ -28,14 +33,6 @@ export function Logo({
   className?: string;
   tone?: "light" | "dark";
 }) {
-  const [iconSrc, setIconSrc] = useState<string | null>(null);
-
-  useEffect(() => {
-    const img = new window.Image();
-    img.onload = () => setIconSrc("/brand-icon.png");
-    img.src = "/brand-icon.png";
-  }, []);
-
   return (
     <Link
       href={href}
@@ -45,12 +42,7 @@ export function Logo({
         className,
       )}
     >
-      {iconSrc ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={iconSrc} alt="" className="size-8 shrink-0 rounded-lg object-contain" />
-      ) : (
-        <BrandMark />
-      )}
+      <BrandMark />
       <span className="font-display text-xl font-bold tracking-tight">
         भारत <span className="text-primary">Hunt</span>
       </span>

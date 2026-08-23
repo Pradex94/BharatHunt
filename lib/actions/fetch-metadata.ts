@@ -17,6 +17,7 @@ import net from "node:net";
 import { auth } from "@clerk/nextjs/server";
 import { checkRateLimitByIpAndUser } from "@/lib/rate-limit";
 
+import { MAX_GALLERY_IMAGES } from "@/lib/constants";
 import { imageSizeFromBytes, squareLogoSize } from "@/lib/image-size";
 import {
   bySizeDesc,
@@ -97,6 +98,12 @@ const GOOD_ICON_PX = 180;
 /** What we ask Google's favicon service for; it serves the best it holds up to this. */
 const GOOGLE_ICON_PX = 256;
 const ICON_PROBE_TIMEOUT_MS = 4000;
+/**
+ * How many scraped screenshots we'll HTTP-check. The form accepts
+ * MAX_GALLERY_IMAGES, and a page rarely declares more than two or three usable
+ * ones, so this is a ceiling on a pathological page rather than a real limit.
+ */
+const MAX_IMAGE_PROBES = MAX_GALLERY_IMAGES;
 const IMAGE_EXTENSION = /\.(png|svg|webp|jpe?g|ico|avif|gif)(\?|#|$)/i;
 
 export async function fetchUrlMetadata(rawUrl: string): Promise<FetchMetadataResult> {
@@ -126,15 +133,30 @@ export async function fetchUrlMetadata(rawUrl: string): Promise<FetchMetadataRes
       return minimalImport(normalized, "We couldn't read any details from that page.");
     }
 
-    // The declared favicon is often missing, a dead link, or a bare .ico. Walk
-    // the candidates (manifest icons included) and keep the *largest* that
-    // really serves an image, so makers get a sharp logo rather than whichever
-    // one the page happened to list first.
-    const icon = await resolveIcon(iconCandidates, manifestUrl, finalUrl);
+    /*
+     * The declared favicon is often missing, a dead link, or a bare .ico. Walk
+     * the candidates (manifest icons included) and keep the *largest* that
+     * really serves an image, so makers get a sharp logo rather than whichever
+     * one the page happened to list first.
+     *
+     * Scraped screenshots get the same scepticism, which they previously did
+     * not: og:image and friends were trusted on sight and written straight to
+     * `screenshot_urls`, so a stale tag pointing at a moved or deleted file
+     * became a broken frame on the product page and a failed request in every
+     * visitor's console. A URL is only offered to the maker if it actually
+     * served an image just now.
+     *
+     * Both run together — the icon walk is already several sequential probes,
+     * and there is no reason for the maker to wait for the images afterwards.
+     */
+    const [icon, loadableImages] = await Promise.all([
+      resolveIcon(iconCandidates, manifestUrl, finalUrl),
+      keepLoadableImages(data.images),
+    ]);
     data.icon = icon.url;
     data.iconPixels = icon.pixels;
     // Don't let the icon double as a "screenshot" if we fell back to og:image.
-    data.images = data.images.filter((image) => image !== data.icon);
+    data.images = loadableImages.filter((image) => image !== data.icon);
 
     return { ok: true, data };
   } catch (error) {
@@ -362,6 +384,29 @@ async function probeIconSize(url: string): Promise<number | null> {
   }
 }
 
+/**
+ * The subset of `urls` that really serve an image right now, in their original
+ * order.
+ *
+ * `probeIconSize` is the liveness check, reused rather than reimplemented: it
+ * already refuses non-http(s) schemes, blocks private hosts (this action makes
+ * *our* server issue the request, so that guard is load-bearing), applies a
+ * timeout, and rejects anything whose response is not OK or is not an image.
+ * Only its measurement is surplus here, and that costs nothing beyond the
+ * header bytes it was already reading.
+ *
+ * Probed together rather than in sequence: these are independent URLs, and a
+ * page with four dead ones would otherwise serialise four full timeouts onto a
+ * maker who is watching a spinner.
+ */
+async function keepLoadableImages(urls: string[]): Promise<string[]> {
+  const candidates = urls.slice(0, MAX_IMAGE_PROBES);
+  if (candidates.length === 0) return [];
+
+  const verdicts = await Promise.all(candidates.map((url) => probeIconSize(url)));
+  return candidates.filter((_, index) => verdicts[index] !== null);
+}
+
 /** The first `maxBytes` of a response body. */
 async function readImageHeader(res: Response, maxBytes: number): Promise<Uint8Array> {
   const reader = res.body?.getReader();
@@ -427,12 +472,19 @@ async function resolveIcon(
   // Nothing the page declares is sharp enough for an avatar. Google's favicon
   // service often holds larger artwork for a domain than the site links to, so
   // it is worth measuring rather than assuming it is better or worse.
+  //
+  // `null` from the probe means the URL did not serve a usable image -- Google
+  // has nothing for this domain, or the request failed. That result used to be
+  // discarded when we had no other candidate: the URL was handed back anyway,
+  // stored on the product, and turned into a broken <img> and a 404 in every
+  // visitor's console. A probe is only worth running if its answer is honoured,
+  // so a failed one now yields no icon at all and ProductLogo draws the
+  // maker's initial instead.
   const host = safeHostname(baseUrl);
   if (host) {
     const fallback = `https://www.google.com/s2/favicons?sz=${GOOGLE_ICON_PX}&domain=${encodeURIComponent(host)}`;
     const size = await probeIconSize(fallback);
     if (size !== null && (!best || size > best.size)) return { url: fallback, pixels: size };
-    if (!best) return { url: fallback, pixels: null };
   }
 
   // `0` is the "live but unmeasurable" marker from probeIconSize; report it as

@@ -24,11 +24,28 @@ const THUMB_SIZES = "114px";
 
 export function ProductGallery({ images }: { images: string[] }) {
   const [active, setActive] = useState(0);
+  /*
+   * Screenshots imported from a maker's own site are third-party URLs we do not
+   * serve, so any of them can die after the launch — a lapsed domain, a moved
+   * file, hotlink protection switched on. Each one used to leave a broken-image
+   * glyph filling the 16:9 frame, and a broken thumbnail under it.
+   *
+   * A failed image is dropped from the gallery entirely rather than replaced
+   * with a placeholder: an empty slot in a strip of screenshots reads as "there
+   * was supposed to be something here", while simply having four shots instead
+   * of five reads as a normal gallery. When every image fails the component
+   * renders nothing, exactly as it does for a product with no images at all.
+   */
+  const [failed, setFailed] = useState<ReadonlySet<string>>(() => new Set());
 
-  if (images.length === 0) return null;
+  const markFailed = (url: string) =>
+    setFailed((prev) => (prev.has(url) ? prev : new Set(prev).add(url)));
 
-  const activeIndex = Math.min(active, images.length - 1);
-  const current = images[activeIndex];
+  const usable = images.filter((url) => !failed.has(url));
+  if (usable.length === 0) return null;
+
+  const activeIndex = Math.min(active, usable.length - 1);
+  const current = usable[activeIndex];
 
   return (
     <div className="flex flex-col gap-3">
@@ -40,12 +57,13 @@ export function ProductGallery({ images }: { images: string[] }) {
         sizes={MAIN_SIZES}
         alt=""
         decoding="async"
+        onError={() => markFailed(current)}
         className="aspect-video w-full rounded-xl border border-border bg-secondary-bg object-cover"
       />
 
-      {images.length > 1 && (
+      {usable.length > 1 && (
         <div className="flex gap-2 overflow-x-auto pb-1">
-          {images.map((url, index) => (
+          {usable.map((url, index) => (
             <button
               key={url}
               type="button"
@@ -67,6 +85,7 @@ export function ProductGallery({ images }: { images: string[] }) {
                 alt=""
                 loading="lazy"
                 decoding="async"
+                onError={() => markFailed(url)}
                 className="size-full object-cover"
               />
             </button>
