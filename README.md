@@ -26,7 +26,11 @@ npm install
 
 ### 2. Configure environment variables
 
-Create `.env.local` in the project root:
+Copy `.env.example` to `.env.local` and fill it in:
+
+```bash
+cp .env.example .env.local
+```
 
 ```bash
 # Supabase
@@ -52,10 +56,9 @@ TURNSTILE_SECRET_KEY=<your-turnstile-secret-key>
 NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME=<your-cloud-name>
 NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET=<your-UNSIGNED-upload-preset>
 
-# Analytics — optional. Neither is a secret; both ship in the page source.
-NEXT_PUBLIC_GA_ID=G-XXXXXXXXXX          # GA4 measurement ID; unset = GA4 off
-NEXT_PUBLIC_GTM_ID=GTM-XXXXXXX          # overrides the default container
-NEXT_PUBLIC_GTM_DEBUG=true              # mount the tags in dev too (see below)
+# Google Analytics — optional. Not a secret; it ships in the page source.
+NEXT_PUBLIC_GA_ID=G-XXXXXXXXXX          # GA4 measurement ID; empty = GA4 off
+NEXT_PUBLIC_GA_DEBUG=true               # mount the tag in dev too (see below)
 ```
 
 Turnstile is **required and fail-closed**: `submitAdInquiry` rejects every submission when `TURNSTILE_SECRET_KEY` is unset, so without both keys the /advertise form is not merely unprotected — it cannot accept a lead at all. When the site key is missing the form replaces itself with an email fallback rather than rendering a button that can never succeed. Create a widget at [Cloudflare Turnstile](https://dash.cloudflare.com/?to=/:account/turnstile) and add your domain (plus `localhost` for dev).
@@ -89,29 +92,67 @@ still paste image URLs.
 
 `EMAIL_FALLBACK_FROM` covers the gap while a new sender is still pending verification: if `EMAIL_FROM` comes back unverified, the send is retried once from the fallback and a warning is logged. Once the intended address is verified the fallback stops being used, and you can drop the variable.
 
-### Analytics
+### How to configure Google Analytics
 
-Google Tag Manager and GA4 both load from a single bootstrap script in
-`components/analytics/google-tag-manager.tsx`, under **Consent Mode v2**: the
-tags always load, but `ad_storage`, `ad_user_data`, `ad_personalization` and
-`analytics_storage` default to *denied* and only flip to granted when a visitor
-accepts the cookie banner. Until then GA4 sends cookieless pings and stores
-nothing on the device — which is what `/cookies` promises in writing, so keep
-that page in step with any change here.
+GA4 is the only analytics tag on the site — loaded directly as `gtag.js`, with no
+Tag Manager container in between.
 
-Both tags are **off outside production** unless `NEXT_PUBLIC_GTM_DEBUG=true`, so
-local browsing does not land in the reports.
+**1. Set the measurement ID.** It comes from GA4 Admin → Data streams → your web
+stream → Measurement ID (`G-XXXXXXXXXX`). It is not a secret — every GA site
+ships its ID in the page source.
 
-Two things are worth knowing before touching the setup:
+| Where | What to do |
+| --- | --- |
+| Local | `NEXT_PUBLIC_GA_ID=G-XXXXXXXXXX` in `.env.local` |
+| Vercel | Settings → Environment Variables → add `NEXT_PUBLIC_GA_ID` for Production (and Preview if you want preview traffic measured), then redeploy |
+| Fallback | `lib/constants.ts` carries the project's own ID as the default, so a checkout with no env var still reports correctly |
 
-- **GA4 is configured in code, not in the GTM container.** Do not also add a GA4
-  tag in the GTM UI — the two would each count every page view. `NEXT_PUBLIC_GA_ID`
-  is the single switch.
-- **Turn off Enhanced measurement's "Page changes based on browser history
-  events"** (GA4 Admin → Data streams → your stream → Enhanced measurement). The
-  App Router navigates via `history.pushState`, and `components/analytics/ga-page-views.tsx`
-  already sends a `page_view` for every route. Leaving the GA4 setting on double-counts
-  every navigation.
+Because `NEXT_PUBLIC_*` values are inlined at build time, changing the variable
+in Vercel needs a **redeploy** to take effect — restarting is not enough.
+
+Setting `NEXT_PUBLIC_GA_ID` to an *empty* value switches GA4 off entirely: no
+script, no requests, nothing to break.
+
+**2. Turn off Enhanced measurement's "Page changes based on browser history
+events"** (GA4 Admin → Data streams → your stream → Enhanced measurement). The
+App Router navigates via `history.pushState`, and
+`components/analytics/ga-page-views.tsx` already sends a `page_view` for every
+route. Leaving the GA4 setting on double-counts every navigation.
+
+**3. Verify.** `npm run build && npm start`, open `/`, click through to
+`/marketplace` and a product page, and watch GA4 → Reports → Realtime. Three
+page views with three different paths means the SPA tracking works. In dev, set
+`NEXT_PUBLIC_GA_DEBUG=true` first.
+
+#### How it works
+
+- **Consent Mode v2.** The tag always loads, but `ad_storage`, `ad_user_data`,
+  `ad_personalization` and `analytics_storage` default to *denied* and only flip
+  to granted when a visitor accepts the cookie banner. Until then GA4 sends
+  cookieless pings and stores nothing on the device — which is what `/cookies`
+  and `/privacy` promise in writing, so keep those pages in step with any change
+  here.
+- **Off outside production** unless `NEXT_PUBLIC_GA_DEBUG=true`, so local
+  browsing does not land in the reports.
+- **Admin and API paths are never tracked.** `UNTRACKED_PATH_PREFIXES` in
+  `lib/analytics.ts` drops `/admin` and `/api`; add `/dashboard` there if
+  signed-in maker pages should stay out too.
+- **Helpers live in `lib/analytics.ts`** — `initAnalytics()`,
+  `trackPageView(path)`, `trackEvent(name, params)` and `updateConsentSignals()`.
+  They no-op during SSR, when GA is off, and when the loader was blocked, so a
+  call site never needs a guard:
+
+  ```ts
+  "use client";
+  import { trackEvent } from "@/lib/analytics";
+
+  trackEvent("upvote", { product_slug: slug });
+  ```
+
+- **One script, one place.** The bootstrap is rendered by
+  `components/analytics/google-analytics.tsx` inside the explicit `<head>` in
+  `app/layout.tsx`. That placement is load-bearing and the file explains why —
+  read the comment before moving it.
 
 Clerk is wired to Supabase as a [third-party auth provider](https://clerk.com/docs/integrations/databases/supabase): the browser/server Supabase clients attach the Clerk session token, and RLS policies authorize against the JWT's `sub` claim (see `supabase/migrations/`).
 

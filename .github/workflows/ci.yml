@@ -52,6 +52,9 @@ jobs:
           CLERK_SECRET_KEY: sk_test_ci-build-placeholder
           NEXT_PUBLIC_SUPABASE_URL: https://ci-placeholder.supabase.co
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-build-placeholder
+          # Empty switches GA4 off, so a CI artifact never carries a live tag.
+          # Production gets the real ID from Vercel's environment variables.
+          NEXT_PUBLIC_GA_ID: ""
 
   search-parity:
     name: Search normalisers agree with Postgres

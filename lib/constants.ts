@@ -50,49 +50,33 @@ export const SITE_URL = (
 export const SITE_NAME = "Bharat Hunt";
 
 /**
- * Google Tag Manager container. Not a secret — it ships in the page source of
- * every site that uses one — so it lives here rather than in an env var, and
- * `NEXT_PUBLIC_GTM_ID` overrides it when a preview needs its own container.
- * Empty string disables the tag entirely (see `components/analytics/`).
- */
-export const GTM_ID = process.env.NEXT_PUBLIC_GTM_ID ?? "GTM-548ZQGWC";
-
-/**
  * GA4 measurement ID (`G-XXXXXXXXXX`), from GA4 Admin > Data streams > your web
- * stream. Like the container ID it is not a secret, but unlike it there is no
- * sensible default to hardcode — an ID belongs to one property, and shipping
- * someone else's would silently send this site's traffic to their reports. So
- * it comes from `NEXT_PUBLIC_GA_ID` and GA4 stays off until that is set.
+ * stream.
  *
- * GA4 is loaded here in code rather than as a tag inside the GTM container.
- * Both work; this way the measurement setup is version-controlled, reviewable,
- * and gated by the same consent bootstrap as everything else, instead of
- * living as UI state in an account only one person can see. The trade-off is
- * that a GA4 tag must NOT also be added in the GTM UI, or every page view is
- * counted twice.
+ * Not a secret — it ships in the page source of every site that uses GA — so
+ * the project's own ID is the default here and `NEXT_PUBLIC_GA_ID` overrides it
+ * when a preview or a fork needs its own property. Setting it to an empty
+ * string switches GA4 off entirely (see `lib/analytics.ts`).
+ *
+ * GA4 is loaded in code rather than through a Tag Manager container: the
+ * measurement setup is then version-controlled, reviewable, and gated by the
+ * same consent bootstrap as everything else, instead of living as UI state in
+ * an account only one person can see.
  */
-export const GA_ID = process.env.NEXT_PUBLIC_GA_ID ?? "";
+export const GA_ID = process.env.NEXT_PUBLIC_GA_ID ?? "G-F29MYSGJD4";
 
 /**
- * Whether to actually mount the Google tags.
+ * Whether to actually mount GA4.
  *
  * Off outside production by default, because `npm run dev` otherwise reports
  * every local page view as real traffic and quietly poisons the numbers you
- * are trying to read. Set `NEXT_PUBLIC_GTM_DEBUG=true` in `.env.local` when you
+ * are trying to read. Set `NEXT_PUBLIC_GA_DEBUG=true` in `.env.local` when you
  * need Tag Assistant or the GA4 DebugView to see a local page.
  */
-const ANALYTICS_ENABLED =
-  process.env.NODE_ENV === "production" || process.env.NEXT_PUBLIC_GTM_DEBUG === "true";
-
-export const GTM_ENABLED = ANALYTICS_ENABLED && Boolean(GTM_ID);
-
-export const GA_ENABLED = ANALYTICS_ENABLED && Boolean(GA_ID);
-
-/**
- * Whether anything needs the shared bootstrap script (consent defaults + the
- * loaders). Either tag alone is reason enough to emit it.
- */
-export const GOOGLE_TAGS_ENABLED = GTM_ENABLED || GA_ENABLED;
+export const GA_ENABLED =
+  (process.env.NODE_ENV === "production" ||
+    process.env.NEXT_PUBLIC_GA_DEBUG === "true") &&
+  Boolean(GA_ID);
 
 /**
  * Where advertising inquiries go. Single source of truth for the /advertise

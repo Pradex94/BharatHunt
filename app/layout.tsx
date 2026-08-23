@@ -7,10 +7,7 @@ import { Footer } from "@/components/layout/footer";
 import { CookieConsent } from "@/components/layout/cookie-consent";
 import { ChatWidget } from "@/components/chat/chat-widget";
 import { JsonLd } from "@/components/seo/json-ld";
-import {
-  GoogleTagManager,
-  GoogleTagManagerNoScript,
-} from "@/components/analytics/google-tag-manager";
+import { GoogleAnalytics } from "@/components/analytics/google-analytics";
 import { ConsentSync } from "@/components/analytics/consent-sync";
 import { GaPageViews } from "@/components/analytics/ga-page-views";
 import { organizationSchema, websiteSchema } from "@/lib/seo";
@@ -82,12 +79,12 @@ export default function RootLayout({
   return (
     <ClerkProvider>
       <html lang="en" className={`${fontVariables} antialiased`}>
+        {/* The explicit <head> is required: an inline script placed anywhere
+            else ends up inside <body>. See google-analytics.tsx. */}
         <head>
-          <GoogleTagManager />
+          <GoogleAnalytics />
         </head>
         <body className="flex min-h-dvh flex-col">
-          {/* GTM's noscript iframe belongs immediately after <body>. */}
-          <GoogleTagManagerNoScript />
           <ConsentSync />
           <GaPageViews />
           <JsonLd data={[organizationSchema(), websiteSchema()]} />

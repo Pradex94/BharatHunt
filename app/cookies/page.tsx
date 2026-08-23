@@ -1,8 +1,8 @@
 /* Cookie Policy — static content page. The banner (CookieConsent) links here,
  * and the footer's "Cookies" link points here too. Honest about what we set:
- * essential auth + the consent cookie, plus Google Tag Manager, which loads
+ * essential auth + the consent cookie, plus Google Analytics, which loads
  * under Consent Mode and stores nothing until someone accepts. Keep this page
- * in step with components/analytics/google-tag-manager.tsx. */
+ * in step with components/analytics/google-analytics.tsx. */
 
 import type { Metadata } from "next";
 
@@ -31,16 +31,9 @@ const COOKIE_ROWS = [
     retention: "Session",
   },
   {
-    name: "Google Tag Manager",
-    purpose:
-      "Loads our measurement setup. Stores nothing on your device unless you accept.",
-    type: "Optional",
-    retention: "Until you accept",
-  },
-  {
     name: "Google Analytics (_ga, _gid)",
     purpose:
-      "Counts visits and shows which pages are used, so we know what to improve.",
+      "Counts visits and shows which pages are used, so we know what to improve. Stores nothing on your device unless you accept.",
     type: "Optional",
     retention: "Up to 2 years",
   },
@@ -78,7 +71,7 @@ export default function CookiesPage() {
           </p>
           <p className="leading-relaxed text-body">
             We also use{" "}
-            <strong className="font-semibold text-ink">Google Tag Manager</strong>{" "}
+            <strong className="font-semibold text-ink">Google Analytics</strong>{" "}
             to understand how the platform is used. It runs in Google&apos;s
             Consent Mode: until you press Accept, it is told to store nothing on
             your device and set no analytics or advertising cookies. Press
