@@ -4,7 +4,7 @@
  * Sends a GA4 `page_view` for every route the visitor lands on.
  *
  * The App Router navigates with `history.pushState`, so the bootstrap script in
- * `google-tag-manager.tsx` runs exactly once per full page load and GA4 would
+ * `google-analytics.tsx` runs exactly once per full page load and GA4 would
  * otherwise record only the entry page — every subsequent click would be
  * invisible. That is why the config there sets `send_page_view: false`: page
  * views are sent from here instead, including the very first one, so there is a
@@ -12,9 +12,12 @@
  *
  * Search params are part of the identity of a page here, not noise: the
  * marketplace keeps category, sort, pricing, query and page in the URL
- * (`hooks/use-update-search-params.ts`), so `/products?category=ai` and
- * `/products?category=devtools` are genuinely different views and reporting
+ * (`hooks/use-update-search-params.ts`), so `/marketplace?category=ai` and
+ * `/marketplace?category=devtools` are genuinely different views and reporting
  * needs to tell them apart.
+ *
+ * Admin and API paths never reach GA — `trackPageView` drops them
+ * (`UNTRACKED_PATH_PREFIXES` in `lib/analytics.ts`).
  *
  * No consent check. That is Consent Mode's job — with `analytics_storage`
  * denied, GA4 still receives these as cookieless pings and stores nothing on
@@ -25,7 +28,8 @@
 import { Suspense, useEffect } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 
-import { GA_ENABLED, GA_ID } from "@/lib/constants";
+import { GA_ENABLED } from "@/lib/constants";
+import { trackPageView } from "@/lib/analytics";
 
 function GaPageViewsInner() {
   const pathname = usePathname();
@@ -36,19 +40,7 @@ function GaPageViewsInner() {
   const query = searchParams.toString();
 
   useEffect(() => {
-    // `gtag` is defined by the bootstrap script. If that was blocked (ad
-    // blocker, extension), there is nothing listening -- skip rather than
-    // throw.
-    if (!window.gtag) return;
-
-    const path = query ? `${pathname}?${query}` : pathname;
-
-    window.gtag("event", "page_view", {
-      page_path: path,
-      page_location: `${window.location.origin}${path}`,
-      page_title: document.title,
-      send_to: GA_ID,
-    });
+    trackPageView(query ? `${pathname}?${query}` : pathname);
   }, [pathname, query]);
 
   return null;

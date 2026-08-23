@@ -41,7 +41,7 @@ const DATA_ROWS = [
   },
   {
     what: "Analytics cookies (optional)",
-    detail: "Google Analytics, loaded through Google Tag Manager, only if you accept.",
+    detail: "Google Analytics, only if you accept.",
     why: "To see which pages get used so we know what to improve.",
   },
 ];
@@ -54,7 +54,7 @@ const PROCESSORS = [
   { name: "Our email relay", role: "Delivers advertising inquiry emails." },
   {
     name: "Google",
-    role: "Tag Manager and Analytics — usage measurement, only after you accept.",
+    role: "Analytics — usage measurement, only after you accept.",
   },
 ];
 
@@ -130,7 +130,7 @@ export default function PrivacyPage() {
           <H2 className="text-2xl sm:text-3xl">Cookies</H2>
           <p className="leading-relaxed text-body">
             We use two essential cookies — one to keep you signed in, one to remember your cookie
-            choice — plus Google Analytics, loaded through Google Tag Manager. The analytics side
+            choice — plus Google Analytics. The analytics side
             runs in Consent Mode: it stores nothing on your device until you press Accept, and
             nothing at all if you Decline. The{" "}
             <Link

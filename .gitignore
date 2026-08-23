@@ -56,3 +56,6 @@ skills-lock.json
 # local test server output
 server.log
 server.err.log
+
+# ...except the committed template of it.
+!.env.example
