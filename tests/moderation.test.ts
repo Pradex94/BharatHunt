@@ -1,7 +1,7 @@
 /**
  * The launch gate's spam-formatting rules.
  *
- * These exist because the gate had none, and two rules were rejecting ordinary
+ * These exist because the gate had none, and three rules were rejecting ordinary
  * submissions:
  *
  *   - `CONTACT_BAIT` listed the bare words "whatsapp" and "telegram", so
@@ -9,6 +9,9 @@
  *     an Indian marketplace — could not be launched at all.
  *   - `PHONE` was `(?:\+?\d[\s-]?){9,}`, i.e. any run of nine or more digits,
  *     so "Covering 2023 2024 2025 2026" read as a phone number.
+ *   - the ALL CAPS rule was a letter ratio, so any uppercase brand name of
+ *     eight letters or more — FLIPKART, KHATABOOK, "GST INVOICE PRO" — was
+ *     rejected as shouting with no wording that could get it through.
  *
  * A moderation rule that blocks real makers is worse than one that lets some
  * spam through: the spam gets removed later, the maker leaves immediately. So
@@ -125,13 +128,45 @@ describe("real phone numbers are still blocked", () => {
   }
 });
 
+describe("capital letters are a brand choice, not a shout", () => {
+  const legitimate: [string, string][] = [
+    ["KHATABOOK", "Track customer credit for your shop"],
+    ["OYO ROOMS", "Book budget hotel stays across India"],
+    ["GST INVOICE PRO", "Send compliant invoices in one click"],
+    ["AI RESUME BUILDER", "Turn your work history into a hireable CV"],
+    ["FilingBox", "GST ITR and TDS filing for CAs and SMBs"],
+    ["Sendly", "AI powered CRM for D2C brands in INDIA"],
+    ["NeoDesk", "SaaS HRMS and ERP in a single dashboard"],
+  ];
+
+  for (const [name, tagline] of legitimate) {
+    it(`allows "${name} — ${tagline}"`, () => {
+      assert.equal(
+        spamFormatting(name, tagline),
+        false,
+        "an uppercase brand name or acronym is not shouting",
+      );
+    });
+  }
+});
+
+describe("an actual shout is still blocked", () => {
+  const shouts: [string, string][] = [
+    ["Deals Hub", "BEST PRODUCT EVER LAUNCHED"],
+    ["Deals Hub", "LIMITED TIME OFFER GRAB IT NOW"],
+    ["BUY CHEAP LEADS TODAY", "Find verified buyers for your business"],
+  ];
+
+  for (const [name, tagline] of shouts) {
+    it(`blocks "${name} — ${tagline}"`, () => {
+      assert.equal(spamFormatting(name, tagline), true);
+    });
+  }
+});
+
 describe("the rest of the spam rules still hold", () => {
   it("blocks an email address in the headline", () => {
     assert.equal(spamFormatting("Deals Hub", "Write to sales@example.com for a quote"), true);
-  });
-
-  it("blocks ALL CAPS", () => {
-    assert.equal(spamFormatting("DEALS HUB", "BEST PRODUCT EVER LAUNCHED"), true);
   });
 
   it("passes an ordinary submission untouched", () => {

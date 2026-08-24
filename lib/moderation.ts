@@ -537,11 +537,30 @@ function looksLikeGibberish(text: string): boolean {
     .some((word) => word.length >= 6 && /^[a-z]+$/.test(word) && !/[aeiouy]/.test(word));
 }
 
+/*
+ * Shouting is a sentence yelled in caps — not a capitalised brand.
+ *
+ * The previous test was a letter ratio: eight or more letters, more than 80%
+ * of them uppercase. That reads capitalisation *style* as intent, and product
+ * names are routinely stylised in caps — FLIPKART, ZERODHA, OYO ROOMS, MYGST —
+ * so a maker whose logo is uppercase could not launch at all, and no amount of
+ * rephrasing would let them through. Acronym-heavy copy sat close to the same
+ * edge ("GST ITR TDS filing for CAs" is 60% uppercase before the tagline even
+ * says anything).
+ *
+ * So count words, not letters. A shout is several *ordinary* words — four
+ * letters or more, which leaves acronyms out of the tally — set in caps inside
+ * a phrase long enough to be a sentence. A one-, two- or three-word name is a
+ * brand and is never a shout, whatever its case.
+ */
 function isShouting(text: string): boolean {
-  const letters = text.replace(/[^a-zA-Z]/g, "");
-  if (letters.length < 8) return false;
-  const upper = letters.replace(/[^A-Z]/g, "").length;
-  return upper / letters.length > 0.8;
+  const words = text
+    .split(/\s+/)
+    .map((word) => word.replace(/[^a-zA-Z]/g, ""))
+    .filter((word) => word.length > 0);
+  if (words.length < 4) return false;
+  const shouted = words.filter((word) => word.length >= 4 && word === word.toUpperCase());
+  return shouted.length >= 3 && shouted.length / words.length > 0.6;
 }
 
 /*
@@ -737,8 +756,11 @@ export function moderateProduct(input: ModeratedProductInput): ModerationResult 
 
   // 7. Spam formatting / contact bait.
   const headline = `${name} ${tagline}`;
-  if (isShouting(name) || isShouting(tagline)) {
-    return reject("spam_formatting", "Please don't use ALL CAPS in your product name or tagline.");
+  if (isShouting(name)) {
+    return reject("spam_formatting", "Please don't write your product name in ALL CAPS.");
+  }
+  if (isShouting(tagline)) {
+    return reject("spam_formatting", "Please don't write your tagline in ALL CAPS.");
   }
   if (countEmoji(name) > 1 || countEmoji(tagline) > 3) {
     return reject("spam_formatting", "Go easy on the emoji in your product name and tagline.");
