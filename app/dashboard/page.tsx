@@ -6,12 +6,13 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@clerk/nextjs/server";
-import { ArrowUpRight, Eye, MessageSquare, Package, Plus, TrendingUp } from "lucide-react";
+import { ArrowUpRight, Clock, Eye, MessageSquare, Package, Plus, TrendingUp } from "lucide-react";
 
 import { Container } from "@/components/ui/container";
 import { Numeric } from "@/components/ui/typography";
 import { buttonVariants } from "@/components/ui/button";
 import { DeleteProductButton } from "@/components/products/delete-product-button";
+import { SubmitForReviewButton } from "@/components/products/submit-for-review-button";
 import { ProductLogo } from "@/components/products/product-logo";
 import { getProductsByCreator, type MakerProduct } from "@/services/products";
 import { getIsAdmin } from "@/lib/admin";
@@ -29,8 +30,18 @@ export const dynamic = "force-dynamic";
 
 const STATUS_BADGE: Record<string, string> = {
   published: "bg-success/10 text-success",
+  pending: "bg-primary/10 text-primary",
   draft: "bg-secondary-bg text-muted",
   archived: "bg-amber-100 text-amber-700",
+};
+
+/*
+ * The database's words are not the maker's words. "pending" reads like
+ * something went wrong; "in review" says who has it and that it is moving.
+ */
+const STATUS_LABEL: Record<string, string> = {
+  pending: "in review",
+  draft: "draft — not submitted",
 };
 
 function formatDate(value: string | null): string {
@@ -40,7 +51,12 @@ function formatDate(value: string | null): string {
   return date.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
 }
 
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ submitted?: string }>;
+}) {
+  const { submitted } = await searchParams;
   const { userId } = await auth();
   if (!userId) {
     redirect("/login");
@@ -97,6 +113,20 @@ export default async function DashboardPage() {
               </Link>
             )}
           </div>
+
+          {/* Straight off the submit form — the launch is stored, not live. */}
+          {submitted && (
+            <div className="flex items-start gap-3 rounded-xl border border-primary/30 bg-primary/5 px-4 py-3.5">
+              <Clock className="mt-0.5 size-4 shrink-0 text-primary" aria-hidden="true" />
+              <div>
+                <p className="text-sm font-semibold text-ink">Submitted for review</p>
+                <p className="mt-0.5 text-sm text-body">
+                  A human reads every launch before it goes live. We&apos;ll email you the moment
+                  it&apos;s published — usually within a day.
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* Totals across every launch */}
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -179,7 +209,7 @@ function ProductRow({ product }: { product: MakerProduct }) {
                 STATUS_BADGE[product.status] ?? "bg-secondary-bg text-muted",
               )}
             >
-              {product.status}
+              {STATUS_LABEL[product.status] ?? product.status}
             </span>
           )}
         </div>
@@ -209,12 +239,16 @@ function ProductRow({ product }: { product: MakerProduct }) {
 
       {/* Actions */}
       <div className="flex shrink-0 items-center gap-3 border-t border-border pt-3 sm:border-t-0 sm:pt-0 sm:pl-2">
-        <Link
-          href={`/products/${product.slug}`}
-          className="flex items-center gap-1 text-sm text-body transition-colors hover:text-primary"
-        >
-          View <ArrowUpRight size={14} />
-        </Link>
+        {/* Only a published product has a public page; the others would 404. */}
+        {product.status === "published" && (
+          <Link
+            href={`/products/${product.slug}`}
+            className="flex items-center gap-1 text-sm text-body transition-colors hover:text-primary"
+          >
+            View <ArrowUpRight size={14} />
+          </Link>
+        )}
+        {product.status === "draft" && <SubmitForReviewButton productId={product.id} />}
         <Link
           href={`/products/${product.slug}/edit`}
           className="text-sm text-primary transition-colors hover:underline"

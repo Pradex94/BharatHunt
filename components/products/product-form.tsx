@@ -1477,12 +1477,13 @@ export function ProductForm({ product, detectedState = null }: ProductFormProps)
                       ? "Uploading image…"
                       : product
                         ? "Saving…"
-                        : "Publishing…"}
+                        : "Submitting…"}
                   </>
                 ) : product ? (
                   "Save changes"
                 ) : (
-                  "Publish product"
+                  // Not "Publish": the maker submits, a reviewer publishes.
+                  "Submit for review"
                 )}
               </Button>
             )}

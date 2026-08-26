@@ -16,8 +16,7 @@ import { MAX_GALLERY_IMAGES, MAX_PRODUCTS_PER_USER, PRODUCT_PLATFORMS } from "@/
 import { hostnameOf, moderateProduct } from "@/lib/moderation";
 import { isIndiaStateCode } from "@/lib/india-states";
 import { detectStateCode } from "@/lib/request-geo";
-import { sendEmail } from "@/lib/email";
-import { buildProductLaunchEmail } from "@/lib/emails/product-launch";
+import { notifyReviewers, sendSubmissionAck, type ReviewSubject } from "@/lib/review";
 
 export type ProductFormState = { error?: string } | undefined;
 
@@ -288,50 +287,31 @@ async function findDuplicateLaunch(
 type ClerkUser = Awaited<ReturnType<typeof currentUser>>;
 
 /**
- * Emails the maker their launch receipt.
+ * The two mails a submission sends: the queue prompt to the admins, and the
+ * acknowledgement to the maker.
  *
- * The address comes from Clerk — `profiles` doesn't store one — so the caller
- * passes the user record it already fetched. It used to call `currentUser()`
- * itself, which is an uncached HTTP call to Clerk's Backend API, and the same
- * launch had already made one for the admin check: two serial round trips for
- * one user record.
+ * The maker's address comes from Clerk — `profiles` doesn't store one — so the
+ * caller passes the user record it already fetched for the admin check, rather
+ * than paying for a second uncached round trip to Clerk's Backend API.
  *
- * The send is awaited rather than handed to `after`. `after` kept it off the
+ * Both are awaited rather than handed to `after`. `after` kept sends off the
  * critical path in theory; in practice the callback never ran in production and
- * the receipt was lost silently — no email, and no log line saying why, since a
+ * the mail was lost silently — no email, and no log line saying why, since a
  * callback that does not run cannot report its own absence.
  *
- * Awaiting adds the provider round trip (a few hundred milliseconds, capped by
- * the 15s timeout in lib/email.ts) before the redirect; the caller overlaps it
- * with cache invalidation so it is not simply added on top. Failures are
- * logged, never thrown — the product is already published, and losing the
- * receipt must not look like a failed launch. Matches the fail-open contract in
+ * Failures are logged, never thrown. The product is already stored and queued,
+ * and /admin is the durable record of that — losing the prompt must not look to
+ * the maker like a failed launch. Matches the fail-open contract in
  * lib/email.ts.
  */
-async function sendLaunchReceipt(
-  product: {
-    name: string;
-    tagline: string;
-    slug: string;
-    category: string;
-    launchState: string | null;
-  },
-  user: ClerkUser,
-): Promise<void> {
-  // Clerk accounts can exist without a primary email (phone-only sign-up), and
-  // `user` is null when the lookup failed — either way there is nobody to mail.
-  const to = user?.primaryEmailAddress?.emailAddress;
-  if (!to) return;
-
+async function announceSubmission(product: ReviewSubject, user: ClerkUser): Promise<void> {
   const makerName =
-    [user.firstName, user.lastName].filter(Boolean).join(" ") || user.username || null;
-  const email = buildProductLaunchEmail(product, makerName);
+    [user?.firstName, user?.lastName].filter(Boolean).join(" ") || user?.username || null;
 
-  const sent = await sendEmail({ to, ...email });
-  // Log the slug, not the address — this lands in shared platform logs.
-  if (!sent.ok) {
-    console.error(`[launch-email] "${product.slug}" was not delivered: ${sent.error}`);
-  }
+  await Promise.all([
+    notifyReviewers(product, makerName),
+    sendSubmissionAck(product, user?.primaryEmailAddress?.emailAddress, makerName),
+  ]);
 }
 
 /**
@@ -499,8 +479,13 @@ export async function createProduct(
     hero_image_url: heroImageUrl,
     screenshot_urls: screenshotUrls,
     tags,
-    status: "published",
-    published_at: new Date().toISOString(),
+    /*
+     * Submitted, not live. The review trigger in
+     * 20260825000000_launch_review_queue.sql refuses any other status from a
+     * maker's session, and `published_at` is written by the approval — an
+     * unreviewed product has never been published, so it has no publish date.
+     */
+    status: "pending",
   };
   const launchFields = {
     cta_text: ctaText,
@@ -523,27 +508,50 @@ export async function createProduct(
   const { data: product, error } = await writeWithOptionalColumns(
     basePayload,
     [launchFields, locationFields],
-    (payload) => supabase.from("products").insert(payload).select("slug").single(),
+    (payload) => supabase.from("products").insert(payload).select("id, slug").single(),
   );
 
   if (error || !product) {
-    return { error: error?.message ?? "Could not publish your product. Please try again." };
+    return { error: error?.message ?? "Could not submit your product. Please try again." };
   }
 
   /*
-   * The product exists now; the rest is bookkeeping the maker is only waiting
-   * on because it has to finish before the redirect. Run it together rather
-   * than stacking a Redis SCAN sweep on top of an email round trip.
+   * The submission exists now; the rest is bookkeeping the maker is only waiting
+   * on because it has to finish before the redirect. Run it together rather than
+   * stacking a Redis SCAN sweep on top of two email round trips.
+   *
+   * The public caches are still invalidated even though nothing public changed
+   * yet: the per-user product count that enforces the launch limit is read
+   * through the same prefix.
    */
   await Promise.all([
-    // A new product changes lists, featured, counts, stats and the sitemap.
     cacheInvalidatePrefix(PRODUCTS_CACHE_PREFIX),
-    sendLaunchReceipt({ name, tagline, slug: product.slug, category, launchState }, user),
+    announceSubmission(
+      {
+        id: product.id,
+        slug: product.slug,
+        name,
+        tagline,
+        description,
+        category,
+        pricingType,
+        websiteUrl,
+        githubUrl,
+        launchState,
+      },
+      user,
+    ),
   ]);
-  // …and it's a new row on the maker's dashboard.
+  // It's a new row on the maker's dashboard, and a new row in the admin queue.
   revalidatePath("/dashboard");
+  revalidatePath("/admin");
 
-  redirect(`/products/${product.slug}`);
+  /*
+   * The product page filters on `status = 'published'`, so a pending product
+   * would 404 there. The dashboard is where a submission is legible anyway —
+   * it shows the review state, and `submitted` turns the banner on.
+   */
+  redirect(`/dashboard?submitted=${encodeURIComponent(product.slug)}`);
 }
 
 export async function updateProduct(

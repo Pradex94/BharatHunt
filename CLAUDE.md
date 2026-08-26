@@ -43,6 +43,14 @@ those through the PowerShell tool instead.
   references a user id, call `ensureProfile()` (`lib/ensure-profile.ts`)** — it
   self-heals the missing row, avoiding `products_creator_id_fkey` violations.
   It's already wired into the product/comment/upvote actions.
+- **A launch is not live until it is approved.** `createProduct` inserts
+  `status = 'pending'`; only `lib/review.ts` (service-role) writes
+  `'published'`. The rule is enforced by a Postgres trigger
+  (`20260825000000_launch_review_queue.sql`), not by the action — the anon key
+  is public, so a maker's own session could otherwise publish itself. Never add
+  a code path that sets `status` or `published_at` from the user-scoped client.
+  Public reads already filter `status = 'published'`, so a pending product is
+  invisible without any query changes.
 - **Search normalisation is mirrored in two languages.** `lib/search.ts` and
   `public.search_normalize()`/`search_tokens()` must stay identical. Change one,
   change the other, then `npm run test:fixtures` and run

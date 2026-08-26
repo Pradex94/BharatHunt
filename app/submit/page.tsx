@@ -43,8 +43,9 @@ export default async function SubmitPage() {
               Launch Your Product
             </h1>
             <p className="text-base text-body">
-              Share what you&apos;ve built with the Bharat Hunt community. Fill in the details below
-              and your product will be live instantly.
+              Share what you&apos;ve built with the Bharat Hunt community. Fill in the details
+              below and send it in — a human reads every launch before it goes live, usually within
+              a day.
             </p>
             <p className="text-sm text-muted">
               {isAdmin
