@@ -194,13 +194,18 @@ export default async function ProductPage({
 
   await supabase.rpc("increment_view_count", { target_product_id: product.id });
 
-  // Absolute URL for share links + the embeddable badge.
+  /*
+   * Absolute URL for share links + the embeddable badge. Both leave the site —
+   * a badge lives on the maker's own page, a share link in someone's feed — so
+   * they name the canonical origin rather than whichever host answered this
+   * request. Built from the request before, which meant a page served on the
+   * .vercel.app deployment URL minted badges pointing there. Only a dev server,
+   * which SITE_URL cannot describe, still uses the request's own host.
+   */
   const requestHeaders = await headers();
-  const host = requestHeaders.get("host") ?? new URL(SITE_URL).host;
-  const proto =
-    requestHeaders.get("x-forwarded-proto") ??
-    (host.startsWith("localhost") || host.startsWith("127.") ? "http" : "https");
-  const productUrl = `${proto}://${host}/products/${product.slug}`;
+  const host = requestHeaders.get("host") ?? "";
+  const isLocal = host.startsWith("localhost") || host.startsWith("127.");
+  const productUrl = `${isLocal ? `http://${host}` : SITE_URL}/products/${product.slug}`;
 
   // Phase 2 launch fields
   const platformLinks = (product.platform_links as Record<string, string> | null) ?? {};

@@ -225,4 +225,37 @@ design.md            The locked design system (single source of truth)
 
 ## Deploy
 
-Deploys cleanly to [Vercel](https://vercel.com/new). Set the same environment variables in the project settings, point the Clerk webhook at `https://<your-domain>/api/webhooks/clerk`, and apply the Supabase migrations to your production database.
+Deploys cleanly to [Vercel](https://vercel.com/new). Set the same environment variables in the project settings, point the Clerk webhook at `https://bharathunt.org/api/webhooks/clerk`, and apply the Supabase migrations to your production database.
+
+### Domain and DNS
+
+The site is **bharathunt.org**, served by Vercel. The records it needs:
+
+| Type  | Name  | Value                                             | Purpose                                     |
+| ----- | ----- | ------------------------------------------------- | ------------------------------------------- |
+| A     | `@`   | `76.76.21.21`                                     | Vercel's anycast address for the apex       |
+| CNAME | `www` | `cname.vercel-dns.com`                            | `www` on the same project (Vercel redirects it to the apex) |
+| MX    | `@`   | `mail.sendgrove.com`                              | inbound mail for `@bharathunt.org`          |
+| TXT   | `@`   | `v=spf1 a mx include:spf.smtp1.sendgrove.net ~all` | SPF, so Sendgrove's mail is not spam-filed  |
+
+`NEXT_PUBLIC_SITE_URL` is an **override, not a requirement**. `lib/constants.ts` defaults `SITE_URL` to `https://bharathunt.org`, because that value is what every canonical tag, sitemap entry, OG image and JSON-LD node points a crawler at — a production build that forgot the variable would otherwise hand Google the `.vercel.app` host and split the site's ranking across two origins. Set the variable only for a deployment that should describe itself as something else (a preview, a staging domain).
+
+### Cloudflare
+
+Two ways to use it, and the difference reaches the code.
+
+**DNS only (grey cloud).** Cloudflare answers DNS and traffic goes straight to Vercel. Nothing about the app changes; you get fast free DNS, DNSSEC, and one place to hold the records.
+
+**Proxied (orange cloud).** Cloudflare terminates the connection and calls Vercel itself, which puts its WAF, bot rules and caching in front of the site — and means every request reaches the origin *from a Cloudflare data centre*. Two things are computed from that address:
+
+- the global per-IP rate limit in `proxy.ts` (300/min) — keyed on the connecting address it would give everyone served by one Cloudflare PoP a single shared budget, throttling a whole city;
+- the launch-location prefill (`lib/request-geo.ts`) — it would report the PoP's location rather than the maker's.
+
+`lib/cloudflare.ts` handles this with no configuration: it matches the connecting address against [Cloudflare's published edge ranges](https://www.cloudflare.com/ips/) and only then believes `cf-connecting-ip` / `cf-ipcountry`. Off Cloudflare, nothing is read from those headers — which is the point, since they are ordinary request headers anyone could send to the origin directly.
+
+If you do turn the proxy on:
+
+- SSL/TLS mode **Full (strict)** — anything less puts a plaintext hop in front of a site that has none today.
+- Enable the **"Add visitor location headers" managed transform**, or only `cf-ipcountry` arrives and the state prefill quietly falls back to Vercel's (now Cloudflare-shaped) guess.
+- Leave **Auto Minify** and **Rocket Loader** off. They rewrite the app's own JavaScript.
+- Don't add cache rules for HTML routes. Caching and revalidation are Vercel's job here (ISR, `revalidatePath`), and a second cache in front of them serves stale launches.
