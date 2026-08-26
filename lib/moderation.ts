@@ -49,6 +49,7 @@ export type ModeratedProductInput = {
 
 /** Shown on the submit/edit form so makers see the policy before they publish. */
 export const SUBMISSION_RULES = [
+  "Every launch is reviewed by a person before it goes live — usually within a day.",
   "Launch a real product — a working public link (website, GitHub, or app store) is required.",
   "No adult or NSFW products. Bharat Hunt is a general-audience marketplace.",
   "No pirated, cracked, or fraudulent listings (fake documents, bought followers, scams).",

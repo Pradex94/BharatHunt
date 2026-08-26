@@ -196,7 +196,43 @@ Type-check with `npx tsc --noEmit`.
 | `/collections`, `/collections/[slug]` | Curated editorial groupings that resolve to live product queries |
 | `/blog`, `/blog/[slug]` | Editorial blog |
 | `/login`, `/signup` | Clerk auth |
+| `/admin` | Admin only — the review queue, plus every product and the platform stats |
+| `/admin/review/[id]` | Where the Approve / Send back links in the review email land |
 | `/api/webhooks/clerk` | Syncs Clerk users into the `profiles` table |
+
+## Launch review
+
+Nothing published itself. A submitted product enters the queue as `status = 'pending'`, and only an
+approval moves it to `'published'`.
+
+**The gate is in Postgres, not in the action.** `NEXT_PUBLIC_SUPABASE_ANON_KEY` is public by
+definition, so a maker holding their own Clerk session can call PostgREST directly, and the existing
+"creators can update their own products" policy would accept `status = 'published'`. The trigger in
+`20260825000000_launch_review_queue.sql` refuses that status — and any change to `published_at` —
+from every Postgres role except `service_role`, which only `createServiceClient()` reaches. The
+server action is the pleasant way to approve; the trigger is what makes approval *required*.
+
+The flow:
+
+1. A maker submits. The row is stored as `pending`, so it is invisible everywhere public (every
+   marketplace query, search function, sitemap entry and category count already filters on
+   `status = 'published'`), and they land on `/dashboard?submitted=…`.
+2. Two mails go out: the queue prompt to `ADMIN_EMAILS`, and an acknowledgement to the maker. Both
+   are fail-open — `/admin` is the durable record, mail is only the prompt.
+3. The admin approves or sends it back, either from `/admin` or from the mail. Approving sets
+   `published_at` and sends the maker the "you're live" receipt; sending it back returns the product
+   to their drafts with an optional note, and the dashboard grows a **Submit for review** button so
+   they can revise and requeue it.
+
+**One-click from the mail** needs `ADMIN_REVIEW_SECRET`. Links are HMACs over the product id, the
+action and a 7-day expiry (`lib/review-token.ts`), so an approve link cannot be edited into a reject
+link, moved to another product, or given a longer life. Without the variable the mail still arrives
+and simply links to `/admin`, which is gated by the Clerk session — the feature degrades to "sign in
+and approve", never to "anyone can approve". `/admin/review/[id]` only *displays* the decision;
+approving is a POST, because mail scanners fetch every link in a message before a human sees it.
+
+Existing published products are untouched by the migration. **Apply it before deploying the app** —
+a build that inserts `'pending'` against the old `products_status_check` cannot accept a launch.
 
 ## Project structure
 

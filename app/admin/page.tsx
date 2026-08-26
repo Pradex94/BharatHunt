@@ -1,14 +1,16 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@clerk/nextjs/server";
-import { ShieldCheck } from "lucide-react";
+import { Clock, ShieldCheck } from "lucide-react";
 
 import { getIsAdmin } from "@/lib/admin";
-import { getAllProductsAdmin } from "@/services/admin";
+import { getAllProductsAdmin, getPendingProductsAdmin, type PendingProductRow } from "@/services/admin";
 import { getPlatformStats } from "@/services/products";
 import { Container } from "@/components/ui/container";
 import { Numeric } from "@/components/ui/typography";
 import { DeleteProductButton } from "@/components/products/delete-product-button";
+import { ReviewActions } from "@/components/admin/review-actions";
+import { indiaStateName } from "@/lib/india-states";
 
 export const metadata = {
   title: "Admin",
@@ -20,9 +22,25 @@ export const dynamic = "force-dynamic";
 
 const STATUS_BADGE: Record<string, string> = {
   published: "bg-success/10 text-success",
+  pending: "bg-primary/10 text-primary",
   draft: "bg-secondary-bg text-muted",
   archived: "bg-amber-100 text-amber-700",
 };
+
+/** "pending" is the database's word for it; "in review" is the human's. */
+const STATUS_LABEL: Record<string, string> = { pending: "in review" };
+
+function submittedAgo(value: string | null): string {
+  if (!value) return "just now";
+  const submitted = new Date(value).getTime();
+  if (Number.isNaN(submitted)) return "just now";
+
+  const minutes = Math.max(0, Math.round((Date.now() - submitted) / 60000));
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return `${Math.round(hours / 24)}d ago`;
+}
 
 export default async function AdminPage() {
   const { userId } = await auth();
@@ -33,7 +51,11 @@ export default async function AdminPage() {
     redirect("/");
   }
 
-  const [products, stats] = await Promise.all([getAllProductsAdmin(), getPlatformStats()]);
+  const [products, pending, stats] = await Promise.all([
+    getAllProductsAdmin(),
+    getPendingProductsAdmin(),
+    getPlatformStats(),
+  ]);
 
   const statCards = [
     { label: "Products", value: stats.products },
@@ -51,7 +73,9 @@ export default async function AdminPage() {
             </span>
             <div>
               <h1 className="text-2xl font-bold tracking-tight text-ink">Admin dashboard</h1>
-              <p className="text-sm text-muted">Moderate any product · unlimited launches.</p>
+              <p className="text-sm text-muted">
+                Review every launch · moderate any product · unlimited launches.
+              </p>
             </div>
           </div>
 
@@ -66,6 +90,9 @@ export default async function AdminPage() {
               </div>
             ))}
           </div>
+
+          {/* Review queue */}
+          <ReviewQueue pending={pending} />
 
           {/* Product table */}
           <div className="overflow-hidden rounded-xl border border-border bg-card">
@@ -107,7 +134,7 @@ export default async function AdminPage() {
                             STATUS_BADGE[product.status] ?? "bg-secondary-bg text-muted"
                           }`}
                         >
-                          {product.status}
+                          {STATUS_LABEL[product.status] ?? product.status}
                         </span>
                       </td>
                       <td className="px-4 py-2.5 text-right text-muted">
@@ -146,5 +173,79 @@ export default async function AdminPage() {
         </div>
       </Container>
     </main>
+  );
+}
+
+/**
+ * The queue, above everything else on the page.
+ *
+ * It sits at the top because it is the only section with a deadline: a maker
+ * who submitted is waiting, and every other number on this page can be read
+ * tomorrow. When it is empty it says so and stays out of the way.
+ */
+function ReviewQueue({ pending }: { pending: PendingProductRow[] }) {
+  if (pending.length === 0) {
+    return (
+      <div className="flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3.5">
+        <Clock className="size-4 shrink-0 text-muted" aria-hidden="true" />
+        <p className="text-sm text-muted">
+          Nothing waiting for review. New launches land here and email you.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="overflow-hidden rounded-xl border border-primary/30 bg-card">
+      <div className="flex items-center justify-between border-b border-border bg-primary/5 px-4 py-3">
+        <h2 className="flex items-center gap-2 text-sm font-semibold text-ink">
+          <Clock className="size-4 text-primary" aria-hidden="true" />
+          Waiting for review
+        </h2>
+        <span className="text-xs text-muted">
+          <Numeric>{pending.length}</Numeric> queued
+        </span>
+      </div>
+
+      <ul className="divide-y divide-border">
+        {pending.map((product) => {
+          const state = indiaStateName(product.launch_state);
+          return (
+            <li key={product.id} className="flex flex-col gap-3 px-4 py-4">
+              <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                <span className="font-semibold text-ink">{product.name}</span>
+                <span className="text-xs text-muted">
+                  {product.category}
+                  {state ? ` · ${state}` : ""} · by {product.creator?.display_name ?? "unknown"} ·{" "}
+                  {submittedAgo(product.created_at)}
+                </span>
+              </div>
+              <p className="text-sm text-body">{product.tagline}</p>
+
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
+                <Link
+                  href={`/products/${product.slug}/edit`}
+                  className="text-primary hover:underline"
+                >
+                  Open full submission
+                </Link>
+                {product.website_url && (
+                  <a
+                    href={product.website_url}
+                    target="_blank"
+                    rel="noopener noreferrer nofollow"
+                    className="text-body hover:text-primary"
+                  >
+                    {product.website_url.replace(/^https?:\/\//, "")}
+                  </a>
+                )}
+              </div>
+
+              <ReviewActions productId={product.id} productName={product.name} />
+            </li>
+          );
+        })}
+      </ul>
+    </div>
   );
 }
