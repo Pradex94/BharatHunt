@@ -39,11 +39,19 @@ export const MAX_GALLERY_IMAGES = 8;
 /**
  * Canonical public origin — the single source of truth for absolute URLs used
  * by metadata (`metadataBase`), the sitemap, robots.txt, and JSON-LD. Override
- * per-environment with `NEXT_PUBLIC_SITE_URL` (e.g. a preview or custom domain);
- * the trailing slash is stripped so callers can safely concatenate paths.
+ * per-environment with `NEXT_PUBLIC_SITE_URL` (e.g. a preview deployment); the
+ * trailing slash is stripped so callers can safely concatenate paths.
+ *
+ * The default is the live domain, not the `.vercel.app` host it also answers
+ * on. Both serve the same app, so whichever origin this names is the one every
+ * canonical tag, sitemap entry, OG image and JSON-LD node points a crawler at —
+ * and a build that forgot the environment variable would quietly hand Google
+ * the deployment URL instead, splitting the site's ranking across two hosts.
+ * Defaulting to the domain makes the variable an override rather than a
+ * requirement.
  */
 export const SITE_URL = (
-  process.env.NEXT_PUBLIC_SITE_URL ?? "https://bharat-hunt.vercel.app"
+  process.env.NEXT_PUBLIC_SITE_URL ?? "https://bharathunt.org"
 ).replace(/\/+$/, "");
 
 /** The human-facing site name, reused across metadata and structured data. */
