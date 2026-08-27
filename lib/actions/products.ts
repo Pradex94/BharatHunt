@@ -681,6 +681,13 @@ export async function updateProduct(
   // The dashboard shows name/tagline/status, so an edit changes it too.
   revalidatePath("/dashboard");
   revalidatePath("/admin");
+  /*
+   * The homepage is a prerender now (`dynamic = "force-static"` in app/page.tsx),
+   * so an edited name, tagline or logo would otherwise sit stale in the hero and
+   * the "Also climbing" grid until the revalidate window elapsed. Dropping a
+   * Redis key no longer refreshes it — only the route cache does.
+   */
+  revalidatePath("/");
 
   redirect(`/products/${productSlug}`);
 }
@@ -739,6 +746,9 @@ export async function deleteProduct(
   revalidatePath("/admin");
   revalidatePath("/dashboard");
   revalidatePath("/marketplace");
+  // Same reason as the edit path: the homepage prerender can be holding this
+  // product in the hero, and a card linking to a 404 is worse than a stale one.
+  revalidatePath("/");
   for (const { slug } of deleted) {
     revalidatePath(`/products/${slug}`);
   }

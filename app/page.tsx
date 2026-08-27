@@ -26,20 +26,51 @@ export const metadata = {
 };
 
 /*
- * ISR, and it now actually applies.
+ * Prerendered, and `force-static` is what finally makes that true in production.
  *
- * This route previously declared BOTH `dynamic = "force-dynamic"` and this
- * `revalidate`. `force-dynamic` wins, so the revalidate below was dead code and
- * every homepage hit re-rendered from scratch: Clerk token round-trip, then
- * three Supabase aggregates, before a single byte of HTML was flushed. That
- * server time sat directly in front of the LCP paint.
+ * Two earlier attempts at this both looked correct and both silently failed:
  *
- * `force-dynamic` was there because these reads went through the Clerk
- * authenticated Supabase client. They are the same for every visitor and pass
- * anon RLS, so they now use `createPublicClient()` and this page prerenders and
- * revalidates on a 12-hour cycle as originally intended.
+ *   1. The route declared `dynamic = "force-dynamic"` *and* `revalidate`.
+ *      `force-dynamic` wins, so the revalidate was dead code.
+ *   2. `force-dynamic` was dropped and the reads moved to `createPublicClient()`
+ *      (no Clerk `auth()`, so no request-time API). `next build` then reported
+ *      `○ /  12h` — locally. Production still served every hit from a function.
+ *
+ * The cause of (2) is `@upstash/redis`. Every command it issues is
+ * `fetch(url, { cache: "no-store" })` (see `nodejs.mjs`, `cache: config.cache ??
+ * "no-store"`), and per Next's caching guide an individual `fetch` with
+ * `cache: "no-store"` is enough to "make the route dynamically rendered".
+ * `services/products.ts` wraps these three reads in `cacheRemember()`, so the
+ * homepage issues three such fetches.
+ *
+ * `.env.local` has no Upstash credentials, so `getRedis()` returns null locally
+ * and no fetch is ever made — the route prerendered on this machine and was
+ * dynamic on Vercel, where the credentials exist. Reproduced by building twice,
+ * once with `UPSTASH_REDIS_REST_URL`/`_TOKEN` set: `○ / 12h` becomes `ƒ /`.
+ *
+ * The measured cost was the whole of the site's TTFB problem. This page is
+ * identical for every visitor, so a request that reached the origin paid:
+ * Mumbai edge -> function in `iad1` (Vercel's default region) -> three Supabase
+ * round trips to `ap-northeast-1` -> three Upstash round trips -> back. Against
+ * production: `/` 1.74s TTFB, `X-Vercel-Cache: MISS`; `/terms` — the same
+ * layout, prerendered, served from the Mumbai edge — 0.22s.
+ *
+ * `force-static` states the intent the two previous fixes only implied: this
+ * page has no per-request input, so prerender it and let anything claiming
+ * otherwise resolve to empty. Request-time APIs (`cookies`, `headers`,
+ * `useSearchParams`) return empty values here — nothing on this page reads
+ * them, and a future edit that needs one should move that part behind its own
+ * boundary rather than quietly costing every visitor another second.
+ *
+ * Ten minutes, not twelve hours: the hero states which launch is leading, and
+ * with a background-revalidating prerender a short window is nearly free —
+ * visitors are served the cached HTML either way. Publishing a launch also
+ * calls `revalidatePath("/")` (lib/review.ts, lib/actions/products.ts), so the
+ * window is the ceiling on staleness for upvote *ordering*, not for whether a
+ * new launch appears at all.
  */
-export const revalidate = 43200;
+export const dynamic = "force-static";
+export const revalidate = 600;
 
 export default async function Home() {
   const [ranked, stats, launchCounts, collectionCounts] = await Promise.all([

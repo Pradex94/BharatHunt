@@ -4,7 +4,6 @@ import { ArrowRight, ChevronUp, Eye, MessageSquare } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { ProductLogo } from "@/components/products/product-logo";
 import { Display, Numeric } from "@/components/ui/typography";
-import { FadeIn } from "@/components/ui/motion";
 import { IndiaFlag } from "@/components/ui/india-flag";
 import type { ProductCardProduct } from "@/components/products/product-card";
 
@@ -50,8 +49,26 @@ export function Hero({ topProduct, stats }: HeroProps) {
         className="pointer-events-none absolute top-[60%] left-1/2 -z-10 size-[560px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[radial-gradient(circle,rgba(255,138,61,0.18),transparent_65%)] blur-2xl"
       />
 
+      {/*
+        No entrance animation above the fold — this is the LCP element.
+
+        Both blocks below used to be wrapped in <FadeIn>, which renders
+        `initial="hidden"` into the server HTML as
+        `style="opacity:0;transform:translateY(16px)"` and only reveals the
+        content once framer-motion has hydrated and its IntersectionObserver has
+        fired. The whole hero — headline, subcopy, both CTAs and the leading
+        launch — was therefore invisible in the delivered document. Chrome does
+        not count an element at opacity 0, so LCP could not be recorded until
+        the client bundle had downloaded, parsed and run: field LCP was 4.3s
+        against an FCP of 3.2s, and that ~1.1s gap is this.
+
+        Entrance animations still run further down the page, where nothing they
+        hide is in the first viewport. Above the fold the content is simply
+        painted. The card keeps `animate-bh-float`, which is CSS and animates
+        `transform` only — it never drops opacity, so it costs LCP nothing.
+      */}
       <div className="relative mx-auto flex w-full max-w-[1100px] flex-col items-center gap-8 px-4 py-20 text-center sm:px-6 md:py-28 lg:py-32">
-        <FadeIn className="flex flex-col items-center gap-7">
+        <div className="flex flex-col items-center gap-7">
           <span className="flex items-center gap-2 rounded-full border border-border bg-card px-3.5 py-1.5 text-sm font-medium text-body shadow-sm">
             <IndiaFlag className="h-3.5 w-auto shrink-0 rounded-[3px]" />
             Built in India
@@ -84,12 +101,12 @@ export function Hero({ topProduct, stats }: HeroProps) {
               <Numeric className="font-semibold text-ink">{stats.makers}</Numeric> makers
             </p>
           )}
-        </FadeIn>
+        </div>
 
         {topProduct && (
-          <FadeIn delay={0.15} className="w-full max-w-2xl">
+          <div className="w-full max-w-2xl">
             <TopLaunchCard product={topProduct} />
-          </FadeIn>
+          </div>
         )}
       </div>
     </section>
