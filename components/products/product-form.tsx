@@ -73,8 +73,14 @@ type StepId = (typeof STEPS)[number]["id"];
 /** Steps carrying required fields, in the order a maker should be sent to fix them. */
 const REQUIRED_STEPS: StepId[] = ["main", "links"];
 
-/** Which step a rejected launch rule belongs to, so we can jump the maker there. */
-const STEP_FOR_RULE: Record<ModerationCode, StepId> = {
+/**
+ * Which step a rejected launch rule belongs to, so we can jump the maker there.
+ *
+ * Partial because `ModerationCode` also covers rules only comments can break —
+ * `moderateProduct` never returns those, and listing them here would claim a
+ * launch step for something no launch can trip.
+ */
+const STEP_FOR_RULE: Partial<Record<ModerationCode, StepId>> = {
   adult_content: "main",
   fraudulent_content: "main",
   placeholder_name: "main",
@@ -579,7 +585,7 @@ export function ProductForm({ product, detectedState = null }: ProductFormProps)
       setRuleError(check.message);
       // Send them to the step that actually holds the problem — without
       // scrolling to the top, so the reason stays on screen.
-      goToStep(STEP_FOR_RULE[check.code], { scroll: false });
+      goToStep(STEP_FOR_RULE[check.code] ?? "main", { scroll: false });
       setSubmitLock(null);
       return;
     }
