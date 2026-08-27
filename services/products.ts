@@ -15,7 +15,7 @@ const AGGREGATE_TTL = 300; // featured / counts / stats / slugs
 // Literal strings (not built dynamically) so the Supabase client can infer the
 // row type from the selected columns.
 const PRODUCT_PAGE_COLUMNS =
-  "id, slug, creator_id, name, tagline, description, hero_image_url, screenshot_urls, website_url, github_url, video_url, category, pricing_type, tags, view_count, upvote_count, comment_count, cta_text, cta_url, platform_links, tech_stack, coupon_code, offer_description, offer_expires_at, roadmap_url, changelog_url, available_for_hire, hire_pitch, launch_state, creator:profiles!products_creator_id_fkey(display_name, username)";
+  "id, slug, creator_id, name, tagline, description, hero_image_url, screenshot_urls, website_url, github_url, video_url, category, pricing_type, tags, view_count, upvote_count, comment_count, avg_rating, rating_count, cta_text, cta_url, platform_links, tech_stack, coupon_code, offer_description, offer_expires_at, roadmap_url, changelog_url, available_for_hire, hire_pitch, launch_state, creator:profiles!products_creator_id_fkey(display_name, username)";
 
 /**
  * Split a select list on its top-level commas only — the embedded creator join
@@ -47,6 +47,15 @@ const LAUNCH_FIELD_COLUMNS = [
 ];
 const LAUNCH_LOCATION_COLUMNS = ["launch_state"];
 
+/*
+ * `rating_count` arrives with the ratings migration, so it is its own group: a
+ * deploy that lands before the migration falls back to a select without it
+ * rather than 500-ing every product page. `avg_rating` has always existed, but
+ * it travels with its count — an average with no count behind it is exactly the
+ * number the schema builder must not use.
+ */
+const RATING_COLUMNS = ["avg_rating", "rating_count"];
+
 /**
  * Progressively narrower selects, tried in order. The launch fields and the
  * launch location ship in separate migrations, so either can be missing
@@ -54,9 +63,15 @@ const LAUNCH_LOCATION_COLUMNS = ["launch_state"];
  * the database actually has.
  */
 const PRODUCT_PAGE_FALLBACK_COLUMNS = [
+  withoutColumns(PRODUCT_PAGE_COLUMNS, RATING_COLUMNS),
   withoutColumns(PRODUCT_PAGE_COLUMNS, LAUNCH_LOCATION_COLUMNS),
   withoutColumns(PRODUCT_PAGE_COLUMNS, LAUNCH_FIELD_COLUMNS),
-  withoutColumns(PRODUCT_PAGE_COLUMNS, [...LAUNCH_FIELD_COLUMNS, ...LAUNCH_LOCATION_COLUMNS]),
+  withoutColumns(PRODUCT_PAGE_COLUMNS, [...RATING_COLUMNS, ...LAUNCH_LOCATION_COLUMNS]),
+  withoutColumns(PRODUCT_PAGE_COLUMNS, [
+    ...RATING_COLUMNS,
+    ...LAUNCH_FIELD_COLUMNS,
+    ...LAUNCH_LOCATION_COLUMNS,
+  ]),
 ];
 
 /**
@@ -528,7 +543,9 @@ export type MakerProduct = {
   slug: string;
   name: string;
   tagline: string;
+  description: string | null;
   hero_image_url: string | null;
+  screenshot_urls: string[] | null;
   category: string;
   pricing_type: string;
   status: string;
@@ -539,8 +556,13 @@ export type MakerProduct = {
   published_at: string | null;
 };
 
+/*
+ * `description` and `screenshot_urls` are here for `isIndexableProduct`, so the
+ * dashboard can tell a maker their listing is too thin to be indexed. It is the
+ * only place that message can land on someone able to act on it.
+ */
 const MAKER_PRODUCT_COLUMNS =
-  "id, slug, name, tagline, hero_image_url, category, pricing_type, status, upvote_count, comment_count, view_count, created_at, published_at";
+  "id, slug, name, tagline, description, hero_image_url, screenshot_urls, category, pricing_type, status, upvote_count, comment_count, view_count, created_at, published_at";
 
 /**
  * Every product a maker owns, newest first — drafts and archived rows included,
@@ -637,4 +659,117 @@ export async function getLaunchStateCounts(): Promise<Record<string, number>> {
     }
     return counts;
   });
+}
+
+/**
+ * Products for one programmatic collection page (`lib/collections.ts`).
+ *
+ * One round trip returns both the rows the page renders and the true total, via
+ * PostgREST's exact count — the total is what decides whether the page may be
+ * indexed, so fetching it separately would mean two queries on every render of
+ * every collection. Cached under the shared products prefix, so a launch or an
+ * approval invalidates these pages along with everything else.
+ *
+ * Ordered by upvotes because that is the only ranking signal this database
+ * actually holds; `RANKING_NOTE` says so in visible text on the page itself.
+ */
+export async function getCollectionProducts(
+  filter: { category?: string; pricing?: string; tag?: string; launchState?: string },
+  limit = 24,
+): Promise<{ products: ProductCardProduct[]; total: number }> {
+  const key = `${PRODUCTS_CACHE_PREFIX}collection:${filter.category ?? ""}:${filter.pricing ?? ""}:${filter.tag ?? ""}:${filter.launchState ?? ""}:${limit}`;
+
+  return cacheRemember(key, AGGREGATE_TTL, async () => {
+    const supabase = createClient();
+    let query = supabase
+      .from("products")
+      .select(PRODUCT_CARD_COLUMNS, { count: "exact" })
+      .eq("status", "published");
+
+    if (filter.category) query = query.eq("category", filter.category);
+    if (filter.pricing) query = query.eq("pricing_type", filter.pricing);
+    if (filter.tag) query = query.contains("tags", [filter.tag]);
+    if (filter.launchState) query = query.eq("launch_state", filter.launchState);
+
+    const { data, error, count } = await query
+      .order("upvote_count", { ascending: false, nullsFirst: false })
+      .order("created_at", { ascending: false })
+      .limit(limit);
+
+    if (error) {
+      throw new Error(`Failed to load collection products: ${error.message}`);
+    }
+    return { products: (data ?? []) as ProductCardProduct[], total: count ?? 0 };
+  });
+}
+
+/**
+ * Published-product totals per collection filter, for the sitemap and the admin
+ * audit — both of which need every collection's size at once.
+ *
+ * Counts are derived in memory from a single narrow read (category, pricing and
+ * tags for every published row) rather than one `count` query per collection.
+ * With ~30 collections that is the difference between one round trip and thirty.
+ */
+export async function getCollectionCounts(
+  filters: {
+    slug: string;
+    category?: string;
+    pricing?: string;
+    tag?: string;
+    launchState?: string;
+  }[],
+): Promise<Record<string, number>> {
+  const rows = await cacheRemember(
+    `${PRODUCTS_CACHE_PREFIX}collection-facets`,
+    AGGREGATE_TTL,
+    async () => {
+      /*
+       * Public client, not the Clerk-scoped one. These counts are identical for
+       * every visitor and pass anon RLS, and reading them through `createClient`
+       * would touch `headers()` — which opts every caller out of static
+       * rendering. The homepage links to collections and revalidates on a
+       * 12-hour cycle; one Clerk-scoped read here would silently turn that back
+       * into a per-request render.
+       */
+      const supabase = createPublicClient();
+      const { data, error } = await supabase
+        .from("products")
+        .select("category, pricing_type, tags, launch_state")
+        .eq("status", "published");
+
+      if (error) {
+        // Counts drive indexability, and guessing would either hide real pages
+        // or advertise thin ones. An empty read makes every collection read as
+        // empty, which fails closed.
+        console.error(`[seo] collection facets unavailable: ${error.message}`);
+        return [] as {
+          category: string;
+          pricing_type: string;
+          tags: string[] | null;
+          launch_state: string | null;
+        }[];
+      }
+      return (data ?? []) as {
+        category: string;
+        pricing_type: string;
+        tags: string[] | null;
+        launch_state: string | null;
+      }[];
+    },
+  );
+
+  const counts: Record<string, number> = {};
+  for (const filter of filters) {
+    counts[filter.slug] = rows.filter((row) => {
+      if (filter.tag) {
+        return (row.tags ?? []).some((tag) => tag.toLowerCase() === filter.tag);
+      }
+      if (filter.launchState) return row.launch_state === filter.launchState;
+      if (filter.category && row.category !== filter.category) return false;
+      if (filter.pricing && row.pricing_type !== filter.pricing) return false;
+      return true;
+    }).length;
+  }
+  return counts;
 }

@@ -65,6 +65,16 @@ export async function generateMetadata({
     alternates: {
       canonical: page > 1 && !filtered ? `/marketplace?page=${page}` : "/marketplace",
     },
+    /*
+     * A search result is not a page. `?q=` can produce an unbounded number of
+     * URLs whose content is a re-slice of the catalogue, and a crawler that
+     * finds one linked anywhere will happily generate the rest. The canonical
+     * above already collapses them, but a canonical is a hint and `noindex` is
+     * a directive — `follow` is kept so the product links on the page are still
+     * worth something. Category and pricing filters keep the canonical-only
+     * treatment: they are a bounded, finite set that collapses cleanly.
+     */
+    ...(params.q ? { robots: { index: false, follow: true } } : {}),
   };
 }
 

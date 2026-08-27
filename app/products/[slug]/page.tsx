@@ -6,7 +6,14 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { headers } from "next/headers";
 import { notFound } from "next/navigation";
-import { Briefcase, ChevronUp, ExternalLink, MapPin, Map as RoadmapIcon, ScrollText } from "lucide-react";
+import {
+  Briefcase,
+  ChevronUp,
+  ExternalLink,
+  MapPin,
+  Map as RoadmapIcon,
+  ScrollText,
+} from "lucide-react";
 import { auth } from "@clerk/nextjs/server";
 import { createClient } from "@/lib/supabase/server";
 import { getIsAdmin } from "@/lib/admin";
@@ -21,8 +28,11 @@ import { ProductReach } from "@/components/products/product-reach";
 import { ProductVideo } from "@/components/products/product-video";
 import { OfferBox } from "@/components/products/offer-box";
 import { JsonLd } from "@/components/seo/json-ld";
+import { Breadcrumbs } from "@/components/seo/breadcrumbs";
+import { collectionsForProduct } from "@/lib/collections";
+import { RatingStars } from "@/components/products/rating-stars";
 import { PRODUCT_PLATFORMS, SITE_URL, slugForCategory } from "@/lib/constants";
-import { isIndexableProduct, productBreadcrumbs, productSchema, withReferral } from "@/lib/seo";
+import { isIndexableProduct, productCrumbs, productSchema, withReferral } from "@/lib/seo";
 import { indiaStateName } from "@/lib/india-states";
 import { H1, H2, Numeric } from "@/components/ui/typography";
 import { FadeIn } from "@/components/ui/motion";
@@ -95,7 +105,10 @@ const TITLE_LIMIT = 60;
 const TITLE_SUFFIX = " | Bharat Hunt";
 
 function seoTitle(name: string, tagline: string): string {
-  const clean = tagline.replace(/\s+/g, " ").trim().replace(/[.\s]+$/, "");
+  const clean = tagline
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/[.\s]+$/, "");
   const room = TITLE_LIMIT - TITLE_SUFFIX.length - name.length - 3; // 3 = " — "
 
   if (!clean || room < 15) return `${name}${TITLE_SUFFIX}`;
@@ -112,8 +125,25 @@ function seoTitle(name: string, tagline: string): string {
  * like the page is broken. Drop trailing connectives and punctuation.
  */
 const DANGLING = new Set([
-  "and", "or", "with", "for", "to", "the", "a", "an", "in", "on", "of", "your",
-  "that", "from", "by", "at", "is", "are", "&",
+  "and",
+  "or",
+  "with",
+  "for",
+  "to",
+  "the",
+  "a",
+  "an",
+  "in",
+  "on",
+  "of",
+  "your",
+  "that",
+  "from",
+  "by",
+  "at",
+  "is",
+  "are",
+  "&",
 ]);
 
 function dropDanglingWord(value: string): string {
@@ -153,11 +183,7 @@ const PRICING_BADGE: Record<string, string> = {
   freemium: "bg-amber-100 text-amber-700",
 };
 
-export default async function ProductPage({
-  params,
-}: {
-  params: Promise<{ slug: string }>;
-}) {
+export default async function ProductPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
   const { userId } = await auth();
   const supabase = createClient();
@@ -176,24 +202,36 @@ export default async function ProductPage({
   const isAdmin = userId ? await getIsAdmin() : false;
   const canManage = isOwner || isAdmin;
 
-  const [{ data: comments }, { data: upvote }, competitors] = await Promise.all([
-    supabase
-      .from("comments")
-      .select(
-        "id, body, created_at, user_id, author:profiles!comments_user_id_fkey(display_name, username)",
-      )
-      .eq("product_id", product.id)
-      .order("created_at", { ascending: true }),
-    userId
-      ? supabase
-          .from("upvotes")
-          .select("product_id")
-          .eq("product_id", product.id)
-          .eq("user_id", userId)
-          .maybeSingle()
-      : Promise.resolve({ data: null }),
-    getCompetingProducts(product.category, product.id, 4),
-  ]);
+  const [{ data: comments }, { data: upvote }, { data: myRating }, competitors] = await Promise.all(
+    [
+      supabase
+        .from("comments")
+        .select(
+          "id, body, created_at, user_id, author:profiles!comments_user_id_fkey(display_name, username)",
+        )
+        .eq("product_id", product.id)
+        .order("created_at", { ascending: true }),
+      userId
+        ? supabase
+            .from("upvotes")
+            .select("product_id")
+            .eq("product_id", product.id)
+            .eq("user_id", userId)
+            .maybeSingle()
+        : Promise.resolve({ data: null }),
+      // The caller's own star, joined into the same parallel group rather than
+      // fetched after it — one more round trip, not one more waterfall.
+      userId
+        ? supabase
+            .from("product_ratings")
+            .select("rating")
+            .eq("product_id", product.id)
+            .eq("user_id", userId)
+            .maybeSingle()
+        : Promise.resolve({ data: null }),
+      getCompetingProducts(product.category, product.id, 4),
+    ],
+  );
 
   await supabase.rpc("increment_view_count", { target_product_id: product.id });
 
@@ -211,6 +249,8 @@ export default async function ProductPage({
   const productUrl = `${isLocal ? `http://${host}` : SITE_URL}/products/${product.slug}`;
 
   // Phase 2 launch fields
+  const productCollections = collectionsForProduct(product);
+
   const platformLinks = (product.platform_links as Record<string, string> | null) ?? {};
   const availableOn: { label: string; url: string }[] = [];
   for (const platform of PRODUCT_PLATFORMS) {
@@ -222,22 +262,29 @@ export default async function ProductPage({
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-8 px-4 py-12 md:py-16">
       <JsonLd
-        data={[
-          productSchema({
-            name: product.name,
-            description: product.description,
-            tagline: product.tagline,
-            slug: product.slug,
-            category: product.category,
-            pricingType: product.pricing_type,
-            image: ogImageFor(product),
-          }),
-          productBreadcrumbs({
-            name: product.name,
-            slug: product.slug,
-            category: product.category,
-          }),
-        ]}
+        data={productSchema({
+          name: product.name,
+          description: product.description,
+          tagline: product.tagline,
+          slug: product.slug,
+          category: product.category,
+          pricingType: product.pricing_type,
+          image: ogImageFor(product),
+          // Emitted only above the threshold in lib/seo.ts, and never from
+          // upvotes — an upvote is not a rating.
+          avgRating: product.avg_rating,
+          ratingCount: product.rating_count,
+        })}
+      />
+      {/* Renders the trail and its BreadcrumbList from one array, so the markup
+          can never describe a hierarchy the page does not show. */}
+      <Breadcrumbs
+        items={productCrumbs({
+          name: product.name,
+          slug: product.slug,
+          category: product.category,
+        })}
+        className="mb-6"
       />
       <FadeIn className="flex flex-col gap-6">
         <div className="flex gap-4 sm:gap-5">
@@ -270,6 +317,21 @@ export default async function ProductPage({
             </div>
           </div>
         </div>
+
+        {/*
+         * Ratings sit above the actions, not beside the upvote: they answer a
+         * different question. An upvote says "this deserves attention today";
+         * a rating says "this was good to use". Only the second can back an
+         * aggregateRating, which is why they are not the same control.
+         */}
+        <RatingStars
+          productId={product.id}
+          productSlug={product.slug}
+          average={product.avg_rating}
+          count={product.rating_count ?? 0}
+          myRating={myRating?.rating ?? null}
+          canRate={Boolean(userId) && !isOwner}
+        />
 
         <div className="flex flex-wrap items-center gap-3">
           <UpvoteButton
@@ -448,6 +510,33 @@ export default async function ProductPage({
         isOwner={userId === product.creator_id}
       />
 
+      {/*
+       * Up into the collections this product belongs to. Computed from the
+       * product's own category, pricing and tags rather than queried, so it
+       * adds no database work to a page that already makes several round
+       * trips — and it is what stops collection pages being reachable only
+       * from the sitemap.
+       */}
+      {productCollections.length > 0 && (
+        <nav
+          aria-label="Collections featuring this product"
+          className="flex flex-col gap-3 border-t border-border pt-8"
+        >
+          <h2 className="text-sm font-semibold text-ink">Featured in</h2>
+          <div className="flex flex-wrap gap-2">
+            {productCollections.map((collection) => (
+              <Link
+                key={collection.slug}
+                href={`/collections/${collection.slug}`}
+                className="rounded-full border border-border bg-card px-3.5 py-1.5 text-sm text-body transition-colors hover:border-primary hover:text-primary"
+              >
+                {collection.title}
+              </Link>
+            ))}
+          </div>
+        </nav>
+      )}
+
       {competitors.length > 0 && (
         <section
           aria-labelledby="alternatives"
@@ -474,15 +563,9 @@ export default async function ProductPage({
                   href={`/products/${competitor.slug}`}
                   className="flex items-center gap-4 rounded-xl border border-border bg-card p-4 transition-colors hover:border-primary/30"
                 >
-                  <ProductLogo
-                    src={competitor.hero_image_url}
-                    name={competitor.name}
-                    size="sm"
-                  />
+                  <ProductLogo src={competitor.hero_image_url} name={competitor.name} size="sm" />
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate font-semibold text-ink">
-                      {competitor.name}
-                    </span>
+                    <span className="block truncate font-semibold text-ink">{competitor.name}</span>
                     <span className="mt-0.5 line-clamp-1 block text-sm text-body">
                       {competitor.tagline}
                     </span>

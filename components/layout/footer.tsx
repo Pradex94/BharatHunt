@@ -7,7 +7,7 @@ import Link from "next/link";
 
 import { Container } from "@/components/ui/container";
 import { Logo } from "@/components/layout/logo";
-import { ADS_EMAIL } from "@/lib/constants";
+import { ADS_EMAIL, SOCIAL_PROFILES } from "@/lib/constants";
 
 function XIcon(props: SVGProps<SVGSVGElement>) {
   return (
@@ -41,18 +41,28 @@ function YouTubeIcon(props: SVGProps<SVGSVGElement>) {
   );
 }
 
+/*
+ * Every one of these used to be `href="#"` — four links to nowhere, on every
+ * page. Now each renders only when its URL is configured (see SOCIAL_PROFILES),
+ * so an account that does not exist leaves no link behind.
+ */
 const SOCIAL_LINKS = [
-  { label: "X (Twitter)", href: "#", Icon: XIcon },
-  { label: "LinkedIn", href: "#", Icon: LinkedInIcon },
-  { label: "Instagram", href: "#", Icon: InstagramIcon },
-  { label: "YouTube", href: "#", Icon: YouTubeIcon },
-];
+  { key: "x", label: "X (Twitter)", Icon: XIcon },
+  { key: "linkedin", label: "LinkedIn", Icon: LinkedInIcon },
+  { key: "instagram", label: "Instagram", Icon: InstagramIcon },
+  { key: "youtube", label: "YouTube", Icon: YouTubeIcon },
+].flatMap(({ key, label, Icon }) => {
+  const href = SOCIAL_PROFILES[key];
+  return href ? [{ label, href, Icon }] : [];
+});
 
 const FOOTER_COLUMNS = [
   {
     title: "Platform",
     links: [
       { label: "All Products", href: "/marketplace" },
+      { label: "Categories", href: "/categories" },
+      { label: "Collections", href: "/collections" },
       { label: "Top Launches", href: "/marketplace?sort=newest" },
       { label: "Leaderboard", href: "/marketplace?sort=top-rated" },
     ],
@@ -61,9 +71,12 @@ const FOOTER_COLUMNS = [
     title: "Resources",
     links: [
       { label: "Blog", href: "/blog" },
-      { label: "Guidelines", href: "/blog" },
-      { label: "Help Center", href: "/blog" },
-      { label: "API", href: "/blog" },
+      // Three links pointed at /blog under names it does not answer to
+      // ("API", "Help Center"). Each now goes where its label promises, or is
+      // gone: a footer link to a page that is not what it says wastes the
+      // crawl and the click alike.
+      { label: "FAQ", href: "/faq" },
+      { label: "Guidelines", href: "/terms" },
     ],
   },
   {

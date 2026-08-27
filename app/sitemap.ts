@@ -1,11 +1,13 @@
 import type { MetadataRoute } from "next";
 
 import { BLOG_POSTS } from "@/lib/blog";
+import { COLLECTIONS, MIN_PRODUCTS_TO_INDEX } from "@/lib/collections";
 import { CATEGORIES, SITE_URL } from "@/lib/constants";
 import { isIndexableProduct } from "@/lib/seo";
 import {
   getAllPublishedProductSlugs,
   getCategoryCounts,
+  getCollectionCounts,
   PRODUCTS_PAGE_SIZE,
 } from "@/services/products";
 
@@ -30,6 +32,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${SITE_URL}`, lastModified: now, changeFrequency: "daily", priority: 1 },
     { url: `${SITE_URL}/marketplace`, lastModified: now, changeFrequency: "hourly", priority: 0.9 },
     { url: `${SITE_URL}/categories`, lastModified: now, changeFrequency: "weekly", priority: 0.7 },
+    { url: `${SITE_URL}/collections`, lastModified: now, changeFrequency: "weekly", priority: 0.7 },
+    { url: `${SITE_URL}/faq`, lastModified: now, changeFrequency: "monthly", priority: 0.5 },
     { url: `${SITE_URL}/advertise`, lastModified: now, changeFrequency: "monthly", priority: 0.6 },
     { url: `${SITE_URL}/blog`, lastModified: now, changeFrequency: "weekly", priority: 0.6 },
     { url: `${SITE_URL}/cookies`, lastModified: now, changeFrequency: "yearly", priority: 0.2 },
@@ -57,6 +61,25 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     lastModified: new Date(post.date),
     changeFrequency: "yearly",
     priority: 0.5,
+  }));
+
+  /*
+   * Programmatic collections, filtered by the same threshold the pages
+   * themselves apply (lib/collections.ts). A sitemap entry for a page that
+   * marks itself `noindex` is a contradiction crawlers report as an error, so
+   * the rule lives in one place and both sides read it. One facet query covers
+   * every collection rather than a count each.
+   */
+  const collectionCounts = await getCollectionCounts(
+    COLLECTIONS.map((collection) => ({ slug: collection.slug, ...collection.filter })),
+  );
+  const collectionRoutes: MetadataRoute.Sitemap = COLLECTIONS.filter(
+    (collection) => (collectionCounts[collection.slug] ?? 0) >= MIN_PRODUCTS_TO_INDEX,
+  ).map((collection) => ({
+    url: `${SITE_URL}/collections/${collection.slug}`,
+    lastModified: now,
+    changeFrequency: "weekly",
+    priority: 0.6,
   }));
 
   const published = await getAllPublishedProductSlugs();
@@ -91,6 +114,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   return [
     ...staticRoutes,
     ...categoryRoutes,
+    ...collectionRoutes,
     ...blogRoutes,
     ...marketplaceRoutes,
     ...productRoutes,

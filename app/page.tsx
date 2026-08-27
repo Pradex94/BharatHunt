@@ -10,7 +10,10 @@ import { FeatureSection } from "@/components/landing/feature-section";
 import { TopProducts } from "@/components/landing/top-products";
 import { CommunitySection } from "@/components/landing/community-section";
 import { Newsletter } from "@/components/landing/newsletter";
+import { CollectionRail } from "@/components/landing/collection-rail";
+import { COLLECTIONS, MIN_PRODUCTS_TO_INDEX } from "@/lib/collections";
 import {
+  getCollectionCounts,
   getLaunchStateCounts,
   getPlatformStats,
   getTopUpvotedProducts,
@@ -39,11 +42,33 @@ export const metadata = {
 export const revalidate = 43200;
 
 export default async function Home() {
-  const [ranked, stats, launchCounts] = await Promise.all([
+  const [ranked, stats, launchCounts, collectionCounts] = await Promise.all([
     getTopUpvotedProducts(6),
     getPlatformStats(),
     getLaunchStateCounts(),
+    getCollectionCounts(
+      COLLECTIONS.map((collection) => ({ slug: collection.slug, ...collection.filter })),
+    ),
   ]);
+
+  /*
+   * The eight biggest collections that clear their own index threshold, one per
+   * kind first so the rail shows the shape of the system rather than eight
+   * variations of "free X". Linking to a page that marks itself noindex would
+   * spend the homepage's authority on a dead end, so the threshold is the same
+   * one the pages and the sitemap use.
+   */
+  const eligible = COLLECTIONS.filter(
+    (collection) => (collectionCounts[collection.slug] ?? 0) >= MIN_PRODUCTS_TO_INDEX,
+  ).sort((a, b) => (collectionCounts[b.slug] ?? 0) - (collectionCounts[a.slug] ?? 0));
+  const featuredCollections = [
+    ...new Set([
+      ...(["topic", "pricing-category", "state"] as const).flatMap((kind) =>
+        eligible.filter((collection) => collection.kind === kind).slice(0, 2),
+      ),
+      ...eligible,
+    ]),
+  ].slice(0, 8);
 
   // The hero features the leader; the grid picks up from #2 so the same
   // product isn't shown twice in one viewport.
@@ -53,6 +78,7 @@ export default async function Home() {
     <>
       <Hero topProduct={leader ?? null} stats={stats} />
       <TopProducts products={rest} startRank={2} heading="Also climbing" />
+      <CollectionRail collections={featuredCollections} counts={collectionCounts} />
       <FeatureSection />
       <CommunitySection stats={stats} launchCounts={launchCounts} />
       <Newsletter />
