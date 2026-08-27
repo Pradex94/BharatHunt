@@ -7,7 +7,7 @@
  * Google never sees fabricated ratings or prices that could trigger a penalty.
  */
 
-import { SITE_NAME, SITE_URL } from "@/lib/constants";
+import { SITE_NAME, SITE_URL, SOCIAL_PROFILE_URLS } from "@/lib/constants";
 import { slugForCategory } from "@/lib/constants";
 
 /** Resolve a site-relative path (or pass through an already-absolute URL). */
@@ -16,7 +16,14 @@ export function absoluteUrl(path = "/"): string {
   return `${SITE_URL}${path.startsWith("/") ? path : `/${path}`}`;
 }
 
-/** Organization node — identifies the publisher across the site. */
+/**
+ * Organization node — identifies the publisher across the site.
+ *
+ * `sameAs` appears only when profiles are actually configured. It is the
+ * property a search engine uses to decide which accounts *are* this
+ * organisation, so listing a profile that is not ours would hand that identity
+ * to someone else — and listing none is simply a fact about a young brand.
+ */
 export function organizationSchema() {
   return {
     "@context": "https://schema.org",
@@ -26,6 +33,7 @@ export function organizationSchema() {
     logo: absoluteUrl("/icon"),
     description:
       "A curated marketplace where founders launch products and the community discovers, upvotes, and shares the tools worth their attention.",
+    ...(SOCIAL_PROFILE_URLS.length > 0 ? { sameAs: SOCIAL_PROFILE_URLS } : {}),
   };
 }
 
@@ -72,14 +80,32 @@ type ProductSchemaInput = {
   category: string;
   pricingType: string;
   image?: string | null;
+  /** Mean of real ratings, or null when nobody has rated it. */
+  avgRating?: number | null;
+  ratingCount?: number | null;
 };
 
 /**
- * SoftwareApplication node for a product page. A free `Offer` is attached only
- * for free/freemium products (where "price 0" is truthful); paid products omit
- * the offer rather than guessing a price. No `aggregateRating` is emitted —
- * upvotes aren't star reviews, and inventing one risks a structured-data
- * penalty.
+ * Ratings needed before `aggregateRating` is emitted.
+ *
+ * Google accepts one, which is precisely the problem: a single five-star rating
+ * would paint five stars beside a search result on the strength of one person's
+ * click, and a marketplace whose stars mean that is a marketplace whose stars
+ * mean nothing. Three is the smallest number that cannot be produced by one
+ * person having an opinion.
+ */
+export const MIN_RATINGS_FOR_SCHEMA = 3;
+
+/**
+ * SoftwareApplication node for a product page.
+ *
+ * A free `Offer` is attached only for free/freemium products, where "price 0" is
+ * truthful; paid products omit the offer rather than guessing a price.
+ *
+ * `aggregateRating` is emitted only from real ratings, and only once there are
+ * at least `MIN_RATINGS_FOR_SCHEMA` of them. Upvotes are still never used for
+ * it: an upvote is not a rating, and reading one as the other is how a site ends
+ * up with a manual action for fabricated structured data.
  */
 export function productSchema({
   name,
@@ -89,8 +115,12 @@ export function productSchema({
   category,
   pricingType,
   image,
+  avgRating,
+  ratingCount,
 }: ProductSchemaInput) {
   const isFree = pricingType === "free" || pricingType === "freemium";
+  const rated =
+    typeof avgRating === "number" && avgRating > 0 && (ratingCount ?? 0) >= MIN_RATINGS_FOR_SCHEMA;
   return {
     "@context": "https://schema.org",
     "@type": "SoftwareApplication",
@@ -109,6 +139,17 @@ export function productSchema({
           },
         }
       : {}),
+    ...(rated
+      ? {
+          aggregateRating: {
+            "@type": "AggregateRating",
+            ratingValue: Number(avgRating).toFixed(1),
+            ratingCount: ratingCount,
+            bestRating: "5",
+            worstRating: "1",
+          },
+        }
+      : {}),
     publisher: {
       "@type": "Organization",
       name: SITE_NAME,
@@ -117,17 +158,71 @@ export function productSchema({
   };
 }
 
-/** Convenience: the canonical breadcrumb trail for a product page. */
-export function productBreadcrumbs(product: { name: string; slug: string; category: string }) {
+/**
+ * FAQPage node.
+ *
+ * Only ever built by `components/seo/faq.tsx`, which renders the same array as
+ * visible text in the same component. That coupling is the point: Google's
+ * guidelines require the questions and answers to be on the page, and the
+ * reliable way to guarantee that is to make it impossible to emit the schema
+ * without also rendering the content.
+ */
+export function faqSchema(items: { question: string; answer: string }[]) {
+  return {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    mainEntity: items.map((item) => ({
+      "@type": "Question",
+      name: item.question,
+      acceptedAnswer: { "@type": "Answer", text: item.answer },
+    })),
+  };
+}
+
+/**
+ * ItemList node for a page that lists products.
+ *
+ * Takes the rows the page actually rendered, so the list can never describe
+ * products a visitor cannot see — a mismatch Google treats as cloaking. Each
+ * entry points at the canonical product URL rather than repeating the product's
+ * own fields, which keeps the detail page the single source of truth for them.
+ */
+export function itemListSchema(
+  items: { name: string; slug: string }[],
+  { name, path }: { name: string; path: string },
+) {
+  return {
+    "@context": "https://schema.org",
+    "@type": "ItemList",
+    name,
+    url: absoluteUrl(path),
+    numberOfItems: items.length,
+    itemListElement: items.map((item, index) => ({
+      "@type": "ListItem",
+      position: index + 1,
+      name: item.name,
+      url: absoluteUrl(`/products/${item.slug}`),
+    })),
+  };
+}
+
+/**
+ * The canonical breadcrumb trail for a product page, as crumbs.
+ *
+ * Returns the array rather than the schema so `components/seo/breadcrumbs.tsx`
+ * can render the visible trail and the JSON-LD from the same value. It used to
+ * return `breadcrumbSchema(...)` directly, which meant the product page emitted
+ * a hierarchy no visitor could see — valid markup describing a navigation aid
+ * that did not exist.
+ */
+export function productCrumbs(product: { name: string; slug: string; category: string }) {
   const categorySlug = slugForCategory(product.category);
-  return breadcrumbSchema([
+  return [
     { name: "Home", path: "/" },
     { name: "Products", path: "/marketplace" },
-    ...(categorySlug
-      ? [{ name: product.category, path: `/categories/${categorySlug}` }]
-      : []),
+    ...(categorySlug ? [{ name: product.category, path: `/categories/${categorySlug}` }] : []),
     { name: product.name, path: `/products/${product.slug}` },
-  ]);
+  ];
 }
 
 /**
@@ -147,8 +242,7 @@ export function isIndexableProduct(product: {
 }): boolean {
   const description = (product.description ?? "").trim();
   if (description.length >= 120) return true;
-  const hasImagery =
-    Boolean(product.hero_image_url) || (product.screenshot_urls ?? []).length > 0;
+  const hasImagery = Boolean(product.hero_image_url) || (product.screenshot_urls ?? []).length > 0;
   return description.length >= 40 && hasImagery && product.tagline.trim().length >= 20;
 }
 

@@ -323,9 +323,52 @@ export type Database = {
         }
         Relationships: []
       }
+      product_ratings: {
+        Row: {
+          created_at: string
+          id: string
+          product_id: string
+          rating: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          product_id: string
+          rating: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          product_id?: string
+          rating?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_ratings_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_ratings_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       products: {
         Row: {
           avg_rating: number | null
+          rating_count: number
           bookmark_count: number | null
           category: string
           comment_count: number | null
@@ -372,6 +415,7 @@ export type Database = {
         }
         Insert: {
           avg_rating?: number | null
+          rating_count?: number
           bookmark_count?: number | null
           category: string
           comment_count?: number | null
@@ -416,6 +460,7 @@ export type Database = {
         }
         Update: {
           avg_rating?: number | null
+          rating_count?: number
           bookmark_count?: number | null
           category?: string
           comment_count?: number | null
@@ -562,6 +607,7 @@ export type Database = {
           category: string
           pricing_type: string
           avg_rating: number | null
+          rating_count: number
           upvote_count: number | null
           comment_count: number | null
           hero_image_url: string | null

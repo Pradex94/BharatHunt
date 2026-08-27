@@ -72,3 +72,33 @@ export async function getPendingProductsAdmin(): Promise<PendingProductRow[]> {
   }
   return (data ?? []) as PendingProductRow[];
 }
+
+export type SeoAuditProduct = {
+  slug: string;
+  name: string;
+  tagline: string;
+  description: string | null;
+  hero_image_url: string | null;
+  screenshot_urls: string[] | null;
+};
+
+/**
+ * Every published product, in the shape `isIndexableProduct` needs.
+ *
+ * One read for the whole audit — the page derives every count from this array
+ * rather than asking the database a question per check. Service-role, so callers
+ * MUST verify `getIsAdmin()` first.
+ */
+export async function getSeoAuditProducts(): Promise<SeoAuditProduct[]> {
+  const supabase = createServiceClient();
+  const { data, error } = await supabase
+    .from("products")
+    .select("slug, name, tagline, description, hero_image_url, screenshot_urls")
+    .eq("status", "published")
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    throw new Error(`Failed to load products for the SEO audit: ${error.message}`);
+  }
+  return (data ?? []) as SeoAuditProduct[];
+}

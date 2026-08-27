@@ -50,9 +50,34 @@ export const MAX_GALLERY_IMAGES = 8;
  * Defaulting to the domain makes the variable an override rather than a
  * requirement.
  */
-export const SITE_URL = (
-  process.env.NEXT_PUBLIC_SITE_URL ?? "https://bharathunt.org"
-).replace(/\/+$/, "");
+export const SITE_URL = (process.env.NEXT_PUBLIC_SITE_URL ?? "https://bharathunt.org").replace(
+  /\/+$/,
+  "",
+);
+
+/**
+ * Official profiles, by platform key.
+ *
+ * Empty by default and read from the environment, because a wrong URL here is
+ * worse than none: `sameAs` is how a search engine decides which accounts *are*
+ * this organisation, and pointing it at an account you do not control hands
+ * that identity away. The footer renders only the entries that are set, so an
+ * unset platform leaves no dead `href="#"` behind — which is what these were
+ * before: four links to nowhere on every page of the site.
+ *
+ * Set the ones you own in the environment; leave the rest unset.
+ */
+export const SOCIAL_PROFILES: Record<string, string | undefined> = {
+  x: process.env.NEXT_PUBLIC_SOCIAL_X?.trim() || undefined,
+  linkedin: process.env.NEXT_PUBLIC_SOCIAL_LINKEDIN?.trim() || undefined,
+  instagram: process.env.NEXT_PUBLIC_SOCIAL_INSTAGRAM?.trim() || undefined,
+  youtube: process.env.NEXT_PUBLIC_SOCIAL_YOUTUBE?.trim() || undefined,
+};
+
+/** Just the URLs that are actually configured, for schema.org `sameAs`. */
+export const SOCIAL_PROFILE_URLS: string[] = Object.values(SOCIAL_PROFILES).filter(
+  (url): url is string => Boolean(url),
+);
 
 /** The human-facing site name, reused across metadata and structured data. */
 export const SITE_NAME = "Bharat Hunt";
@@ -82,8 +107,7 @@ export const GA_ID = process.env.NEXT_PUBLIC_GA_ID ?? "G-F29MYSGJD4";
  * need Tag Assistant or the GA4 DebugView to see a local page.
  */
 export const GA_ENABLED =
-  (process.env.NODE_ENV === "production" ||
-    process.env.NEXT_PUBLIC_GA_DEBUG === "true") &&
+  (process.env.NODE_ENV === "production" || process.env.NEXT_PUBLIC_GA_DEBUG === "true") &&
   Boolean(GA_ID);
 
 /**
@@ -100,9 +124,7 @@ export const ADS_EMAIL = "ads@bharathunt.org";
  * Override with a comma-separated `NEXT_PUBLIC_ADMIN_EMAILS` env var (defaults to
  * the project owner so admin access works with zero config).
  */
-export const ADMIN_EMAILS = (
-  process.env.NEXT_PUBLIC_ADMIN_EMAILS ?? "bislapardeep007@gmail.com"
-)
+export const ADMIN_EMAILS = (process.env.NEXT_PUBLIC_ADMIN_EMAILS ?? "bislapardeep007@gmail.com")
   .split(",")
   .map((email) => email.trim().toLowerCase())
   .filter(Boolean);
@@ -256,4 +278,3 @@ export function slugForCategory(name: string): string | undefined {
 export function categoryFromSlug(slug: string): Category | undefined {
   return CATEGORY_BY_SLUG.get(slug);
 }
-

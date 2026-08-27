@@ -17,6 +17,7 @@ import { ProductLogo } from "@/components/products/product-logo";
 import { getProductsByCreator, type MakerProduct } from "@/services/products";
 import { getIsAdmin } from "@/lib/admin";
 import { MAX_PRODUCTS_PER_USER, PRICING_TYPE_LABELS } from "@/lib/constants";
+import { isIndexableProduct } from "@/lib/seo";
 import { cn } from "@/lib/utils";
 
 export const metadata = {
@@ -218,6 +219,27 @@ function ProductRow({ product }: { product: MakerProduct }) {
           {product.category}
           {pricing ? ` · ${pricing}` : ""} · Launched {launched}
         </p>
+
+        {/*
+         * The SEO problem the maker can actually solve, said where they will
+         * see it. A published listing this thin carries `noindex` — it is on
+         * the site but invisible to search — and until now nothing told them
+         * that, so the only person who could fix it never knew. The rule is
+         * `isIndexableProduct`, the same one the page and the sitemap use, so
+         * this notice disappears the moment it stops being true.
+         */}
+        {product.status === "published" && !isIndexableProduct(product) && (
+          <p className="mt-2 rounded-lg bg-amber-50 px-2.5 py-1.5 text-xs text-amber-800">
+            Not indexed by search engines yet — the description is too short.{" "}
+            <Link
+              href={`/products/${product.slug}/edit`}
+              className="font-semibold underline underline-offset-2"
+            >
+              Add a couple of sentences
+            </Link>{" "}
+            about what it does and who it is for, and it becomes searchable on its own.
+          </p>
+        )}
       </div>
 
       {/* Performance */}
@@ -256,11 +278,7 @@ function ProductRow({ product }: { product: MakerProduct }) {
           Edit
         </Link>
         {/* redirectTo={null} keeps the maker here; the row just disappears. */}
-        <DeleteProductButton
-          productId={product.id}
-          productName={product.name}
-          redirectTo={null}
-        />
+        <DeleteProductButton productId={product.id} productName={product.name} redirectTo={null} />
       </div>
     </div>
   );
