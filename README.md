@@ -263,6 +263,29 @@ design.md            The locked design system (single source of truth)
 
 Deploys cleanly to [Vercel](https://vercel.com/new). Set the same environment variables in the project settings, point the Clerk webhook at `https://bharathunt.org/api/webhooks/clerk`, and apply the Supabase migrations to your production database.
 
+### Function region
+
+`vercel.json` pins Serverless Functions to **`bom1` (Mumbai)**. JSON takes no
+comments, so the reasoning lives here.
+
+Vercel's default region is `iad1` (Washington DC), and the audience is in India
+while the Supabase project is in AWS `ap-northeast-1` (Tokyo) — so `iad1` was
+the worst of the three available choices, paying a trans-Atlantic hop to reach
+the user *and* a trans-Pacific hop to reach the database. Production response
+headers showed it plainly: `X-Vercel-Id: bom1::iad1::…` — received at the Mumbai
+edge, executed in Virginia.
+
+`bom1` puts the function where the edge already terminates and where the users
+are, and shortens the database leg as well (Mumbai→Tokyo rather than
+Virginia→Tokyo). Every dynamic route benefits: `/marketplace`,
+`/products/[slug]`, `/categories/*`, `/collections/*`, `/dashboard`, `/submit`.
+
+**The remaining win here is the database, not the function.** Moving the
+Supabase project to `ap-south-1` (Mumbai) would put it in the same region as the
+functions and cut roughly 120ms off every round trip a dynamic page makes. That
+is a project migration, not a config change, so it is called out rather than
+done.
+
 ### Domain and DNS
 
 The site is **bharathunt.org**, served by Vercel. The records it needs:

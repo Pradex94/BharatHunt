@@ -5,7 +5,7 @@ import { MotionConfig } from "framer-motion";
 import { Navbar } from "@/components/layout/navbar";
 import { Footer } from "@/components/layout/footer";
 import { CookieConsent } from "@/components/layout/cookie-consent";
-import { ChatWidget } from "@/components/chat/chat-widget";
+import { ChatWidgetLazy } from "@/components/chat/chat-widget-lazy";
 import { JsonLd } from "@/components/seo/json-ld";
 import { GoogleAnalytics } from "@/components/analytics/google-analytics";
 import { ConsentSync } from "@/components/analytics/consent-sync";
@@ -23,11 +23,26 @@ const inter = Inter({
   display: "swap",
 });
 
-// Monospace for tabular figures (upvote counts, stats).
+/*
+ * Monospace for tabular figures (upvote counts, stats).
+ *
+ * Not preloaded, unlike Inter. `next/font` emits a `<link rel="preload">` for
+ * every font it hosts, and those arrive as `Link:` headers on the HTML response
+ * — so both faces were being fetched ahead of anything the browser had even
+ * parsed, competing with the stylesheet on a mobile connection.
+ *
+ * Inter earns that: it sets the headline that is the LCP element. This face
+ * only ever renders the small numerals inside `Numeric`, so it can be
+ * discovered from the stylesheet like a normal font. `display: "swap"` plus the
+ * metric-matched fallback `next/font` generates (`adjustFontFallback`, on by
+ * default) means those numerals paint immediately in the fallback and swap
+ * without moving the layout around them.
+ */
 const jetbrainsMono = JetBrains_Mono({
   variable: "--font-geist-mono",
   subsets: ["latin"],
   display: "swap",
+  preload: false,
 });
 
 export const metadata: Metadata = {
@@ -96,7 +111,7 @@ export default function RootLayout({
             <main className="flex flex-1 flex-col">{children}</main>
             <Footer />
             <CookieConsent />
-            <ChatWidget />
+            <ChatWidgetLazy />
           </MotionConfig>
           <NextTopLoader
             showSpinner={false}
