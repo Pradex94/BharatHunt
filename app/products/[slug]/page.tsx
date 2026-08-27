@@ -173,12 +173,15 @@ export default async function ProductPage({
 
   // Owners manage their own product; admins can moderate any product.
   const isOwner = userId === product.creator_id;
-  const canManage = isOwner || (userId ? await getIsAdmin() : false);
+  const isAdmin = userId ? await getIsAdmin() : false;
+  const canManage = isOwner || isAdmin;
 
   const [{ data: comments }, { data: upvote }, competitors] = await Promise.all([
     supabase
       .from("comments")
-      .select("id, body, created_at, author:profiles!comments_user_id_fkey(display_name, username)")
+      .select(
+        "id, body, created_at, user_id, author:profiles!comments_user_id_fkey(display_name, username)",
+      )
       .eq("product_id", product.id)
       .order("created_at", { ascending: true }),
     userId
@@ -516,7 +519,18 @@ export default async function ProductPage({
         <div className="flex flex-col gap-2">
           {comments && comments.length > 0 ? (
             comments.map((comment) => (
-              <CommentItem key={comment.id} comment={comment as CommentItemData} />
+              <CommentItem
+                key={comment.id}
+                comment={comment as CommentItemData}
+                productId={product.id}
+                productSlug={product.slug}
+                /*
+                 * Authors and admins, deliberately not the product's owner: a
+                 * maker who can delete criticism of their own launch turns the
+                 * comment thread into a testimonial page.
+                 */
+                canDelete={isAdmin || (userId != null && comment.user_id === userId)}
+              />
             ))
           ) : (
             <p className="text-sm text-muted">No comments yet.</p>

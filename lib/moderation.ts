@@ -1,8 +1,13 @@
 /**
- * Launch moderation — the gate every product passes before it goes live.
+ * Content moderation — two gates, sharing one set of blocklists.
  *
- * Two rules, enforced server-side in `lib/actions/products.ts` on both create
- * and edit:
+ * `moderateProduct` is the launch gate, below; `moderateComment` (at the end of
+ * the file) is the comment gate. They share the adult, fraud and solicitation
+ * lists deliberately — the same spam arrives through both doors — but not their
+ * quality rules, which are calibrated for very different writing.
+ *
+ * The launch gate enforces two rules, server-side in `lib/actions/products.ts`
+ * on both create and edit:
  *
  *  1. **No adult content.** Bharat Hunt is a general-audience marketplace, so
  *     NSFW/adult products (and fraud/piracy listings) are rejected outright.
@@ -24,7 +29,8 @@ export type ModerationCode =
   | "untrusted_link"
   | "placeholder_name"
   | "low_quality"
-  | "spam_formatting";
+  | "spam_formatting"
+  | "code_snippet";
 
 export type ModerationResult = { ok: true } | { ok: false; code: ModerationCode; message: string };
 
@@ -453,10 +459,7 @@ function matchesTerms({ word, loose }: TermMatchers, text: string): boolean {
   const normalized = normalize(text);
   const collapsed = collapseSpacedLetters(normalized);
   return (
-    word.test(normalized) ||
-    loose.test(normalized) ||
-    word.test(collapsed) ||
-    loose.test(collapsed)
+    word.test(normalized) || loose.test(normalized) || word.test(collapsed) || loose.test(collapsed)
   );
 }
 
@@ -658,8 +661,8 @@ export function moderateProduct(input: ModeratedProductInput): ModerationResult 
     (link): link is string => Boolean(link && link.trim()),
   );
   // Everything else we'd render — still subject to the content rules.
-  const mediaLinks = [videoUrl, heroImageUrl, ...screenshotUrls].filter(
-    (link): link is string => Boolean(link && link.trim()),
+  const mediaLinks = [videoUrl, heroImageUrl, ...screenshotUrls].filter((link): link is string =>
+    Boolean(link && link.trim()),
   );
   const allLinks = [...productLinks, ...mediaLinks];
 
@@ -771,6 +774,118 @@ export function moderateProduct(input: ModeratedProductInput): ModerationResult 
       "spam_formatting",
       "Keep phone numbers and contact handles out of the name and tagline — put them on your product page instead.",
     );
+  }
+
+  return { ok: true };
+}
+
+// ── Comments ─────────────────────────────────────────────────────────────
+
+/*
+ * A comment is a review, not a paste buffer.
+ *
+ * The gate above reads a submission; this reads what people write underneath
+ * one. The failure it exists for was live on the site: someone pasted a whole
+ * embed badge — `<a href=… style=…>` and all — into a comment box, and someone
+ * else pasted a four-line Python script. Neither is abuse and neither is
+ * dangerous (React escapes every comment it renders, so the markup showed as
+ * text rather than running), but a product page reads as abandoned when the
+ * discussion under it is other people's clipboards.
+ *
+ * The rules match on *shape*, never on vocabulary. "Does it have an API?" and
+ * "I love the print preview" have to pass, so a word list would be the wrong
+ * instrument: what separates a comment from a paste is that a paste is built
+ * out of statements rather than sentences.
+ */
+
+/*
+ * HTML by tag name rather than by angle bracket, so `<3`, `x < 5` and a
+ * developer writing `Array<string>` all survive — a comparison has no tag name
+ * after the bracket, and `string` is not an element.
+ */
+const HTML_TAG =
+  /<\s*\/?\s*(a|abbr|address|article|aside|audio|b|base|blockquote|body|br|button|canvas|caption|center|code|col|div|em|embed|fieldset|figure|font|footer|form|h[1-6]|head|header|hr|html|i|iframe|img|input|label|li|link|main|map|marquee|meta|nav|noscript|object|ol|option|p|param|picture|pre|script|section|select|small|source|span|strong|style|sub|sup|svg|table|tbody|td|textarea|tfoot|th|thead|title|tr|track|u|ul|video)\b[^>]*>/i;
+
+/** A fenced block is an explicit "this is code" marker. */
+const CODE_FENCE = /(^|\n)\s*(```|~~~)/;
+
+/**
+ * A declaration or preprocessor line, which prose never produces. One is enough
+ * on its own — nobody writes "import requests" as a sentence.
+ */
+const DECLARATION =
+  /(^|\n)\s*(import\s+[\w.{*]|from\s+[\w.]+\s+import\b|#include\b|package\s+[\w.]+;|using\s+[\w.]+;|def\s+\w+\s*\(|class\s+\w+\s*[({:]|function\s*\w*\s*\(|(const|let|var)\s+\w+\s*=|public\s+(static|class|void)\b)/;
+
+/**
+ * Weaker signals, counted rather than trusted. Each appears in ordinary writing
+ * on its own — "worth it (really)" ends in a parenthesis, "the ratio = 3" has an
+ * equals sign — so two are required before a comment is refused.
+ */
+const CODE_LINE_PATTERNS: readonly RegExp[] = [
+  /^[\w.$[\]]+\s*=\s*.*[("'`]/, // ip = requests.get("…")
+  /^[\w.$]+\([^)]*\)\s*;?$/, // print(ip)
+  /^[)\]}][;,)\]}\s]*$/, // a line that only closes a block
+  /=>\s*[{(]/, // an arrow function
+  /;\s*$/, // a statement terminator
+  /^(if|for|while|switch|return|await|throw)\s*\(/, // control flow with parens
+];
+
+/** How many lines read as code rather than as writing. */
+function codeLineCount(text: string): number {
+  return text
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
+    .filter((line) => CODE_LINE_PATTERNS.some((pattern) => pattern.test(line))).length;
+}
+
+/**
+ * The gate every comment passes, enforced server-side in
+ * `lib/actions/comments.ts`.
+ *
+ * Deliberately narrower than `moderateProduct`. A comment is one sentence from
+ * someone who may be typing on a phone in a second language, so the rules that
+ * suit a launch listing — placeholder names, gibberish detection, emoji counts
+ * — would only produce false positives here. Repeated letters are enthusiasm
+ * ("loooove this"), not mashing, and a comment in Punjabi or transliterated
+ * Hindi has to pass as readily as one in English.
+ */
+export function moderateComment(body: string): ModerationResult {
+  const text = body.trim();
+
+  if (containsAdultContent(text)) {
+    return reject("adult_content", "That comment isn't appropriate for Bharat Hunt.");
+  }
+  if (containsFraudulentContent(text)) {
+    return reject("fraudulent_content", "That comment isn't appropriate for Bharat Hunt.");
+  }
+
+  if (HTML_TAG.test(text)) {
+    return reject(
+      "code_snippet",
+      "Comments are for feedback on the product. HTML is shown as plain text here, so pasting it only makes the thread harder to read.",
+    );
+  }
+  if (CODE_FENCE.test(text) || DECLARATION.test(text) || codeLineCount(text) >= 2) {
+    return reject(
+      "code_snippet",
+      "Comments are for feedback on the product, not for code. Put the snippet in a gist or a repo and link to it instead.",
+    );
+  }
+
+  /*
+   * Solicitation and phone numbers only. A plain email address is left alone:
+   * a maker answering "how do I get support?" with an address is being useful,
+   * and this gate is not the place to stop them.
+   */
+  if (CONTACT_BAIT.test(text) || PHONE.test(text)) {
+    return reject(
+      "spam_formatting",
+      "Leave phone numbers and “message me” out of comments — say what you think of the product instead.",
+    );
+  }
+  if (isShouting(text)) {
+    return reject("spam_formatting", "Please don't write your comment in ALL CAPS.");
   }
 
   return { ok: true };
