@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ChevronRight } from "lucide-react";
 
+import { cn } from "@/lib/utils";
 import { JsonLd } from "@/components/seo/json-ld";
 import { breadcrumbSchema } from "@/lib/seo";
 
@@ -20,24 +21,50 @@ export type Crumb = { name: string; path: string };
  *
  * Server component, no client JavaScript. A breadcrumb that needed hydration to
  * appear would be invisible in exactly the pass that matters.
+ *
+ * `tone` exists because /promote opens on a near-black band, where the default
+ * ink-on-cream greys fall under 4.5:1. It only remaps colours; the default is
+ * the light trail every other page already renders.
  */
-export function Breadcrumbs({ items, className }: { items: Crumb[]; className?: string }) {
+export function Breadcrumbs({
+  items,
+  className,
+  tone = "light",
+}: {
+  items: Crumb[];
+  className?: string;
+  tone?: "light" | "dark";
+}) {
   if (items.length < 2) return null;
+
+  const onDark = tone === "dark";
 
   return (
     <>
       <JsonLd data={breadcrumbSchema(items)} />
       <nav aria-label="Breadcrumb" className={className}>
-        <ol className="flex flex-wrap items-center gap-1.5 text-xs text-muted">
+        <ol
+          className={cn(
+            "flex flex-wrap items-center gap-1.5 text-xs",
+            onDark ? "text-white/50" : "text-muted",
+          )}
+        >
           {items.map((item, index) => {
             const isLast = index === items.length - 1;
             return (
               <li key={item.path} className="flex items-center gap-1.5">
                 {index > 0 && (
-                  <ChevronRight size={12} className="shrink-0 text-border" aria-hidden="true" />
+                  <ChevronRight
+                    size={12}
+                    className={cn("shrink-0", onDark ? "text-white/25" : "text-border")}
+                    aria-hidden="true"
+                  />
                 )}
                 {isLast ? (
-                  <span aria-current="page" className="truncate text-body">
+                  <span
+                    aria-current="page"
+                    className={cn("truncate", onDark ? "text-white/80" : "text-body")}
+                  >
                     {item.name}
                   </span>
                 ) : (

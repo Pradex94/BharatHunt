@@ -6,7 +6,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useClerk, useUser } from "@clerk/nextjs";
 import { MenuIcon } from "lucide-react";
 
@@ -34,8 +34,24 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 
+/**
+ * Index of the nav link that matches the current route, or -1.
+ *
+ * Compared on pathname only, and only the first match counts. `NAV_LINKS` holds
+ * two entries pointing at /marketplace (`Products` and `Launches?sort=newest`),
+ * and reading the query string here would mean `useSearchParams` inside a
+ * layout-level client component -- which forces every page under it to opt out
+ * of static rendering. First-match keeps `Products` the active item on
+ * /marketplace, which is the right answer anyway.
+ */
+function activeNavIndex(pathname: string): number {
+  return NAV_LINKS.findIndex((link) => link.href.split("?")[0] === pathname);
+}
+
 export function Navbar() {
   const router = useRouter();
+  const pathname = usePathname();
+  const activeIndex = activeNavIndex(pathname);
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const { isLoaded, isSignedIn, user } = useUser();
@@ -87,11 +103,15 @@ export function Navbar() {
           <Logo tone="dark" />
 
           <nav aria-label="Primary" className="hidden items-center gap-6 lg:flex">
-            {NAV_LINKS.map((link) => (
+            {NAV_LINKS.map((link, index) => (
               <Link
                 key={link.href}
                 href={link.href}
-                className="text-sm font-medium text-white/70 transition-colors duration-200 hover:text-white"
+                aria-current={index === activeIndex ? "page" : undefined}
+                className={cn(
+                  "text-sm font-medium transition-colors duration-200 hover:text-white",
+                  index === activeIndex ? "text-white" : "text-white/70",
+                )}
               >
                 {link.label}
               </Link>
@@ -185,12 +205,16 @@ export function Navbar() {
                   />
 
                   <nav aria-label="Primary" className="flex flex-col gap-1">
-                    {NAV_LINKS.map((link) => (
+                    {NAV_LINKS.map((link, index) => (
                       <Link
                         key={link.href}
                         href={link.href}
                         onClick={() => setMobileOpen(false)}
-                        className="flex min-h-11 items-center rounded-md px-3 py-2 text-sm font-medium text-body transition-colors duration-200 hover:bg-secondary-bg hover:text-ink"
+                        aria-current={index === activeIndex ? "page" : undefined}
+                        className={cn(
+                          "flex min-h-11 items-center rounded-md px-3 py-2 text-sm font-medium transition-colors duration-200 hover:bg-secondary-bg hover:text-ink",
+                          index === activeIndex ? "bg-secondary-bg text-ink" : "text-body",
+                        )}
                       >
                         {link.label}
                       </Link>

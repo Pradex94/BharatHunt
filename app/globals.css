@@ -454,3 +454,83 @@
     animation: none;
   }
 }
+
+
+/* ── /promote: auction board ─────────────────────────────────────────────
+ * components/promote/*. Transform and opacity only, on a handful of nodes.
+ *
+ * Ranking movement is deliberately *not* here. Rows carry an inline
+ * `translateY(calc(var(--auction-row-h) * n))` plus a plain transition, so
+ * re-ordering the board is one property change per row -- no keyframe, no
+ * measurement pass, and a viewport resize re-derives every offset from the CSS
+ * variable without any JavaScript running.
+ *
+ * Every animation below ends on its resting value, because the global
+ * prefers-reduced-motion block above collapses animations to 0.01ms and freezes
+ * them on their final frame. A frozen frame has to be the calm state, never a
+ * half-faded row.
+ */
+
+/* A contender arriving on the board, or a category's rows being swapped in. */
+@keyframes bh-bid-enter {
+  from {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.animate-bh-bid-enter {
+  animation: bh-bid-enter 420ms cubic-bezier(0.22, 0.8, 0.3, 1) both;
+}
+
+/* Confirmation blocks: a short settle, not a bounce. */
+@keyframes bh-bid-pop {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.animate-bh-bid-pop {
+  animation: bh-bid-pop 320ms cubic-bezier(0.22, 0.8, 0.3, 1) both;
+}
+
+/* The ring behind the LIVE DEMO dot. One element, one 2s cycle. */
+@keyframes bh-live-pulse {
+  0%,
+  100% {
+    opacity: 0.45;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0;
+    transform: scale(2.2);
+  }
+}
+.animate-bh-live-pulse {
+  animation: bh-live-pulse 2s ease-out infinite;
+}
+
+/*
+ * Countdown urgency, applied only in the closing minutes of a round. A slow
+ * opacity breath on one block and nothing louder -- the brief for this page is
+ * urgency, not a page that flashes at the reader.
+ */
+@keyframes bh-urgent {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.72;
+  }
+}
+.animate-bh-urgent {
+  animation: bh-urgent 1.6s ease-in-out infinite;
+}

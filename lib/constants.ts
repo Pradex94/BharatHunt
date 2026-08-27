@@ -23,6 +23,7 @@ export const NAV_LINKS: NavLink[] = [
   { label: "Launches", href: "/marketplace?sort=newest" },
   { label: "People", href: "/categories" },
   { label: "Resources", href: "/blog" },
+  { label: "Promote", href: "/promote" },
   { label: "Advertise", href: "/advertise" },
 ];
 
