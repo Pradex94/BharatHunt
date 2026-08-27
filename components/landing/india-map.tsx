@@ -220,9 +220,18 @@ export function IndiaMap({
         const r = markerRadius(marker.count);
         return (
           <g key={marker.code}>
-            <title>
-              {marker.name}: {marker.count} {marker.count === 1 ? "product" : "products"}
-            </title>
+            {/*
+              One interpolated string, not three adjacent children. Written as
+              `{name}: {count} {word}` React serialises each expression as its
+              own text node and separates them with `<!-- -->` markers; the HTML
+              parser then merges them back into one text node, so hydration
+              found a different child list than it rendered and threw
+              "Hydration failed because the server rendered HTML didn't match
+              the client" (React #418) on every homepage load — which makes
+              React discard the server tree and re-render the whole page on the
+              client. Chrome's console shows it against production today.
+            */}
+            <title>{`${marker.name}: ${marker.count} ${marker.count === 1 ? "product" : "products"}`}</title>
             <circle cx={marker.x} cy={marker.y} r={r} fill="currentColor" fillOpacity="0.22" />
             <circle
               cx={marker.x}

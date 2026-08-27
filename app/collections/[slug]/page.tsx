@@ -17,7 +17,7 @@ import { JsonLd } from "@/components/seo/json-ld";
 import { Container } from "@/components/ui/container";
 import { Section } from "@/components/ui/section";
 import { Display, Lead, Numeric } from "@/components/ui/typography";
-import { FadeIn, FadeInStagger, FadeInItem } from "@/components/ui/motion";
+import { FadeInStagger, FadeInItem } from "@/components/ui/motion";
 import { ProductCard } from "@/components/products/product-card";
 import {
   collectionBySlug,
@@ -183,13 +183,15 @@ export default async function CollectionPage({ params }: { params: Promise<{ slu
       <Section className="border-b border-border py-12 md:py-16">
         <Container className="flex flex-col gap-5">
           <Breadcrumbs items={crumbs} />
-          <FadeIn className="flex flex-col gap-4">
+          {/* Painted, not faded in: this header is the LCP element on this
+              route. See the note in components/ui/motion.tsx. */}
+          <div className="flex flex-col gap-4">
             <Display className="max-w-3xl">{collection.title}</Display>
             <Lead className="max-w-2xl">{collection.intro}</Lead>
             <p className="text-sm text-muted">
               <Numeric>{total}</Numeric> {total === 1 ? "product" : "products"} · {RANKING_NOTE}
             </p>
-          </FadeIn>
+          </div>
         </Container>
       </Section>
 

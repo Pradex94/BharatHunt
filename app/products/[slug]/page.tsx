@@ -35,7 +35,6 @@ import { PRODUCT_PLATFORMS, SITE_URL, slugForCategory } from "@/lib/constants";
 import { isIndexableProduct, productCrumbs, productSchema, withReferral } from "@/lib/seo";
 import { indiaStateName } from "@/lib/india-states";
 import { H1, H2, Numeric } from "@/components/ui/typography";
-import { FadeIn } from "@/components/ui/motion";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -286,7 +285,11 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
         })}
         className="mb-6"
       />
-      <FadeIn className="flex flex-col gap-6">
+      {/* Not faded in. This block is the entire launch — logo, name, tagline,
+          CTA, description, gallery — so wrapping it in <FadeIn> put the whole
+          above-the-fold page behind `opacity:0` until framer-motion hydrated.
+          See the note in components/ui/motion.tsx. */}
+      <div className="flex flex-col gap-6">
         <div className="flex gap-4 sm:gap-5">
           <ProductLogo src={product.hero_image_url} name={product.name} size="lg" />
           <div className="flex min-w-0 flex-1 flex-col gap-2">
@@ -500,7 +503,7 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
             </div>
           </div>
         )}
-      </FadeIn>
+      </div>
 
       <ProductReach
         productUrl={productUrl}

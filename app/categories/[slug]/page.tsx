@@ -12,7 +12,7 @@ import { Container } from "@/components/ui/container";
 import { Section } from "@/components/ui/section";
 import { Display, Lead, Numeric } from "@/components/ui/typography";
 import { buttonVariants } from "@/components/ui/button";
-import { FadeIn, FadeInStagger, FadeInItem } from "@/components/ui/motion";
+import { FadeInStagger, FadeInItem } from "@/components/ui/motion";
 import { ProductCard, type ProductCardProduct } from "@/components/products/product-card";
 import { Breadcrumbs } from "@/components/seo/breadcrumbs";
 import { JsonLd } from "@/components/seo/json-ld";
@@ -121,7 +121,9 @@ export default async function CategoryPage({
               { name: category.name, path: `/categories/${slug}` },
             ]}
           />
-          <FadeIn className="flex flex-col gap-5">
+          {/* Painted, not faded in: this header is the LCP element on this
+              route. See the note in components/ui/motion.tsx. */}
+          <div className="flex flex-col gap-5">
             <Link
               href="/categories"
               className="flex w-fit items-center gap-1.5 text-sm font-medium text-muted transition-colors duration-200 hover:text-ink"
@@ -141,7 +143,7 @@ export default async function CategoryPage({
               </div>
             </div>
             <Lead className="max-w-2xl">{category.blurb}</Lead>
-          </FadeIn>
+          </div>
         </Container>
       </Section>
 
