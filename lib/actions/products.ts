@@ -6,7 +6,7 @@ import { auth, currentUser } from "@clerk/nextjs/server";
 import type { PostgrestError } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
-import { isMissingColumnError } from "@/lib/supabase/errors";
+import { isMissingColumnError, isTransportError } from "@/lib/supabase/errors";
 import { getIsAdmin, isAdminUser } from "@/lib/admin";
 import { cacheInvalidatePrefix } from "@/lib/cache";
 import { ensureProfile } from "@/lib/ensure-profile";
@@ -563,6 +563,21 @@ export async function createProduct(
   );
 
   if (error || !product) {
+    /*
+     * A write that timed out is not a write that failed. `resilientFetch` gives
+     * up on the connection, not on the row — Postgres may well have applied the
+     * insert and simply not got the answer back to us. Reporting that as
+     * "couldn't save" invites a resubmit that lands a second launch, so say what
+     * is actually known and point at the page that settles it.
+     */
+    if (error && isTransportError(error)) {
+      console.error(`[launch] insert did not confirm for "${slug}": ${error.message}`);
+      return {
+        error:
+          "We couldn't confirm your launch was saved — the database didn't answer in time. " +
+          "Check your dashboard: if it isn't listed there, submit again.",
+      };
+    }
     return { error: error?.message ?? "Could not submit your product. Please try again." };
   }
 
