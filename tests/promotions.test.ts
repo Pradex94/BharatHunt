@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { formatDuration, formatPaise, promotionWindow } from "../lib/promotions.ts";
+import { formatDuration, formatInr, formatPaise, promotionWindow } from "../lib/promotions.ts";
 
 /**
  * The pure half of the promotion system: the figure a customer is shown, and
@@ -9,6 +9,25 @@ import { formatDuration, formatPaise, promotionWindow } from "../lib/promotions.
  * a wrong rupee figure looks like a price, and a wrong end date looks like a
  * date — so they are checked here rather than eyeballed on a page.
  */
+
+describe("formatInr", () => {
+  it("groups the Indian way", () => {
+    assert.equal(formatInr(950), "₹950");
+    assert.equal(formatInr(2400), "₹2,400");
+    assert.equal(formatInr(120000), "₹1,20,000");
+    assert.equal(formatInr(10000000), "₹1,00,00,000");
+  });
+
+  it("handles small and negative values", () => {
+    assert.equal(formatInr(0), "₹0");
+    assert.equal(formatInr(7), "₹7");
+    assert.equal(formatInr(-2400), "-₹2,400");
+  });
+
+  it("rounds rather than emitting a fraction", () => {
+    assert.equal(formatInr(2400.6), "₹2,401");
+  });
+});
 
 describe("formatPaise", () => {
   it("renders whole rupees without a decimal part", () => {
@@ -19,9 +38,8 @@ describe("formatPaise", () => {
 
   /*
    * Indian digit grouping, not thousands: 2,49,900 paise is ₹2,499 and a
-   * hundred thousand rupees is ₹1,00,000, never ₹100,000. `formatInr` in
-   * lib/promote.ts owns the rule; this asserts the paise wrapper does not lose
-   * it.
+   * hundred thousand rupees is ₹1,00,000, never ₹100,000. `formatInr` owns the
+   * rule; this asserts the paise wrapper does not lose it.
    */
   it("groups in the Indian style", () => {
     assert.equal(formatPaise(10000000), "₹1,00,000");
