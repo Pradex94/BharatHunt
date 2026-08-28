@@ -1,21 +1,16 @@
 /**
  * Promotion vocabulary shared by the server and the browser.
  *
- * Framework-agnostic on purpose, exactly like lib/promote.ts and
- * lib/constants.ts: no React, no Supabase, no `process.env`. The checkout is a
- * client component and needs these types and this formatting, so nothing here
- * may drag a server module into the client bundle.
+ * Framework-agnostic on purpose, exactly like lib/constants.ts: no React, no
+ * Supabase, no `process.env`. The checkout is a client component and needs
+ * these types and this formatting, so nothing here may drag a server module
+ * into the client bundle.
  *
  * Note what is *not* here: no prices. Every rupee figure lives in the
  * `promotion_packages` table and reaches the browser only as data the server
  * read from it. A constant here would be a second source of truth, and the one
  * the client could be shown while the server charged the other.
  */
-
-// Relative and extensioned on purpose: `npm test` imports this module in plain
-// Node, where the `@/` alias and extensionless specifiers do not resolve. Same
-// convention as lib/rate-limit-ip.ts.
-import { formatInr } from "./promote.ts";
 
 /** Lifecycle of a purchased slot. Mirrors the CHECK constraint on `promotions`. */
 export type PromotionStatus =
@@ -28,7 +23,7 @@ export type PromotionStatus =
 /** Lifecycle of a Razorpay payment. Mirrors the CHECK constraint on `payments`. */
 export type PaymentStatus = "created" | "pending" | "paid" | "failed" | "refunded";
 
-/** Where a slot renders. Same vocabulary as `PROMO_SLOTS` in lib/promote.ts. */
+/** Where a slot renders. Mirrors the `placement` column on `promotion_packages`. */
 export type PromotionPlacement = "spotlight" | "featured" | "category";
 
 /** A row of `promotion_packages`, as the checkout receives it. */
@@ -73,11 +68,28 @@ export type PromotableProduct = {
 };
 
 /**
+ * Indian digit grouping, hand-rolled rather than `Intl.NumberFormat("en-IN")`.
+ *
+ * This string is rendered on the server and again during hydration. A Node
+ * build without full ICU groups differently from the browser, which would be a
+ * hydration mismatch that only appears on some hosts — the worst kind. Six
+ * lines of arithmetic have no such failure mode.
+ */
+export function formatInr(amount: number): string {
+  const rounded = Math.round(amount);
+  const digits = String(Math.abs(rounded));
+  const last3 = digits.slice(-3);
+  const rest = digits.slice(0, -3);
+  const grouped = rest ? `${rest.replace(/\B(?=(\d{2})+(?!\d))/g, ",")},${last3}` : last3;
+  return `${rounded < 0 ? "-" : ""}₹${grouped}`;
+}
+
+/**
  * Paise to a displayable rupee string: `499900` becomes `₹4,999`.
  *
- * Reuses `formatInr` rather than `Intl.NumberFormat("en-IN")` for the reason
- * given there -- a Node build without full ICU groups digits differently from
- * the browser, and this string is rendered on both sides of a hydration
+ * Reuses `formatInr` above rather than `Intl.NumberFormat("en-IN")` for the
+ * reason given there -- a Node build without full ICU groups digits differently
+ * from the browser, and this string is rendered on both sides of a hydration
  * boundary.
  *
  * Fractional rupees are rendered when a price has them. Every seeded package is
