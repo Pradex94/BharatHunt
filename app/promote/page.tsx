@@ -187,8 +187,16 @@ export default function PromotePage() {
                 </PromoteCta>
               </div>
 
+              {/*
+                The board above is still a preview, and says so. Fixed-price
+                slots are real and buyable at /promote/checkout, so this line
+                has to separate the two rather than claim nothing on the page
+                charges anyone — which stopped being true the moment checkout
+                shipped.
+              */}
               <p className="text-xs leading-relaxed text-white/45">
-                Preview of the bidding experience — no payment is taken on this page.
+                The board above is a preview — live bidding is coming. Fixed-price promotion slots
+                are available now.
               </p>
             </div>
 
@@ -216,7 +224,35 @@ export default function PromotePage() {
 
             <SlotTiers />
 
+            {/*
+              The real purchase path.
+
+              Deliberately a link rather than the checkout itself: this page is
+              prerendered (see the note at the top), and the checkout reads the
+              signed-in maker's own products and promotion history. Rendering it
+              here would make the whole route dynamic and undo the prerender the
+              hero's LCP depends on. No price is quoted for the same reason — the
+              figures live in `promotion_packages`, and a number hardcoded here
+              would be a second source of truth that could drift from what the
+              card is actually charged.
+            */}
             <div className="mx-auto mt-14 max-w-3xl">
+              <div className="flex flex-col gap-4 rounded-3xl border border-primary/25 bg-primary/[0.05] p-6 sm:flex-row sm:items-center sm:justify-between sm:p-7">
+                <div className="flex flex-col gap-1.5">
+                  <H3 className="text-lg sm:text-xl">Buy a slot at a fixed price</H3>
+                  <p className="text-sm leading-relaxed text-body">
+                    Skip the board. Choose a placement, pay once, and hold the position for a set
+                    number of days.
+                  </p>
+                </div>
+                <PromoteCta href="/promote/checkout" event="promote_view_packages" size="lg">
+                  See packages
+                  <ArrowRight className="size-4" aria-hidden="true" />
+                </PromoteCta>
+              </div>
+            </div>
+
+            <div className="mx-auto mt-8 max-w-3xl">
               <BidPanel />
             </div>
           </Container>
@@ -343,8 +379,8 @@ export default function PromotePage() {
             </FadeIn>
 
             <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row">
-              <PromoteCta href="#place-bid" event="promote_start_bidding_footer" size="lg">
-                Start Bidding
+              <PromoteCta href="/promote/checkout" event="promote_view_packages_footer" size="lg">
+                Get Promoted
                 <ArrowRight className="size-4" aria-hidden="true" />
               </PromoteCta>
               <Link
@@ -361,7 +397,7 @@ export default function PromotePage() {
 
             <p className="flex items-center gap-2 text-xs text-white/45">
               <Check className="size-3.5 text-primary" aria-hidden="true" />
-              Bidding opens soon. Nothing on this page charges you.
+              Fixed-price slots, paid securely through Razorpay. Live bidding opens soon.
             </p>
           </Container>
         </section>
