@@ -83,6 +83,18 @@ export async function clientIp(): Promise<string> {
 // ── Public API ───────────────────────────────────────────────────────────
 
 /**
+ * How long Redis may take to answer a limit check before we stop waiting.
+ *
+ * The fail-open contract above already covers a Redis *error*. It does not cover
+ * Redis being slow, and an unanswered call is the worse of the two: the limiter
+ * sits on the critical path of every write, so a stalled connection here doesn't
+ * degrade to the local tier, it holds the whole Server Action until the platform
+ * kills it. Degrading on silence is the same decision as degrading on an error,
+ * just with the clock made explicit.
+ */
+const LIMITER_TIMEOUT_MS = 2_000;
+
+/**
  * Consume one unit against `name` for `identifier` (a user id, or an IP).
  *
  * Returns a result rather than throwing, so each caller shapes its own
@@ -100,7 +112,15 @@ export async function checkRateLimit(
   }
 
   try {
-    const { success, limit, remaining, reset } = await limiter.limit(identifier);
+    const verdict = await Promise.race([
+      limiter.limit(identifier),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), LIMITER_TIMEOUT_MS)),
+    ]);
+    if (!verdict) {
+      console.error(`[rate-limit] "${name}" did not answer in ${LIMITER_TIMEOUT_MS}ms — counting locally.`);
+      return consumeLocal(`ratelimit:${name}:${identifier}`, policy);
+    }
+    const { success, limit, remaining, reset } = verdict;
     return {
       ok: success,
       limit,
