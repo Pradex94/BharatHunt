@@ -74,6 +74,16 @@ type StepId = (typeof STEPS)[number]["id"];
 const REQUIRED_STEPS: StepId[] = ["main", "links"];
 
 /**
+ * How long a submit may stay in flight before the form stops covering the page
+ * and hands control back. See the note on `stalled` in the component.
+ *
+ * Well past a healthy launch (a few seconds, most of it the redirect's render)
+ * and past a slow one on a bad connection, but short enough that a maker has
+ * not yet given up and closed the tab.
+ */
+const PUBLISH_STALL_MS = 25_000;
+
+/**
  * Which step a rejected launch rule belongs to, so we can jump the maker there.
  *
  * Partial because `ModerationCode` also covers rules only comments can break —
@@ -314,6 +324,27 @@ export function ProductForm({ product, detectedState = null }: ProductFormProps)
   const [submitLock, setSubmitLock] = useState<{ result: ProductFormState } | null>(null);
   const submitting = submitLock !== null && submitLock.result === state;
 
+  /*
+   * The lock above has one failure mode, and it is the worst one: it opens only
+   * when something *arrives*. A launch that never comes back — a killed
+   * function, a dropped connection, a response the router can't read as an
+   * action result — leaves `submitting` (or `pending`) latched on with no error
+   * to show and no result to compare against, and the overlay below covers the
+   * whole viewport. The maker is then left looking at a spinner that cannot
+   * end, over a form they cannot reach, with no way to retry and nothing said.
+   *
+   * So the wait is bounded. Past the deadline we stop claiming to know what is
+   * happening: uncover the page, release the lock, and say plainly that the
+   * launch may or may not have been recorded and where to check. Being wrong
+   * about a slow-but-fine launch costs a duplicate-name message on retry; being
+   * wrong the other way costs the maker the whole submission.
+   */
+  const [stall, setStall] = useState<{ result: ProductFormState } | null>(null);
+  // Same idiom as the lock above, and for the same reason: a verdict that turns
+  // up late is a better answer than "we don't know", so the notice stands only
+  // until the action result moves on from the one it was raised against.
+  const stalled = stall !== null && stall.result === state;
+
   const stepIndex = STEPS.findIndex((entry) => entry.id === step);
 
   const productLinks = [
@@ -332,15 +363,42 @@ export function ProductForm({ product, detectedState = null }: ProductFormProps)
   // The banner lives below the step panels, so bring it into view whenever it
   // changes — otherwise a rejected publish just silently scrolls away.
   useEffect(() => {
-    if (activeError) {
+    if (activeError || stalled) {
       errorRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
     }
-  }, [activeError]);
+  }, [activeError, stalled]);
 
   /** The submit is in flight — covers the action *and* the redirect after it. */
-  const publishing = submitting || pending;
+  const inFlight = submitting || pending || uploadingImage || galleryUploading > 0;
+
+  /*
+   * Starts the clock on whichever phase is running, and restarts it when the
+   * phase changes — a slow Cloudinary upload followed by a slow action gets a
+   * full allowance each rather than sharing one.
+   *
+   * Releasing the lock here is what actually unsticks the form: `submitting`
+   * only clears when a *different* action result arrives, and `pending` clears
+   * only when React's action settles. Neither can be waited on if the response
+   * never comes, so the lock is dropped from this side instead. `pending` may
+   * well stay true underneath, which is why every gate below reads `!stalled`
+   * rather than trusting the flags on their own.
+   */
+  useEffect(() => {
+    // Already given up on this one: `pending` can stay latched behind a response
+    // that never came, and re-arming against it would just retell the maker the
+    // same thing every 25 seconds. The next submit starts the next clock.
+    if (!inFlight || stalled) return;
+    const timer = setTimeout(() => {
+      setSubmitLock(null);
+      setStall({ result: state });
+    }, PUBLISH_STALL_MS);
+    return () => clearTimeout(timer);
+  }, [inFlight, stalled, uploadingImage, galleryUploading, state]);
+
+  /** Whether to cover the page and say a launch is running. */
+  const publishing = (submitting || pending) && !stalled;
   /** Anything that must block a second submit, uploads included. */
-  const busy = publishing || uploadingImage || galleryUploading > 0;
+  const busy = inFlight && !stalled;
   // Only the hero upload can run inside a submit — a gallery upload in flight
   // makes the form `busy`, which turns the submit away before it starts.
   const busyLabel = uploadingImage
@@ -545,6 +603,8 @@ export function ProductForm({ product, detectedState = null }: ProductFormProps)
     // the review step reaches this handler regardless of both.
     if (busy) return;
     setSubmitLock({ result: state });
+    // A retry after a stalled launch starts a fresh attempt, and a fresh clock.
+    setStall(null);
 
     // Required fields live on specific steps, and the stepper lets a maker jump
     // straight to Review. Check them here so an incomplete form points at the
@@ -1434,6 +1494,38 @@ export function ProductForm({ product, detectedState = null }: ProductFormProps)
 
         {/* Scroll target for whichever banner is showing — see the effect above. */}
         <div ref={errorRef} className="empty:hidden">
+          {/*
+            The form is usable again at this point, so this has to say the one
+            thing that stops a maker making it worse: we don't know whether it
+            landed, and a blind retry of a launch that did land comes back as a
+            duplicate. The link is a plain <a> on purpose — whatever left the
+            submit hanging may well be the client router itself, and a full page
+            load is the one navigation that cannot also be stuck.
+          */}
+          {stalled && (
+            <div className="rounded-lg border border-amber-300 bg-amber-50 p-4" role="alert">
+              <p className="text-sm font-semibold text-amber-900">
+                {product
+                  ? "Your changes are taking longer than expected."
+                  : "Your launch is taking longer than expected."}
+              </p>
+              <p className="mt-1 text-sm text-amber-800">
+                {product ? (
+                  "The save may still have gone through — reload this page to see where it got to before saving again."
+                ) : (
+                  <>
+                    It may still have gone through. Check{" "}
+                    <a href="/dashboard" className="font-medium underline">
+                      your dashboard
+                    </a>{" "}
+                    before submitting again — resubmitting a launch that already arrived comes back
+                    as a duplicate.
+                  </>
+                )}
+              </p>
+            </div>
+          )}
+
           {stepError && (
             <div className="rounded-lg border border-amber-300 bg-amber-50 p-4" role="alert">
               <p className="text-sm text-amber-800">{stepError}</p>
