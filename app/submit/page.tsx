@@ -19,6 +19,20 @@ export const metadata = {
   robots: { index: false, follow: true },
 };
 
+/**
+ * `createProduct` posts back to this route, and a page-level `maxDuration` is
+ * what sets the budget for every Server Action on the page — so this is the
+ * launch's actual time limit, not the page render's.
+ *
+ * A launch is a handful of serial round trips (Clerk, four Postgres queries,
+ * the insert, then the bookkeeping) and it ends by rendering /dashboard into
+ * the redirect response. Left unset, the platform default decides when to kill
+ * that, and a launch cut off mid-flight reaches the maker as a spinner that
+ * never resolves. 60s is far more than the path needs — the point is that the
+ * deadline is ours and is known, not that it is generous.
+ */
+export const maxDuration = 60;
+
 export default async function SubmitPage() {
   const { userId } = await auth();
 

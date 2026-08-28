@@ -315,6 +315,57 @@ async function announceSubmission(product: ReviewSubject, user: ClerkUser): Prom
 }
 
 /**
+ * How long the after-the-insert bookkeeping may hold a maker's redirect.
+ *
+ * Nothing behind this deadline is load-bearing. The row is committed before any
+ * of it starts, and every piece is fail-open by contract (lib/email.ts,
+ * lib/cache.ts) — so the only thing it can cost is the maker's patience, and it
+ * was quietly authorised to cost all of it. Two Sendgrove round trips cap at
+ * 15s *each*, or 30s when the sender falls back to `EMAIL_FALLBACK_FROM`, and
+ * the cache sweep walks the whole Redis keyspace with one network hop per
+ * `SCAN` page. All of it ran before a single byte of the response went out, so
+ * a slow provider showed up on the launch form as a spinner that never ended.
+ *
+ * Past the deadline we redirect anyway and log what was still running. /admin
+ * is the durable record that a launch is waiting; the mail is only the prompt
+ * to go and look at it.
+ */
+const BOOKKEEPING_DEADLINE_MS = 8_000;
+
+/**
+ * Awaits `work`, but never for longer than {@link BOOKKEEPING_DEADLINE_MS}.
+ *
+ * The rejection handler is attached before the race rather than after it, so
+ * work that fails *after* the deadline has passed is still logged rather than
+ * surfacing as an unhandled rejection that takes the whole invocation with it.
+ */
+async function withDeadline(label: string, work: Promise<unknown>): Promise<void> {
+  const settled = work.then(
+    () => "done" as const,
+    (error: unknown) => {
+      console.error(`[launch] ${label} failed:`, error);
+      return "done" as const;
+    },
+  );
+
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<"timeout">((resolve) => {
+    timer = setTimeout(() => resolve("timeout"), BOOKKEEPING_DEADLINE_MS);
+  });
+
+  try {
+    if ((await Promise.race([settled, deadline])) === "timeout") {
+      console.error(
+        `[launch] ${label} was still running after ${BOOKKEEPING_DEADLINE_MS}ms — ` +
+          "finishing the launch without it.",
+      );
+    }
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
  * Every existing slug that could collide with `baseSlug`, in one round trip.
  *
  * Slug selection used to probe candidates one at a time — a sequential query
@@ -518,30 +569,34 @@ export async function createProduct(
   /*
    * The submission exists now; the rest is bookkeeping the maker is only waiting
    * on because it has to finish before the redirect. Run it together rather than
-   * stacking a Redis SCAN sweep on top of two email round trips.
+   * stacking a Redis SCAN sweep on top of two email round trips — and under a
+   * deadline, so neither can hold the launch open (see `withDeadline`).
    *
    * The public caches are still invalidated even though nothing public changed
    * yet: the per-user product count that enforces the launch limit is read
    * through the same prefix.
    */
-  await Promise.all([
-    cacheInvalidatePrefix(PRODUCTS_CACHE_PREFIX),
-    announceSubmission(
-      {
-        id: product.id,
-        slug: product.slug,
-        name,
-        tagline,
-        description,
-        category,
-        pricingType,
-        websiteUrl,
-        githubUrl,
-        launchState,
-      },
-      user,
-    ),
-  ]);
+  await withDeadline(
+    "submission bookkeeping",
+    Promise.all([
+      cacheInvalidatePrefix(PRODUCTS_CACHE_PREFIX),
+      announceSubmission(
+        {
+          id: product.id,
+          slug: product.slug,
+          name,
+          tagline,
+          description,
+          category,
+          pricingType,
+          websiteUrl,
+          githubUrl,
+          launchState,
+        },
+        user,
+      ),
+    ]),
+  );
   // It's a new row on the maker's dashboard, and a new row in the admin queue.
   revalidatePath("/dashboard");
   revalidatePath("/admin");
