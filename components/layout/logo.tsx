@@ -18,7 +18,7 @@ function BrandMark() {
  *
  * This used to probe for an optional `public/brand-icon.png` on mount and
  * upgrade to it if the request succeeded. That file is not in the repo and is
- * not coming back -- `app/icon.tsx` replaced it -- so the probe never upgraded
+ * not coming back -- `app/icon.svg` replaced it -- so the probe never upgraded
  * anything and simply spent a guaranteed 404 on every page load, on every
  * route, for every visitor. There is no way to ask a browser "does this file
  * exist?" without making a request that fails when it does not, so the feature
