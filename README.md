@@ -48,6 +48,12 @@ SENDGROVE_API_KEY=<keyId>:<keySecret>         # sent as the X-API-Key header
 EMAIL_FROM=Bharat Hunt <ads@bharathunt.org>   # must be a VERIFIED sender
 EMAIL_FALLBACK_FROM=Bharat Hunt <info@bharathunt.org>   # optional; see below
 
+# Razorpay — LIVE payments for /promote/checkout (REQUIRED to sell promotion slots)
+# All three are SERVER-ONLY. None is NEXT_PUBLIC_, and none may be.
+RAZORPAY_KEY_ID=rzp_live_xxxxxxxxxxxxxx
+RAZORPAY_KEY_SECRET=<your-live-key-secret>
+RAZORPAY_WEBHOOK_SECRET=<your-webhook-secret>   # a DIFFERENT value from the key secret
+
 # Cloudflare Turnstile — captcha on the /advertise inquiry form (REQUIRED for that form)
 NEXT_PUBLIC_TURNSTILE_SITE_KEY=<your-turnstile-site-key>
 TURNSTILE_SECRET_KEY=<your-turnstile-secret-key>
@@ -198,7 +204,49 @@ Type-check with `npx tsc --noEmit`.
 | `/login`, `/signup` | Clerk auth |
 | `/admin` | Admin only — the review queue, plus every product and the platform stats |
 | `/admin/review/[id]` | Where the Approve / Send back links in the review email land |
+| `/promote` | Promotion marketing page — the auction board is a preview; links to checkout |
+| `/promote/checkout` | Buy a fixed-price promotion slot (Razorpay Standard Checkout) |
 | `/api/webhooks/clerk` | Syncs Clerk users into the `profiles` table |
+| `/api/webhooks/razorpay` | Settles payments and activates promotions (signed, idempotent) |
+
+## Paid promotions (Razorpay)
+
+`/promote/checkout` sells fixed-price promotion slots through Razorpay Standard Checkout in **live
+mode**. There is no test-mode branch and no mock response anywhere in the path.
+
+**The browser never decides the price.** The checkout posts a package id and a product id; the price
+is read from `promotion_packages.amount_paise` server-side and the Razorpay order is created from
+that figure. No parameter on `createPromotionOrder` can carry an amount.
+
+**Nothing is marked paid on a browser callback.** `verifyPromotionPayment` requires four independent
+things: the HMAC over `order_id|payment_id` verifies under `RAZORPAY_KEY_SECRET`; the payment row for
+that order belongs to the caller; Razorpay's own API reports the payment captured against that order;
+and the captured amount and currency equal what was recorded. Only then does the payment become
+`paid` and the promotion `active`.
+
+**`promotions` and `payments` have SELECT policies only.** With RLS on and no INSERT/UPDATE/DELETE
+policy, the anon key cannot write them at all — the sole write path is the service-role client, and
+the authorization happens in `lib/actions/promotions.ts` before each write. Same reasoning as the
+launch review gate below.
+
+### The webhook
+
+Point Razorpay at `https://bharathunt.org/api/webhooks/razorpay` and subscribe to `payment.captured`,
+`payment.authorized`, `payment.failed`, `refund.created` and `refund.processed`. The body is verified
+against `RAZORPAY_WEBHOOK_SECRET` — a **different value** from the key secret; swapping the two fails
+every delivery silently and paid promotions never activate.
+
+Delivery is at-least-once, so the handler is idempotent three ways: `razorpay_webhook_events` is a
+ledger keyed on Razorpay's `x-razorpay-event-id` and short-circuits a replay before any handler runs;
+every settlement update is conditioned on the row's current status; and a partial unique index
+(`promotions (product_id) where status = 'active'`) makes a second live slot for one product
+impossible rather than merely unlikely.
+
+### What is not wired yet
+
+A purchased slot is charged, recorded and visible to its buyer, but **promoted placements are not yet
+rendered on the marketplace or homepage**. `getActivePromotions()` in `services/promotions.ts` is the
+seam those queries will read from. Do not advertise the checkout publicly until that is done.
 
 ## Launch review
 

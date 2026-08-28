@@ -55,6 +55,214 @@ export type Database = {
           },
         ]
       }
+      promotion_packages: {
+        Row: {
+          amount_paise: number
+          created_at: string
+          currency: string
+          description: string | null
+          duration_days: number
+          id: string
+          is_active: boolean
+          name: string
+          placement: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          amount_paise: number
+          created_at?: string
+          currency?: string
+          description?: string | null
+          duration_days: number
+          id: string
+          is_active?: boolean
+          name: string
+          placement: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          amount_paise?: number
+          created_at?: string
+          currency?: string
+          description?: string | null
+          duration_days?: number
+          id?: string
+          is_active?: boolean
+          name?: string
+          placement?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      promotions: {
+        Row: {
+          activated_at: string | null
+          amount_paise: number
+          created_at: string
+          currency: string
+          duration_days: number
+          ends_at: string | null
+          id: string
+          package_id: string
+          placement: string
+          product_id: string
+          starts_at: string | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          activated_at?: string | null
+          amount_paise: number
+          created_at?: string
+          currency?: string
+          duration_days: number
+          ends_at?: string | null
+          id?: string
+          package_id: string
+          placement: string
+          product_id: string
+          starts_at?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          activated_at?: string | null
+          amount_paise?: number
+          created_at?: string
+          currency?: string
+          duration_days?: number
+          ends_at?: string | null
+          id?: string
+          package_id?: string
+          placement?: string
+          product_id?: string
+          starts_at?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "promotions_package_id_fkey"
+            columns: ["package_id"]
+            isOneToOne: false
+            referencedRelation: "promotion_packages"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "promotions_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "promotions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      payments: {
+        Row: {
+          amount: number
+          created_at: string
+          currency: string
+          error_code: string | null
+          error_description: string | null
+          id: string
+          promotion_id: string
+          razorpay_order_id: string
+          razorpay_payment_id: string | null
+          razorpay_signature: string | null
+          receipt: string
+          refunded_amount: number
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          currency?: string
+          error_code?: string | null
+          error_description?: string | null
+          id?: string
+          promotion_id: string
+          razorpay_order_id: string
+          razorpay_payment_id?: string | null
+          razorpay_signature?: string | null
+          receipt: string
+          refunded_amount?: number
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          currency?: string
+          error_code?: string | null
+          error_description?: string | null
+          id?: string
+          promotion_id?: string
+          razorpay_order_id?: string
+          razorpay_payment_id?: string | null
+          razorpay_signature?: string | null
+          receipt?: string
+          refunded_amount?: number
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payments_promotion_id_fkey"
+            columns: ["promotion_id"]
+            isOneToOne: false
+            referencedRelation: "promotions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payments_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      razorpay_webhook_events: {
+        Row: {
+          event: string
+          id: string
+          order_id: string | null
+          payment_id: string | null
+          received_at: string
+        }
+        Insert: {
+          event: string
+          id: string
+          order_id?: string | null
+          payment_id?: string | null
+          received_at?: string
+        }
+        Update: {
+          event?: string
+          id?: string
+          order_id?: string | null
+          payment_id?: string | null
+          received_at?: string
+        }
+        Relationships: []
+      }
       newsletter_subscribers: {
         Row: {
           created_at: string

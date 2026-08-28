@@ -93,6 +93,33 @@ export const RATE_LIMITS = {
     message: "Too many link imports. Try again in a few minutes.",
   },
 
+  /**
+   * Creates a real Razorpay order. Tightest authenticated write on the
+   * platform, and the only one that costs the *provider* something per call:
+   * orders accumulate against the account whether or not anyone pays them, and
+   * a flood would fill the Razorpay dashboard with junk while pinning our own
+   * outbound requests. Five in ten minutes is far more than a human buying a
+   * slot needs, including retries after a failed card.
+   */
+  promotionOrder: {
+    limit: 5,
+    windowSeconds: 600,
+    message: "Too many payment attempts. Please wait a few minutes and try again.",
+  },
+  /**
+   * Verifying a Checkout callback. Looser than order creation because one
+   * purchase can legitimately verify more than once -- a retried network call,
+   * a webhook and a browser callback racing -- but still bounded, because this
+   * is the endpoint an attacker would hammer to brute-force a signature. (The
+   * HMAC comparison is constant-time, so the limit is defence in depth rather
+   * than the actual protection.)
+   */
+  paymentVerify: {
+    limit: 20,
+    windowSeconds: 600,
+    message: "Too many verification attempts. Please wait a few minutes.",
+  },
+
   /** Sends real email through a paid provider — strictest, and keyed per IP. */
   newsletter: {
     limit: 3,
