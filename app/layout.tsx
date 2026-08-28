@@ -66,8 +66,15 @@ export const metadata: Metadata = {
   // NOTE: no site-wide `alternates.canonical`. A default of "/" made every
   // page that didn't override it declare itself the homepage, which drops it
   // from the index entirely. Each route sets its own canonical below.
-  // Favicon + Apple touch icon come from app/icon.tsx and app/apple-icon.tsx
-  // (generated), and the default share card from app/opengraph-image.tsx.
+  // Icons are static files, not generated routes: app/favicon.ico (16/32/48),
+  // app/icon.svg, app/apple-icon.png. Two reasons they aren't ImageResponse
+  // routes any more. Google's favicon fetcher only accepts a square that is a
+  // multiple of 48px, so the old 32px icon was never eligible; and it looks for
+  // /favicon.ico first, which didn't exist. A generated icon also serves from
+  // an extensionless path (/icon?<hash>), which proxy.ts does not exclude — so
+  // the fetcher was billed against the per-IP rate limit and could be answered
+  // with a 429. Static files carry an extension the matcher skips.
+  // Default share card: app/opengraph-image.tsx.
   openGraph: {
     title: "Bharat Hunt — Discover premium software before everyone else",
     description:
