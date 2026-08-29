@@ -25,7 +25,10 @@ export const KB: KbEntry[] = [
     q: "What is Bharat Hunt?",
     keywords: ["what", "about", "bharat", "hunt", "platform", "explain", "purpose", "means"],
     a: "Bharat Hunt is a Product-Hunt-for-India marketplace. Makers launch their products, and the community discovers, upvotes and comments on them — helping the best Indian products get noticed and grow.",
-    links: [{ href: "/marketplace", label: "Explore products" }],
+    links: [
+      { href: "/about", label: "About Bharat Hunt" },
+      { href: "/marketplace", label: "Explore products" },
+    ],
   },
   {
     id: "launch",
@@ -140,9 +143,10 @@ export const KB: KbEntry[] = [
     id: "contact",
     q: "How do I contact the team?",
     keywords: ["contact", "support", "help", "email", "reach", "team", "question for"],
-    a: "You can reach the team at info@bharathunt.org, or read guides and updates on the blog.",
+    a: "You can reach the team at info@bharathunt.org, read about who we are on the About page, or follow guides and updates on the blog.",
     links: [
       { href: "mailto:info@bharathunt.org", label: "Email us" },
+      { href: "/about", label: "About us" },
       { href: "/blog", label: "Read the blog" },
     ],
   },

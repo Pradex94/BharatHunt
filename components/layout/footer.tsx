@@ -82,7 +82,9 @@ const FOOTER_COLUMNS = [
   {
     title: "Company",
     links: [
-      { label: "About Us", href: "/blog/why-cream-not-white" },
+      // Pointed at /blog/why-cream-not-white — an essay on the background
+      // colour — until /about existed to answer the question the label asks.
+      { label: "About Us", href: "/about" },
       { label: "Advertise", href: "/advertise" },
       { label: "Contact", href: "mailto:info@bharathunt.org" },
       { label: "Privacy Policy", href: "/privacy" },
