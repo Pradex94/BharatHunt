@@ -81,7 +81,7 @@ export function ShareMenu({
           e.preventDefault();
           setOpen((v) => !v);
         }}
-        className="flex h-8 items-center gap-1.5 rounded-md border border-border bg-card px-2.5 text-xs font-medium text-muted transition-colors duration-150 hover:border-primary/40 hover:text-primary"
+        className="flex h-8 items-center gap-1.5 rounded-md border border-border bg-card px-2.5 text-xs font-medium text-muted transition-colors duration-150 pointer-coarse:h-11 pointer-coarse:px-3 hover:border-primary/40 hover:text-primary"
       >
         <Share2 className="size-3.5" />
         Share
@@ -106,7 +106,7 @@ export function ShareMenu({
                 rel="noopener noreferrer"
                 role="menuitem"
                 onClick={() => setOpen(false)}
-                className="flex items-center gap-3 rounded-lg px-2.5 py-2 text-sm text-ink transition-colors duration-150 hover:bg-secondary-bg"
+                className="flex items-center gap-3 rounded-lg px-2.5 py-2 text-sm text-ink transition-colors duration-150 pointer-coarse:min-h-11 hover:bg-secondary-bg"
               >
                 <Icon className="size-4 shrink-0 text-muted" />
                 {target.label}
@@ -117,7 +117,7 @@ export function ShareMenu({
             type="button"
             role="menuitem"
             onClick={copyLink}
-            className="flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-sm text-ink transition-colors duration-150 hover:bg-secondary-bg"
+            className="flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-sm text-ink transition-colors duration-150 pointer-coarse:min-h-11 hover:bg-secondary-bg"
           >
             {copied ? (
               <>

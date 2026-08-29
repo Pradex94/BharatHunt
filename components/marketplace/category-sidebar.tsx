@@ -30,7 +30,7 @@ function CategoryList({
         type="button"
         onClick={() => updateSearchParams({ category: null }, { resetPage: true })}
         className={cn(
-          "flex items-center justify-between rounded-lg px-3 py-2 text-left text-sm font-medium transition-colors duration-150 outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
+          "flex items-center justify-between rounded-lg px-3 py-2 text-left text-sm font-medium transition-colors duration-150 outline-none pointer-coarse:min-h-11 focus-visible:ring-2 focus-visible:ring-ring/50",
           activeCategory === null
             ? "bg-primary/10 text-primary"
             : "text-ink hover:bg-secondary-bg",
@@ -46,7 +46,7 @@ function CategoryList({
           aria-pressed={activeCategory === category}
           onClick={() => updateSearchParams({ category }, { resetPage: true })}
           className={cn(
-            "flex items-center justify-between rounded-lg px-3 py-2 text-left text-sm font-medium transition-colors duration-150 outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
+            "flex items-center justify-between rounded-lg px-3 py-2 text-left text-sm font-medium transition-colors duration-150 outline-none pointer-coarse:min-h-11 focus-visible:ring-2 focus-visible:ring-ring/50",
             activeCategory === category
               ? "bg-primary/10 text-primary"
               : "text-ink hover:bg-secondary-bg",
@@ -79,7 +79,13 @@ function PricingFilter() {
       {PRODUCT_PRICING_TYPES.map((value) => {
         const checked = activePricing.includes(value);
         return (
-          <label key={value} className="flex cursor-pointer items-center gap-2.5 text-sm text-foreground">
+          // The whole row is the target, not the 17px box inside it: on a
+          // touch pointer the label gets a 44px height so the tap area matches
+          // what a finger can actually hit. The desktop row is unchanged.
+          <label
+            key={value}
+            className="flex cursor-pointer items-center gap-2.5 text-sm text-foreground pointer-coarse:min-h-11"
+          >
             <span className="relative inline-flex">
               <input
                 type="checkbox"

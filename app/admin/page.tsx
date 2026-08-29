@@ -80,7 +80,10 @@ export default async function AdminPage() {
           </div>
 
           {/* Stats */}
-          <div className="grid grid-cols-3 gap-3">
+          {/* Three columns on a 320px screen left ~50px per figure, which a
+              four-digit count does not fit. Two up on a phone, three from
+              `sm` — the desktop layout is the same as it was. */}
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
             {statCards.map((card) => (
               <div key={card.label} className="rounded-xl border border-border bg-card p-4">
                 <div className="text-2xl font-bold text-ink">

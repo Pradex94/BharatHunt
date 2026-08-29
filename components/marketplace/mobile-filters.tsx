@@ -30,7 +30,7 @@ export function MobileFilters({
         <SlidersHorizontalIcon className="size-4" aria-hidden="true" />
         Filters
       </SheetTrigger>
-      <SheetContent side="right" className="w-full sm:max-w-xs">
+      <SheetContent side="right" className="w-full">
         <SheetHeader>
           <SheetTitle>Filters</SheetTitle>
         </SheetHeader>

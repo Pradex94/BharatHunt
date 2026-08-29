@@ -55,7 +55,10 @@ export function SortPills() {
             )
           }
           className={cn(
-            "rounded-sm px-3.5 py-1.5 text-sm font-medium whitespace-nowrap transition-colors duration-150 outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
+            // ~30px with a mouse, which is fine to click and awkward to tap.
+            // The segmented control keeps its desktop proportions and only
+            // grows to a 44px row on a touch pointer.
+            "flex items-center rounded-sm px-3.5 py-1.5 text-sm font-medium whitespace-nowrap transition-colors duration-150 outline-none pointer-coarse:min-h-11 pointer-coarse:px-4 focus-visible:ring-2 focus-visible:ring-ring/50",
             sort === value
               ? "bg-surface-card text-ink"
               : "text-muted hover:text-ink",

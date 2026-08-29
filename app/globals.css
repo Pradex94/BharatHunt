@@ -534,3 +534,40 @@
 .animate-bh-urgent {
   animation: bh-urgent 1.6s ease-in-out infinite;
 }
+
+/* ── Clerk sign-in / sign-up on touch ────────────────────────────────────
+ * Clerk renders its own form controls, and it renders them mouse-sized:
+ * measured at 320px, its fields are 13px type in a 32px box and its buttons
+ * are 32px (the show-password toggle, 26px). Two consequences on a phone —
+ * iOS zooms the whole page whenever a focused field is under 16px, and none
+ * of it is a comfortable target.
+ *
+ * Only the sizes are touched; Clerk keeps every colour, radius and font.
+ * Notes on how this is written:
+ *   - `pointer: coarse` so a desktop sign-in page is untouched, matching the
+ *     `pointer-coarse:` treatment the app's own controls get.
+ *   - Doubled class selectors (0,2,0) rather than `!important`. Clerk injects
+ *     its styles into <head> at runtime, after this stylesheet, and its
+ *     emotion classes are single selectors — so specificity is what settles
+ *     it, and both classes in each pair are on the real element.
+ *   - Unlayered on purpose. Clerk's injected CSS is unlayered too, and
+ *     unlayered rules beat anything inside an @layer no matter how specific.
+ * Class names are Clerk's documented, stable `cl-` hooks, not the hashed
+ * `cl-internal-*` ones.
+ */
+@media (pointer: coarse) {
+  .cl-formFieldInput.cl-input {
+    min-height: 44px;
+    font-size: 16px;
+  }
+
+  .cl-formButtonPrimary.cl-button,
+  .cl-socialButtonsBlockButton.cl-button {
+    min-height: 44px;
+  }
+
+  .cl-formFieldInputShowPasswordButton.cl-button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}

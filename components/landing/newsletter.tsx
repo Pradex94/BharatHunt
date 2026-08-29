@@ -32,7 +32,25 @@ export function Newsletter() {
         </div>
 
         <div className="flex w-full flex-col gap-1.5 sm:w-auto">
-          <form action={formAction} className="flex w-full gap-3 sm:w-auto">
+          {/*
+            Stacked below `sm`, a row from `sm` up — the same shape the hero
+            CTAs use.
+
+            This was a row at every width, and it was the one place on the site
+            that scrolled sideways: measured 91px past the viewport at 320, 375
+            and 390. A flex item's `min-width` resolves to `auto`, and for an
+            <input> that is its intrinsic ~20-character width, so `flex-1` could
+            not shrink it below roughly 180px; the button next to it is
+            `shrink-0` by design. 180 + 12 + 118 does not fit in the 240px this
+            card leaves on a 320px screen, so the row pushed the page open.
+            `min-w-0` lets the field shrink once it is beside the button again.
+
+            `flex-1` is `sm:` only, and that part matters: flex sizing follows
+            the main axis, so in the stacked column it governed the field's
+            *height* — `flex-basis: 0%` beat `h-11` and collapsed the input to
+            22px. It belongs to the row layout, so it now ships with it.
+          */}
+          <form action={formAction} className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row">
             {/* Honeypot: hidden from people, irresistible to bots. Never filled
                 by a real visitor, so anything in it is discarded server-side. */}
             <input
@@ -51,12 +69,12 @@ export function Newsletter() {
               placeholder="Enter your email"
               aria-label="Email address"
               aria-invalid={state?.error ? true : undefined}
-              className="h-11 flex-1 rounded-xl border border-border bg-background px-4 text-base text-ink outline-none transition-colors placeholder:text-muted-soft focus-visible:border-primary disabled:opacity-60 sm:w-64 sm:text-sm"
+              className="h-11 w-full min-w-0 rounded-xl border border-border bg-background px-4 text-base text-ink outline-none transition-colors placeholder:text-muted-soft focus-visible:border-primary disabled:opacity-60 sm:w-64 sm:flex-1 sm:text-sm"
             />
             <button
               type="submit"
               disabled={pending || subscribed}
-              className="btn-gradient flex h-11 shrink-0 items-center justify-center gap-1.5 rounded-xl px-5 text-sm font-semibold disabled:opacity-70"
+              className="btn-gradient flex h-11 w-full shrink-0 items-center justify-center gap-1.5 rounded-xl px-5 text-sm font-semibold disabled:opacity-70 sm:w-auto"
             >
               {subscribed ? (
                 <>

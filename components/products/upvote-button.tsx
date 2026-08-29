@@ -59,14 +59,19 @@ export function UpvoteButton({
         className,
         variant === "inline" &&
           cn(
-            "gap-1 rounded-md border px-1.5 py-0.5 text-xs",
+            // Measured at 39x22 on the product page, where this is the primary
+            // action on the whole screen. On a touch pointer it grows to a
+            // 44px target; with a mouse it stays the compact chip it was.
+            "gap-1 rounded-md border px-1.5 py-0.5 text-xs pointer-coarse:min-h-11 pointer-coarse:gap-1.5 pointer-coarse:px-3.5 pointer-coarse:text-sm",
             upvoted
               ? "border-primary bg-primary/10 text-primary"
               : "border-border text-muted-foreground hover:border-primary/40 hover:text-foreground",
           ),
         variant === "boxed" &&
           cn(
-            "flex-col gap-0.5 rounded-lg border px-4 py-2.5",
+            // Narrower pillar on phones so the card's text column keeps its
+            // width; the desktop card is unchanged from `sm` up.
+            "flex-col gap-0.5 rounded-lg border px-3 py-2.5 pointer-coarse:min-w-11 sm:px-4",
             upvoted
               ? "border-primary/40 bg-primary/10"
               : "border-border bg-background hover:border-primary/40",

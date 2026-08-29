@@ -34,7 +34,11 @@ export function SearchInput() {
         onChange={(event) => setValue(event.target.value)}
         placeholder="Search products, tags, or makers…"
         aria-label="Search products"
-        className="h-auto border-none bg-transparent p-0 shadow-none focus-visible:ring-0"
+        /* The bordered wrapper is the control here, and its own padding
+           already makes it a 44px row on a phone. `pointer-coarse:h-auto`
+           cancels the touch height Input applies to itself, which would
+           otherwise stack a 44px field inside a 44px box. */
+        className="h-auto border-none bg-transparent p-0 shadow-none pointer-coarse:h-auto focus-visible:ring-0"
       />
     </div>
   );

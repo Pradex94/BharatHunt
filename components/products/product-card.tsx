@@ -60,7 +60,15 @@ export function ProductCard({
   return (
     <article
       className={cn(
-        "group flex gap-4 rounded-xl border border-border bg-card p-4 sm:p-5",
+        /*
+         * Tighter gutters below `sm`. The card is a three-column row — upvote
+         * pillar, logo, content — and at 320px the two 16px gaps plus a 56px
+         * logo and the pillar left about 112px for the name, the category and
+         * pricing badges, and the maker line. Everything technically fitted and
+         * nothing was readable. Trimming the gaps and the logo one step returns
+         * ~24px to the column that holds the words. Unchanged from `sm` up.
+         */
+        "group flex gap-3 rounded-xl border border-border bg-card p-4 sm:gap-4 sm:p-5",
         cardInteractiveClassName,
       )}
     >
@@ -82,6 +90,7 @@ export function ProductCard({
           name={product.name}
           size="md"
           loading="lazy"
+          className="size-12 sm:size-14"
         />
       </Link>
 
@@ -122,14 +131,14 @@ export function ProductCard({
             {platforms.map(({ key, label, Icon }) => (
               <span
                 key={key}
-                className="inline-flex items-center gap-1 rounded-md border border-border px-1.5 py-0.5 text-[11px] font-medium text-muted"
+                className="inline-flex items-center gap-1 rounded-md border border-border px-1.5 py-0.5 text-xs font-medium text-muted"
               >
                 <Icon className="size-3" aria-hidden="true" />
                 {label}
               </span>
             ))}
             {tags.map((tag) => (
-              <span key={tag} className="rounded-md bg-secondary-bg px-1.5 py-0.5 text-[11px] text-muted">
+              <span key={tag} className="rounded-md bg-secondary-bg px-1.5 py-0.5 text-xs text-muted">
                 {tag}
               </span>
             ))}

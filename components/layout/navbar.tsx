@@ -193,7 +193,7 @@ export function Navbar() {
               >
                 <MenuIcon aria-hidden="true" />
               </SheetTrigger>
-              <SheetContent side="right" className="w-full sm:max-w-xs">
+              <SheetContent side="right" className="w-full">
                 <SheetHeader>
                   <SheetTitle>Menu</SheetTitle>
                 </SheetHeader>

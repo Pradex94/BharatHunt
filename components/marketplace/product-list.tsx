@@ -63,7 +63,7 @@ export function ProductList({
             type="button"
             onClick={handleLoadMore}
             disabled={isPending}
-            className="inline-block rounded-md border border-border bg-background px-6 py-2.5 text-sm font-medium text-ink transition-colors duration-150 outline-none hover:bg-secondary-bg focus-visible:ring-2 focus-visible:ring-ring/50 disabled:opacity-60"
+            className="inline-block rounded-md border border-border bg-background px-6 py-2.5 text-sm font-medium text-ink transition-colors duration-150 outline-none pointer-coarse:min-h-11 hover:bg-secondary-bg focus-visible:ring-2 focus-visible:ring-ring/50 disabled:opacity-60"
           >
             {isPending ? "Loading…" : "Load more"}
           </button>

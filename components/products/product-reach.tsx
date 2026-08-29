@@ -99,7 +99,7 @@ export function ProductReach({
         <button
           type="button"
           onClick={() => void copy(productUrl, "link")}
-          className="flex h-10 items-center gap-2 rounded-lg border border-border bg-card px-3.5 text-sm font-medium text-ink transition-colors duration-200 hover:border-primary/40 hover:text-primary"
+          className="flex h-10 items-center gap-2 rounded-lg border border-border bg-card px-3.5 text-sm font-medium text-ink transition-colors duration-200 pointer-coarse:h-11 hover:border-primary/40 hover:text-primary"
         >
           {copied === "link" ? (
             <>
