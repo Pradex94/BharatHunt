@@ -6,14 +6,22 @@ import { FadeIn, FadeInStagger, FadeInItem } from "@/components/ui/motion";
 import { ProductLogo } from "@/components/products/product-logo";
 import type { ProductCardProduct } from "@/components/products/product-card";
 
+/** A product with its position on the board being rendered. */
+export type RankedProduct = ProductCardProduct & { rank: number };
+
 export type TopProductsProps = {
-  products: ProductCardProduct[];
-  /** Rank of the first card. The hero already shows #1, so this grid starts at 2. */
-  startRank?: number;
+  /**
+   * Cards in board order, each carrying its own rank. The rank travels with the
+   * product rather than being counted from a starting offset because the caller
+   * drops whichever product the hero is already showing, and that can be any
+   * position — a card labelled "#4" has to mean the fourth most upvoted launch,
+   * not the fourth card that survived the filter.
+   */
+  products: RankedProduct[];
   heading?: string;
 };
 
-export function TopProducts({ products, startRank = 1, heading = "Most upvoted" }: TopProductsProps) {
+export function TopProducts({ products, heading = "Most upvoted" }: TopProductsProps) {
   if (products.length === 0) return null;
 
   return (
@@ -32,14 +40,14 @@ export function TopProducts({ products, startRank = 1, heading = "Most upvoted" 
       </FadeIn>
 
       <FadeInStagger className="grid gap-5 sm:grid-cols-2 lg:grid-cols-5">
-        {products.map((product, index) => (
+        {products.map((product) => (
           <FadeInItem key={product.id}>
             <Link
               href={`/products/${product.slug}`}
               className="group flex h-full flex-col gap-3 rounded-3xl border border-border bg-card p-5 shadow-sm transition-all duration-200 ease-out hover:-translate-y-1 hover:shadow-hover"
             >
               <span className="w-fit rounded-full bg-secondary-bg px-2.5 py-1 text-xs font-bold text-body">
-                #{index + startRank}
+                #{product.rank}
               </span>
               <ProductLogo
                 src={product.hero_image_url}

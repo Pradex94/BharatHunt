@@ -2,6 +2,7 @@ import { cache } from "react";
 import { createClient, createPublicClient } from "@/lib/supabase/server";
 import { isMissingColumnError } from "@/lib/supabase/errors";
 import { cacheRemember } from "@/lib/cache";
+import { istDayKey, istDayStart } from "@/lib/format-date";
 import type { ProductCardProduct } from "@/components/products/product-card";
 import { PRODUCT_CATEGORIES, type ProductCategory, type ProductSort } from "@/lib/constants";
 
@@ -214,6 +215,88 @@ export async function getTopUpvotedProducts(limit = 6): Promise<LandingProduct[]
 
     if (error) return [];
     return (data ?? []) as LandingProduct[];
+  });
+}
+
+/** The featured launch, plus the IST day whose board it actually topped. */
+export type LeadingLaunch = {
+  product: LandingProduct;
+  /** IST calendar day, `YYYY-MM-DD`. */
+  day: string;
+};
+
+/**
+ * Top of the board among launches published at or after `since`.
+ *
+ * Only ever called with the start of the newest day that has launches, so no
+ * upper bound is needed — there is nothing after it to exclude.
+ */
+async function leadingLaunchSince(since: Date): Promise<LandingProduct | null> {
+  const supabase = createPublicClient();
+  const { data, error } = await supabase
+    .from("products")
+    .select(LANDING_PRODUCT_COLUMNS)
+    .eq("status", "published")
+    .gte("published_at", since.toISOString())
+    .order("upvote_count", { ascending: false, nullsFirst: false })
+    .order("published_at", { ascending: false, nullsFirst: false })
+    .limit(1);
+
+  if (error) return null;
+  return ((data ?? [])[0] as LandingProduct | undefined) ?? null;
+}
+
+/** When the most recent launch went live, or null if nothing is published. */
+async function latestLaunchAt(): Promise<Date | null> {
+  const supabase = createPublicClient();
+  const { data, error } = await supabase
+    .from("products")
+    .select("published_at")
+    .eq("status", "published")
+    .order("published_at", { ascending: false, nullsFirst: false })
+    .limit(1);
+
+  const publishedAt = (data ?? [])[0]?.published_at;
+  if (error || !publishedAt) return null;
+  return new Date(publishedAt);
+}
+
+/**
+ * The launch leading *today's* board — the hero's featured product.
+ *
+ * Deliberately not `getTopUpvotedProducts()[0]`. That query is an all-time
+ * leaderboard, so the hero pinned whichever launch had ever accumulated the
+ * most upvotes and sat under a badge reading "Leading today" for weeks at a
+ * time. A daily board has to be scoped to a day.
+ *
+ * The day is the **IST** calendar day (lib/format-date.ts), not UTC: the last
+ * five and a half hours of a UTC day are already tomorrow for this audience,
+ * and a launch approved at 00:25 IST belongs to the day the maker thinks they
+ * launched on.
+ *
+ * Days without a launch are normal on a young site, and an empty hero is worse
+ * than an honest one, so this falls back to the most recent day that *did* have
+ * launches and returns that day alongside the product — the badge says
+ * "Leading 23 Aug" rather than claiming a board that does not exist. The
+ * fallback costs two extra round trips and only runs on those days.
+ *
+ * Cached under the day key so the board rolls over exactly at IST midnight
+ * instead of inheriting the previous day's leader for the rest of the TTL.
+ * Fails soft (null) for the same reason the leaderboard does: the homepage is
+ * the front door and should render without its hero rather than 500.
+ */
+export async function getLeadingLaunch(now: Date = new Date()): Promise<LeadingLaunch | null> {
+  const today = istDayKey(now);
+
+  return cacheRemember(`${PRODUCTS_CACHE_PREFIX}leading:${today}`, AGGREGATE_TTL, async () => {
+    const todaysLeader = await leadingLaunchSince(istDayStart(now));
+    if (todaysLeader) return { product: todaysLeader, day: today };
+
+    const latest = await latestLaunchAt();
+    if (!latest) return null;
+
+    const leader = await leadingLaunchSince(istDayStart(latest));
+    return leader ? { product: leader, day: istDayKey(latest) } : null;
   });
 }
 

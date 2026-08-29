@@ -4,6 +4,7 @@ import { ArrowRight, ChevronUp, Eye, MessageSquare } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { ProductLogo } from "@/components/products/product-logo";
 import { Display, Numeric } from "@/components/ui/typography";
+import { formatLaunchDay } from "@/lib/format-date";
 import { IndiaFlag } from "@/components/ui/india-flag";
 import type { ProductCardProduct } from "@/components/products/product-card";
 
@@ -11,12 +12,17 @@ import type { ProductCardProduct } from "@/components/products/product-card";
 const GRID_FADE = "linear-gradient(to bottom, #000 0%, #000 30%, transparent 88%)";
 
 export type HeroProps = {
-  /** The current top-voted launch. Null before anything is published. */
+  /** The launch leading its day's board. Null before anything is published. */
   topProduct: (ProductCardProduct & { view_count?: number | null }) | null;
+  /**
+   * The IST day that launch led, `YYYY-MM-DD`. The badge names it, so a hero
+   * showing an older day says so instead of claiming to be today's board.
+   */
+  topProductDay: string | null;
   stats: { products: number; makers: number };
 };
 
-export function Hero({ topProduct, stats }: HeroProps) {
+export function Hero({ topProduct, topProductDay, stats }: HeroProps) {
   return (
     <section className="relative isolate overflow-hidden">
       {/* Warm canvas wash, resolving to the page floor. design.md: the canvas is
@@ -105,7 +111,7 @@ export function Hero({ topProduct, stats }: HeroProps) {
 
         {topProduct && (
           <div className="w-full max-w-2xl">
-            <TopLaunchCard product={topProduct} />
+            <TopLaunchCard product={topProduct} day={topProductDay} />
           </div>
         )}
       </div>
@@ -113,8 +119,18 @@ export function Hero({ topProduct, stats }: HeroProps) {
   );
 }
 
-/** The showpiece: whichever real launch is currently leading on upvotes. */
-function TopLaunchCard({ product }: { product: HeroProps["topProduct"] & {} }) {
+/** The showpiece: whichever real launch is leading the day named on the badge. */
+function TopLaunchCard({
+  product,
+  day,
+}: {
+  product: HeroProps["topProduct"] & {};
+  day: string | null;
+}) {
+  // "today" / "yesterday" / "23 Aug". Null only for a malformed or missing day,
+  // where a neutral label beats a claim we cannot stand behind.
+  const dayLabel = day ? formatLaunchDay(day) : null;
+
   const metrics = [
     { icon: ChevronUp, value: product.upvote_count ?? 0, label: "Upvotes" },
     { icon: MessageSquare, value: product.comment_count ?? 0, label: "Comments" },
@@ -125,7 +141,7 @@ function TopLaunchCard({ product }: { product: HeroProps["topProduct"] & {} }) {
     <div className="animate-bh-float rounded-[2rem] border border-border bg-card p-5 text-left shadow-[0_30px_70px_-28px_rgba(23,20,15,0.28)] sm:p-10">
       <div className="flex items-center justify-between gap-4">
         <span className="rounded-full bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary">
-          Leading today
+          {dayLabel ? `Leading ${dayLabel}` : "Top launch"}
         </span>
         <span className="rounded-full bg-secondary-bg px-2.5 py-1 text-xs font-medium text-body">
           {product.category}

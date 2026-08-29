@@ -15,6 +15,7 @@ import { COLLECTIONS, MIN_PRODUCTS_TO_INDEX } from "@/lib/collections";
 import {
   getCollectionCounts,
   getLaunchStateCounts,
+  getLeadingLaunch,
   getPlatformStats,
   getTopUpvotedProducts,
 } from "@/services/products";
@@ -67,13 +68,15 @@ export const metadata = {
  * visitors are served the cached HTML either way. Publishing a launch also
  * calls `revalidatePath("/")` (lib/review.ts, lib/actions/products.ts), so the
  * window is the ceiling on staleness for upvote *ordering*, not for whether a
- * new launch appears at all.
+ * new launch appears at all. It is also the lag on the hero's board rolling
+ * over at IST midnight, which is well inside what "today" has to mean.
  */
 export const dynamic = "force-static";
 export const revalidate = 600;
 
 export default async function Home() {
-  const [ranked, stats, launchCounts, collectionCounts] = await Promise.all([
+  const [leading, ranked, stats, launchCounts, collectionCounts] = await Promise.all([
+    getLeadingLaunch(),
     getTopUpvotedProducts(6),
     getPlatformStats(),
     getLaunchStateCounts(),
@@ -101,14 +104,34 @@ export default async function Home() {
     ]),
   ].slice(0, 8);
 
-  // The hero features the leader; the grid picks up from #2 so the same
-  // product isn't shown twice in one viewport.
-  const [leader, ...rest] = ranked;
+  /*
+   * Two different boards, which is the point. The hero is *today's* — whichever
+   * launch is leading the current IST day (see `getLeadingLaunch`) — while the
+   * grid below stays the all-time upvote leaderboard, because a day's cohort is
+   * often one or two launches on a few upvotes and five near-empty cards is a
+   * worse homepage than five real ones.
+   *
+   * The two overlap only when a new launch is also the all-time leader. When
+   * they do, the hero's product is dropped from the grid rather than shown
+   * twice in one viewport; the surviving cards keep their true positions, so
+   * the numbering skips rather than lying.
+   *
+   * `getLeadingLaunch` fails soft, and an empty hero is the most expensive
+   * thing on this page to lose, so the all-time leader stands in if the daily
+   * query is the one that broke. It arrives with no day attached, which is
+   * exactly right — the badge then reads "Top launch" instead of naming a day
+   * we did not actually resolve.
+   */
+  const heroProduct = leading?.product ?? ranked[0] ?? null;
+  const board = ranked
+    .map((product, index) => ({ ...product, rank: index + 1 }))
+    .filter((product) => product.id !== heroProduct?.id)
+    .slice(0, 5);
 
   return (
     <>
-      <Hero topProduct={leader ?? null} stats={stats} />
-      <TopProducts products={rest} startRank={2} heading="Also climbing" />
+      <Hero topProduct={heroProduct} topProductDay={leading?.day ?? null} stats={stats} />
+      <TopProducts products={board} heading="Most upvoted" />
       <CollectionRail collections={featuredCollections} counts={collectionCounts} />
       <FeatureSection />
       <CommunitySection stats={stats} launchCounts={launchCounts} />

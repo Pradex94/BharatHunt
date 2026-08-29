@@ -45,3 +45,56 @@ export function formatDate(value: string | Date | null | undefined): string | nu
 
   return DATE_FORMAT.format(date);
 }
+
+/*
+ * ── The IST calendar day ─────────────────────────────────────────────────
+ *
+ * "Today" is a claim the homepage makes, so it needs a definition that does not
+ * depend on where the code runs. India has observed no DST since 1945, so IST
+ * is a fixed +05:30 and the day boundary is pure arithmetic — no zone database
+ * lookup, and identical on a Vercel function in UTC and a laptop in Pune.
+ *
+ * Shifting the instant forward by the offset and then reading it in UTC is the
+ * whole trick: 2026-08-29T18:55Z becomes 2026-08-30T00:25Z, which is exactly
+ * the IST wall-clock reading, and truncating that to midnight and shifting back
+ * gives the UTC instant the IST day began at.
+ */
+const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
+
+/** The IST calendar day `at` falls in, as `YYYY-MM-DD`. */
+export function istDayKey(at: Date = new Date()): string {
+  return new Date(at.getTime() + IST_OFFSET_MS).toISOString().slice(0, 10);
+}
+
+/** The instant the IST day containing `at` began, as a UTC `Date`. */
+export function istDayStart(at: Date = new Date()): Date {
+  const shifted = new Date(at.getTime() + IST_OFFSET_MS);
+  shifted.setUTCHours(0, 0, 0, 0);
+  return new Date(shifted.getTime() - IST_OFFSET_MS);
+}
+
+const DAY_FORMAT = new Intl.DateTimeFormat("en-IN", {
+  day: "numeric",
+  month: "short",
+  timeZone: TIME_ZONE,
+});
+
+/**
+ * An IST day key as a badge reads it: "today", "yesterday", or "23 Aug".
+ *
+ * The relative words matter more than the date. A visitor who sees "Leading
+ * today" is being told the board is live; one who sees "Leading 23 Aug" is
+ * being told, honestly, that it is not. Returns null for a malformed key so the
+ * caller can drop the claim rather than print "Invalid Date" — same contract as
+ * `formatDate` above.
+ */
+export function formatLaunchDay(day: string, now: Date = new Date()): string | null {
+  const date = new Date(`${day}T00:00:00+05:30`);
+  if (Number.isNaN(date.getTime())) return null;
+
+  if (day === istDayKey(now)) return "today";
+  // One millisecond before today's IST midnight is, by construction, yesterday.
+  if (day === istDayKey(new Date(istDayStart(now).getTime() - 1))) return "yesterday";
+
+  return DAY_FORMAT.format(date);
+}
