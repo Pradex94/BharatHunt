@@ -94,12 +94,13 @@ export const RATE_LIMITS = {
   },
 
   /**
-   * Creates a real Razorpay order. Tightest authenticated write on the
+   * Opens a real Dodo checkout session. Tightest authenticated write on the
    * platform, and the only one that costs the *provider* something per call:
-   * orders accumulate against the account whether or not anyone pays them, and
-   * a flood would fill the Razorpay dashboard with junk while pinning our own
-   * outbound requests. Five in ten minutes is far more than a human buying a
-   * slot needs, including retries after a failed card.
+   * sessions accumulate against the account whether or not anyone pays them,
+   * and a flood would fill the Dodo dashboard with junk while pinning our own
+   * outbound requests -- two of them per attempt, since the catalogue price is
+   * read back before a session is opened. Five in ten minutes is far more than
+   * a human buying a slot needs, including retries after a failed card.
    */
   promotionOrder: {
     limit: 5,
@@ -107,12 +108,11 @@ export const RATE_LIMITS = {
     message: "Too many payment attempts. Please wait a few minutes and try again.",
   },
   /**
-   * Verifying a Checkout callback. Looser than order creation because one
-   * purchase can legitimately verify more than once -- a retried network call,
-   * a webhook and a browser callback racing -- but still bounded, because this
-   * is the endpoint an attacker would hammer to brute-force a signature. (The
-   * HMAC comparison is constant-time, so the limit is defence in depth rather
-   * than the actual protection.)
+   * Confirming a return from Dodo's hosted checkout. Looser than opening one,
+   * because a single purchase can legitimately confirm more than once -- a
+   * refresh on the return page, a webhook and a browser return racing, a
+   * customer watching a pending mandate clear -- but still bounded, because each
+   * call costs us up to two outbound requests to Dodo.
    */
   paymentVerify: {
     limit: 20,

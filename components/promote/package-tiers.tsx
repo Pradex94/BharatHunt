@@ -5,8 +5,10 @@
  * A server component with no state and no client hooks: the rows arrive from
  * `getPromotionPackages()` already priced, and there is nothing here to
  * animate. It replaces the scripted auction board that used to stand in this
- * spot — every figure below is a row in the database that the checkout will
- * charge, so a card and a Razorpay order can no longer disagree.
+ * spot — every figure below is a row in the database, and the checkout refuses
+ * to open unless Dodo's catalogue price for that package matches it, so a card
+ * and this page can no longer disagree. Tax is added by Dodo on top; the
+ * checkout says so before the Pay button.
  *
  * No price is hardcoded, not even as a fallback. A constant here would be a
  * second source of truth and the one a visitor could be shown while the server

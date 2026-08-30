@@ -5,15 +5,28 @@
  * The real payment card. Everything the demo bid panel simulates, this does for
  * money.
  *
- * ── The state machine ────────────────────────────────────────────────────────
- * idle → creating → paying → verifying → paid
- *                     ↓          ↓
- *                   idle       error (retryable)
+ * ── What changed when Razorpay became Dodo Payments ──────────────────────────
+ * Razorpay Standard Checkout opened a modal over this page and handed the
+ * payment back to a JavaScript callback. Dodo's hosted checkout is a page on
+ * Dodo's own origin: the customer leaves, pays, and comes back to
+ * `/promote/checkout?status=success&promotion=<id>`. So this component no longer
+ * loads a third-party script, and there is no in-page `paying` state to be
+ * stranded in — the browser is simply gone for that part of the flow.
  *
- * There is no transition into `paid` that does not pass through `verifying`, and
- * `verifying` is the server call. Razorpay's `handler` firing is *not* success —
- * it is a claim the browser makes, and this component never renders a success
- * screen on it. That is the single most important line in this file.
+ * What survives the change is the rule that mattered: **arriving back with
+ * `status=success` is not success.** It is a claim the URL makes, and the server
+ * has to ask Dodo. `confirm` below is that call, and nothing renders a paid
+ * screen without it.
+ *
+ * ── The state machine ────────────────────────────────────────────────────────
+ *   idle → creating → (navigates away to Dodo)
+ *   returning → confirming → paid
+ *                    ↓ ↓
+ *                  idle  pending
+ *
+ * `pending` is new and is not a failure. Dodo can return a customer whose UPI
+ * mandate or 3DS step has not finished; telling them the payment failed would
+ * send them to pay twice.
  *
  * ── Double-submit ────────────────────────────────────────────────────────────
  * Guarded twice, because the two guards fail differently. `disabled` on the
@@ -24,6 +37,7 @@
 
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   ArrowRight,
   BadgeCheck,
@@ -37,50 +51,55 @@ import {
 
 import { cn } from "@/lib/utils";
 import { trackEvent } from "@/lib/analytics";
-import { SITE_NAME } from "@/lib/constants";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { H2, H3, Numeric } from "@/components/ui/typography";
 import {
   formatDuration,
   formatPaise,
+  PAYMENT_CANCELLED_MESSAGE,
   type PromotableProduct,
   type PromotionPackage,
   type PromotionSummary,
 } from "@/lib/promotions";
 import {
-  createPromotionOrder,
-  recordPromotionPaymentFailure,
-  verifyPromotionPayment,
+  confirmPromotionPayment,
+  createPromotionCheckout,
+  recordPromotionCheckoutCancelled,
 } from "@/lib/actions/promotions";
-import {
-  loadRazorpayCheckout,
-  openRazorpayCheckout,
-  type RazorpayCheckoutResponse,
-  type RazorpayFailure,
-} from "@/components/promote/razorpay";
 
-type Status = "idle" | "creating" | "paying" | "verifying" | "paid";
+type Status = "idle" | "creating" | "confirming" | "pending" | "paid";
 
 type Props = {
   packages: PromotionPackage[];
   products: PromotableProduct[];
-  /** Prefills Checkout. Never used to identify the buyer server-side. */
-  buyer: { name: string; email: string };
+  /**
+   * What Dodo sent us back to, read from the URL on the server.
+   *
+   * A pointer, never a credential. `promotionId` is looked up among the caller's
+   * own rows and the outcome comes from Dodo's API; a customer who edits it can
+   * at most point at a promotion that is not theirs and be told so.
+   */
+  ret: { status: "success" | "cancelled" | null; promotionId: string | null };
 };
 
-/** Brand orange, matching `--color-primary`. Checkout takes a literal hex. */
-const CHECKOUT_THEME = "#FF6B1A";
-
-export function PromotionCheckout({ packages, products, buyer }: Props) {
+export function PromotionCheckout({ packages, products, ret }: Props) {
   const headingId = useId();
   const errorId = useId();
+  const router = useRouter();
 
   const promotable = products.filter((product) => !product.hasActivePromotion);
 
   const [packageId, setPackageId] = useState(() => packages[0]?.id ?? "");
   const [productId, setProductId] = useState(() => promotable[0]?.id ?? "");
-  const [status, setStatus] = useState<Status>("idle");
-  const [error, setError] = useState<string | null>(null);
+  /* A return from Dodo starts mid-flow rather than at `idle`, so the customer
+   * never sees the empty form flash before the confirmation resolves. */
+  const [status, setStatus] = useState<Status>(() =>
+    ret.status === "success" && ret.promotionId ? "confirming" : "idle",
+  );
+  const [error, setError] = useState<string | null>(
+    ret.status === "cancelled" ? PAYMENT_CANCELLED_MESSAGE : null,
+  );
+  const [notice, setNotice] = useState<string | null>(null);
   const [summary, setSummary] = useState<PromotionSummary | null>(null);
 
   /*
@@ -97,34 +116,87 @@ export function PromotionCheckout({ packages, products, buyer }: Props) {
     };
   }, []);
 
-  /*
-   * The current status, readable synchronously from Razorpay's callbacks.
-   *
-   * `ondismiss` fires outside React's event system and needs to know whether a
-   * verification is in flight *right now*. The closure it was created in holds
-   * a stale `status`, and deciding inside a `setStatus` updater would mean
-   * mutating a ref from a function React is allowed to call twice. A mirror ref
-   * is the honest version of both.
-   */
-  const statusRef = useRef<Status>("idle");
-  const move = useCallback((next: Status) => {
-    statusRef.current = next;
-    setStatus(next);
-  }, []);
-
   const selectedPackage = packages.find((entry) => entry.id === packageId) ?? null;
   const selectedProduct = promotable.find((entry) => entry.id === productId) ?? null;
-  const busy = status === "creating" || status === "paying" || status === "verifying";
+  const busy = status === "creating" || status === "confirming";
 
-  const settle = useCallback(
-    (next: Status, message: string | null) => {
+  /*
+   * Confirm a return from Dodo.
+   *
+   * Guarded on "is one already running" rather than "has one ever run", because
+   * this is called from two places with different needs: the effect below, which
+   * must fire exactly once on arrival, and the Check again button on the pending
+   * screen, which exists precisely to ask a second time. A once-ever guard would
+   * make that button do nothing.
+   */
+  const confirming = useRef(false);
+
+  const confirm = useCallback(async (promotionId: string) => {
+    if (confirming.current) return;
+    confirming.current = true;
+
+    setStatus("confirming");
+    try {
+      const result = await confirmPromotionPayment({ promotionId });
       if (!mounted.current) return;
-      inFlight.current = false;
-      move(next);
-      setError(message);
-    },
-    [move],
-  );
+
+      if (!result.ok) {
+        // Never a success screen on a failed confirmation, however convincing
+        // the URL looked.
+        trackEvent("promote_checkout_unverified", { location: "promote_checkout" });
+        setStatus("idle");
+        setError(result.error);
+        return;
+      }
+
+      if (result.state === "pending") {
+        trackEvent("promote_checkout_pending", { location: "promote_checkout" });
+        setStatus("pending");
+        setNotice(result.message);
+        setError(null);
+        return;
+      }
+
+      trackEvent("promote_checkout_paid", { location: "promote_checkout" });
+      setSummary(result.summary);
+      setStatus("paid");
+      setError(null);
+      /* The history list below this card, and the dashboard, both changed. */
+      router.refresh();
+    } finally {
+      confirming.current = false;
+    }
+  }, [router]);
+
+  /*
+   * The arrival. An effect rather than a click, because the customer's "action"
+   * was navigating back — there is nothing for them to press. The `arrived` ref
+   * keeps it to once per promotion even under React's development double-invoke
+   * of effects, which would otherwise fire two calls at the rate limiter for
+   * every return.
+   */
+  const arrived = useRef<string | null>(null);
+  useEffect(() => {
+    const promotionId = ret.promotionId;
+    if (ret.status !== "success" || !promotionId) return;
+    if (arrived.current === promotionId) return;
+    arrived.current = promotionId;
+
+    void confirm(promotionId);
+  }, [confirm, ret.promotionId, ret.status]);
+
+  /* A cancelled return is recorded so the maker's own history says so rather
+   * than leaving a purchase that reads as still awaiting payment forever. */
+  const cancelled = useRef<string | null>(null);
+  useEffect(() => {
+    const promotionId = ret.promotionId;
+    if (ret.status !== "cancelled" || !promotionId) return;
+    if (cancelled.current === promotionId) return;
+    cancelled.current = promotionId;
+
+    trackEvent("promote_checkout_dismissed", { location: "promote_checkout" });
+    void recordPromotionCheckoutCancelled({ promotionId });
+  }, [ret.promotionId, ret.status]);
 
   const pay = useCallback(async () => {
     // Guard one: synchronous, closes the batching window `disabled` leaves open.
@@ -136,128 +208,83 @@ export function PromotionCheckout({ packages, products, buyer }: Props) {
 
     inFlight.current = true;
     setError(null);
-    move("creating");
+    setNotice(null);
+    setStatus("creating");
 
     trackEvent("promote_checkout_start", {
       location: "promote_checkout",
       package_id: selectedPackage.id,
     });
 
-    // The script loads before the order so a script failure costs no order.
-    try {
-      await loadRazorpayCheckout();
-    } catch {
-      settle("idle", "Could not open the payment window. Check your connection and try again.");
-      return;
-    }
-
-    // The amount is not sent. Only these two ids are, and the server prices them.
-    const order = await createPromotionOrder({
+    // The amount is not sent. Only these two ids are, and the server prices them
+    // against Dodo's own catalogue before opening anything.
+    const result = await createPromotionCheckout({
       packageId: selectedPackage.id,
       productId: selectedProduct.id,
     });
 
-    if (!order.ok) {
-      settle("idle", order.error);
-      return;
-    }
     if (!mounted.current) return;
 
-    move("paying");
-
-    const verify = async (response: RazorpayCheckoutResponse) => {
-      if (!mounted.current) return;
-      move("verifying");
-
-      const result = await verifyPromotionPayment({
-        razorpay_order_id: response.razorpay_order_id,
-        razorpay_payment_id: response.razorpay_payment_id,
-        razorpay_signature: response.razorpay_signature,
-      });
-
-      if (!mounted.current) return;
-
-      if (!result.ok) {
-        // Never a success screen on a failed verification, however convincing
-        // the browser's callback looked.
-        trackEvent("promote_checkout_unverified", { location: "promote_checkout" });
-        settle("idle", result.error);
-        return;
-      }
-
-      trackEvent("promote_checkout_paid", {
-        location: "promote_checkout",
-        package_id: selectedPackage.id,
-      });
+    if (!result.ok) {
       inFlight.current = false;
-      setSummary(result.summary);
-      move("paid");
-      setError(null);
-    };
-
-    const onFailure = async (payload: RazorpayFailure) => {
-      await recordPromotionPaymentFailure({
-        razorpay_order_id: order.orderId,
-        code: payload?.error?.code,
-        description: payload?.error?.description,
-      });
-      trackEvent("promote_checkout_failed", { location: "promote_checkout" });
-      settle(
-        "idle",
-        "That payment did not go through. No money has been taken — you can try again.",
-      );
-    };
-
-    try {
-      openRazorpayCheckout(
-        {
-          key: order.keyId,
-          amount: order.amountPaise,
-          currency: order.currency,
-          name: SITE_NAME,
-          description: `${order.packageName} — ${order.productName}`,
-          order_id: order.orderId,
-          handler: (response) => {
-            void verify(response);
-          },
-          prefill: { name: buyer.name, email: buyer.email },
-          notes: { promotion_id: order.promotionId },
-          theme: { color: CHECKOUT_THEME },
-          modal: {
-            // Closing the modal is a normal thing to do, not an error. The
-            // order stays open and the same one is reused on retry.
-            ondismiss: () => {
-              if (!mounted.current) return;
-              trackEvent("promote_checkout_dismissed", { location: "promote_checkout" });
-
-              /*
-               * A dismiss can fire *after* a successful handler, while the
-               * server is still verifying. Releasing the guard there would
-               * re-arm the Pay button mid-verification and let a second order
-               * be created for a payment that is about to succeed — so both the
-               * status reset and the guard release happen only while the flow
-               * is still sitting at "paying".
-               */
-              if (statusRef.current !== "paying") return;
-              inFlight.current = false;
-              move("idle");
-            },
-            escape: true,
-            confirm_close: true,
-          },
-        },
-        (payload) => {
-          void onFailure(payload);
-        },
-      );
-    } catch {
-      settle("idle", "Could not open the payment window. Please try again.");
+      setStatus("idle");
+      setError(result.error);
+      return;
     }
-  }, [buyer.email, buyer.name, move, selectedPackage, selectedProduct, settle]);
+
+    /*
+     * A full navigation, not `router.push`. The destination is Dodo's origin, so
+     * the client router cannot handle it — and the guard is deliberately left
+     * closed: this tab is on its way out, and re-arming the Pay button during
+     * the handover is how a second checkout gets opened for one purchase.
+     */
+    window.location.assign(result.checkoutUrl);
+  }, [selectedPackage, selectedProduct]);
 
   // ── Success ────────────────────────────────────────────────────────────
   if (status === "paid" && summary) {
     return <PaidScreen summary={summary} />;
+  }
+
+  // ── Confirming a return from Dodo ──────────────────────────────────────
+  if (status === "confirming") {
+    return (
+      <div
+        className="flex flex-col items-center gap-4 rounded-3xl border border-border bg-card p-10 text-center shadow-soft"
+        aria-live="polite"
+      >
+        <Loader2 className="size-6 animate-spin text-primary" aria-hidden="true" />
+        <H3 className="text-xl">Confirming your payment</H3>
+        <p className="max-w-sm text-sm leading-relaxed text-body">
+          Do not close this page or pay again — we are checking with Dodo Payments.
+        </p>
+      </div>
+    );
+  }
+
+  // ── Paid, but not settled yet ──────────────────────────────────────────
+  if (status === "pending") {
+    return (
+      <div className="rounded-3xl border border-border bg-card p-6 shadow-soft sm:p-8">
+        <span className="flex size-12 items-center justify-center rounded-2xl bg-secondary-bg text-primary">
+          <Clock className="size-6" aria-hidden="true" />
+        </span>
+        <H2 className="mt-5 text-2xl sm:text-3xl">Payment in progress</H2>
+        <p className="mt-2 text-body">{notice}</p>
+        <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+          <Button
+            type="button"
+            size="lg"
+            onClick={() => ret.promotionId && void confirm(ret.promotionId)}
+          >
+            Check again
+          </Button>
+          <Link href="/dashboard" className={buttonVariants({ variant: "outline", size: "lg" })}>
+            Go to your dashboard
+          </Link>
+        </div>
+      </div>
+    );
   }
 
   // ── Nothing to sell / nothing to promote ───────────────────────────────
@@ -417,6 +444,17 @@ export function PromotionCheckout({ packages, products, buyer }: Props) {
           </Numeric>
         </div>
 
+        {/*
+          Said before the button, not after the charge. Dodo Payments is the
+          Merchant of Record, so it is the legal seller and adds the sales tax
+          for the customer's country on top of this figure. A customer who reads
+          "Total ₹4,999" and is then debited more has been surprised by us, not
+          by their bank.
+        */}
+        <p className="-mt-2 text-xs text-muted">
+          Tax is calculated by Dodo Payments at checkout and added to this amount.
+        </p>
+
         <Button
           type="button"
           size="lg"
@@ -428,7 +466,7 @@ export function PromotionCheckout({ packages, products, buyer }: Props) {
           {busy ? (
             <>
               <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-              {status === "verifying" ? "Confirming payment…" : "Processing…"}
+              Opening secure checkout…
             </>
           ) : (
             <>
@@ -455,15 +493,9 @@ export function PromotionCheckout({ packages, products, buyer }: Props) {
           )}
         </div>
 
-        {status === "verifying" && (
-          <p className="text-center text-xs text-muted">
-            Do not close this page — we are confirming the payment with Razorpay.
-          </p>
-        )}
-
         <p className="flex items-center justify-center gap-2 text-center text-xs text-muted">
           <ShieldCheck className="size-3.5 shrink-0 text-success" aria-hidden="true" />
-          Payments are processed by Razorpay. {SITE_NAME} never sees your card, UPI or bank
+          Payments are processed by Dodo Payments. Bharat Hunt never sees your card, UPI or bank
           details.
         </p>
       </div>
@@ -471,7 +503,7 @@ export function PromotionCheckout({ packages, products, buyer }: Props) {
   );
 }
 
-/** Shown only after the server verified the payment. */
+/** Shown only after the server confirmed the payment with Dodo. */
 function PaidScreen({ summary }: { summary: PromotionSummary }) {
   return (
     <div className="rounded-3xl border border-success/30 bg-success/[0.05] p-6 shadow-soft sm:p-8">
@@ -486,8 +518,26 @@ function PaidScreen({ summary }: { summary: PromotionSummary }) {
       </p>
 
       <dl className="mt-6 grid gap-3 sm:grid-cols-2">
-        <Fact label="Amount paid" value={formatPaise(summary.amountPaise)} />
+        {/*
+          The charged total, not the quoted one, whenever Dodo told us what it
+          actually took. This is the number on the customer's card statement, and
+          a receipt that disagrees with a statement is a support ticket.
+        */}
+        <Fact
+          label="Amount paid"
+          value={
+            summary.chargedAmount !== null
+              ? formatCharged(summary.chargedAmount, summary.chargedCurrency)
+              : formatPaise(summary.amountPaise)
+          }
+        />
         <Fact label="Payment reference" value={summary.reference} mono />
+        {summary.chargedTax !== null && summary.chargedTax > 0 && (
+          <Fact
+            label="Of which tax"
+            value={formatCharged(summary.chargedTax, summary.chargedCurrency)}
+          />
+        )}
         {summary.startsAt && (
           <Fact label="Starts" value={new Date(summary.startsAt).toLocaleString("en-IN")} />
         )}
@@ -498,7 +548,8 @@ function PaidScreen({ summary }: { summary: PromotionSummary }) {
 
       <p className="mt-5 text-xs leading-relaxed text-muted">
         Keep the payment reference for your records — quote it if you need to contact us about
-        this promotion. A receipt is also available in your Razorpay payment confirmation.
+        this promotion. Dodo Payments is the merchant of record for this purchase and emails you
+        a tax invoice for it.
       </p>
 
       <div className="mt-6 flex flex-col gap-3 sm:flex-row">
@@ -506,15 +557,26 @@ function PaidScreen({ summary }: { summary: PromotionSummary }) {
           Go to your dashboard
           <ArrowRight className="size-4" aria-hidden="true" />
         </Link>
-        <Link
-          href={summary.productName ? "/promote" : "/promote"}
-          className={buttonVariants({ variant: "outline", size: "lg" })}
-        >
+        <Link href="/promote" className={buttonVariants({ variant: "outline", size: "lg" })}>
           Back to Promote
         </Link>
       </div>
     </div>
   );
+}
+
+/**
+ * A charged total in whatever currency Dodo took it in.
+ *
+ * `formatPaise` is the rupee formatter and hard-codes ₹, which is right for
+ * every price this site quotes. What was *charged* can carry a currency we did
+ * not choose if a Dodo-side setting ever changes, and printing that with a ₹ in
+ * front would be a lie on a receipt — so anything other than INR is rendered
+ * with its ISO code instead of a symbol we cannot vouch for.
+ */
+function formatCharged(amount: number, currency: string | null): string {
+  if (!currency || currency === "INR") return formatPaise(amount);
+  return `${currency} ${(amount / 100).toFixed(2)}`;
 }
 
 function Fact({ label, value, mono }: { label: string; value: string; mono?: boolean }) {

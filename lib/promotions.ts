@@ -20,7 +20,7 @@ export type PromotionStatus =
   | "cancelled"
   | "refunded";
 
-/** Lifecycle of a Razorpay payment. Mirrors the CHECK constraint on `payments`. */
+/** Lifecycle of a Dodo payment. Mirrors the CHECK constraint on `payments`. */
 export type PaymentStatus = "created" | "pending" | "paid" | "failed" | "refunded";
 
 /** Where a slot renders. Mirrors the `placement` column on `promotion_packages`. */
@@ -33,7 +33,7 @@ export type PromotionPackage = {
   description: string | null;
   placement: PromotionPlacement;
   durationDays: number;
-  /** Integer paise. The unit Razorpay is charged in, carried unconverted. */
+  /** Integer paise. The unit Dodo's catalogue is priced in, carried unconverted. */
   amountPaise: number;
   currency: string;
 };
@@ -48,13 +48,27 @@ export type PromotionPackage = {
  * thing a reviewer should never have to think twice about.
  */
 export type PromotionSummary = {
-  /** Razorpay payment id, shown to the customer as their reference. */
+  /** Dodo payment id, shown to the customer as their reference. */
   reference: string;
   productName: string;
   packageName: string;
   startsAt: string | null;
   endsAt: string | null;
+  /** The net price we quoted, in paise. */
   amountPaise: number;
+  /**
+   * What Dodo actually charged, tax included, in the smallest unit of
+   * `chargedCurrency`. Null until a payment settles.
+   *
+   * Separate from `amountPaise` because Dodo Payments is a Merchant of Record:
+   * it is the legal seller, so it adds the sales tax for the customer's
+   * jurisdiction on top of the catalogue price. A receipt that shows only the
+   * net figure disagrees with the customer's card statement.
+   */
+  chargedAmount: number | null;
+  chargedCurrency: string | null;
+  /** The tax component of `chargedAmount`, when Dodo reports one. */
+  chargedTax: number | null;
 };
 
 /** A product the signed-in maker may buy a slot for. */
@@ -128,11 +142,10 @@ export function promotionWindow(
 /**
  * What the customer is told when a payment does not go through.
  *
- * Deliberately one fixed string per outcome rather than Razorpay's own
- * `error_description`. That text is written for developers, sometimes names
- * internal gateway state, and is attacker-influenceable in the sense that it
- * varies with the instrument -- none of which belongs on a checkout screen. The
- * real reason is stored on the payment row for support.
+ * Deliberately one fixed string per outcome rather than Dodo's own
+ * `error_message`. That text is written for developers, sometimes names internal
+ * gateway state, and varies with the instrument -- none of which belongs on a
+ * checkout screen. The real reason is stored on the payment row for support.
  */
 export const PAYMENT_ERROR_MESSAGE =
   "That payment did not go through. No money has been taken — you can try again.";
@@ -140,3 +153,21 @@ export const PAYMENT_ERROR_MESSAGE =
 /** Shown when the browser hands back something the server cannot vouch for. */
 export const VERIFICATION_ERROR_MESSAGE =
   "We could not confirm that payment. If money has left your account it will be refunded automatically — please contact support before paying again.";
+
+/**
+ * Shown when the payment is real but has not finished settling.
+ *
+ * New with Dodo, and it earns its place. Razorpay Standard Checkout handed back
+ * a captured payment or an error; Dodo's hosted checkout can also return a
+ * customer whose payment sits `processing` or `requires_customer_action` — a UPI
+ * mandate awaiting approval in another app, a bank page they have not finished.
+ * Telling that customer "payment failed" would send them to pay a second time
+ * while the first is still in flight, which is the one outcome worth spending a
+ * separate string to avoid.
+ */
+export const PAYMENT_PENDING_MESSAGE =
+  "Your payment is still going through. Do not pay again — this page updates on its own, and your promotion starts the moment it clears.";
+
+/** Shown when someone returns from a checkout they abandoned. */
+export const PAYMENT_CANCELLED_MESSAGE =
+  "That payment was cancelled and nothing has been charged. Your selection is still here whenever you want to try again.";

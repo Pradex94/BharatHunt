@@ -36,6 +36,11 @@ export async function getPromotionPackages(): Promise<PromotionPackage[]> {
     .from("promotion_packages")
     .select("id, name, description, placement, duration_days, amount_paise, currency")
     .eq("is_active", true)
+    // A package with no Dodo product behind it cannot be charged for, so it is
+    // not offered. Fail-closed: a fresh deployment shows "promotions are
+    // unavailable" until an operator has created the matching products in the
+    // Dodo dashboard, rather than a price list whose Pay button always errors.
+    .not("dodo_product_id", "is", null)
     .order("sort_order", { ascending: true });
 
   if (error) {
@@ -135,7 +140,7 @@ export type PromotionHistoryRow = {
   startsAt: string | null;
   endsAt: string | null;
   createdAt: string;
-  /** Razorpay payment id of the successful charge, for the customer's records. */
+  /** Dodo payment id of the successful charge, for the customer's records. */
   paymentReference: string | null;
 };
 
@@ -192,7 +197,7 @@ export async function getUserPromotions(
       .in("id", [...new Set(rows.map((row) => row.package_id))]),
     supabase
       .from("payments")
-      .select("promotion_id, razorpay_payment_id")
+      .select("promotion_id, dodo_payment_id")
       .eq("status", "paid")
       .in("promotion_id", [...new Set(rows.map((row) => row.id))]),
   ]);
@@ -200,7 +205,7 @@ export async function getUserPromotions(
   const productById = new Map((products.data ?? []).map((row) => [row.id, row]));
   const packageById = new Map((packages.data ?? []).map((row) => [row.id, row]));
   const referenceById = new Map(
-    (payments.data ?? []).map((row) => [row.promotion_id, row.razorpay_payment_id]),
+    (payments.data ?? []).map((row) => [row.promotion_id, row.dodo_payment_id]),
   );
 
   return rows.map((row) => ({
