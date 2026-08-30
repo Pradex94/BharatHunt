@@ -147,12 +147,23 @@ export function ProductCard({
 
         {/* Footer: maker · comments · share */}
         <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs text-muted">
+          {/*
+            The maker's name truncates rather than refusing to wrap.
+
+            This row was `whitespace-nowrap` on the outer span, which made the
+            initial + name one unbreakable unit that could not shrink: a long
+            display name pushed straight through the card and took the page
+            with it — 11px of horizontal scroll at 320px on a search result,
+            which is a state the page only reaches with a query in the URL.
+            `min-w-0` lets the item shrink below its content, and `truncate`
+            spends the overflow on an ellipsis instead of on the viewport.
+          */}
           {product.creator && (
-            <span className="flex items-center gap-1.5 whitespace-nowrap">
-              <span className="flex size-5 items-center justify-center rounded-full bg-primary/10 text-[10px] font-semibold text-primary">
+            <span className="flex min-w-0 items-center gap-1.5">
+              <span className="flex size-5 shrink-0 items-center justify-center rounded-full bg-primary/10 text-[10px] font-semibold text-primary">
                 {makerInitial}
               </span>
-              {product.creator.display_name}
+              <span className="truncate">{product.creator.display_name}</span>
             </span>
           )}
           <Link
