@@ -61,6 +61,7 @@ export type Database = {
           created_at: string
           currency: string
           description: string | null
+          dodo_product_id: string | null
           duration_days: number
           id: string
           is_active: boolean
@@ -74,6 +75,7 @@ export type Database = {
           created_at?: string
           currency?: string
           description?: string | null
+          dodo_product_id?: string | null
           duration_days: number
           id: string
           is_active?: boolean
@@ -87,6 +89,7 @@ export type Database = {
           created_at?: string
           currency?: string
           description?: string | null
+          dodo_product_id?: string | null
           duration_days?: number
           id?: string
           is_active?: boolean
@@ -173,15 +176,19 @@ export type Database = {
       payments: {
         Row: {
           amount: number
+          charged_amount: number | null
+          charged_currency: string | null
+          charged_tax: number | null
+          checkout_url: string | null
           created_at: string
           currency: string
+          dodo_payment_id: string | null
+          dodo_session_id: string
           error_code: string | null
           error_description: string | null
           id: string
           promotion_id: string
-          razorpay_order_id: string
-          razorpay_payment_id: string | null
-          razorpay_signature: string | null
+          provider: string
           receipt: string
           refunded_amount: number
           status: string
@@ -190,15 +197,19 @@ export type Database = {
         }
         Insert: {
           amount: number
+          charged_amount?: number | null
+          charged_currency?: string | null
+          charged_tax?: number | null
+          checkout_url?: string | null
           created_at?: string
           currency?: string
+          dodo_payment_id?: string | null
+          dodo_session_id: string
           error_code?: string | null
           error_description?: string | null
           id?: string
           promotion_id: string
-          razorpay_order_id: string
-          razorpay_payment_id?: string | null
-          razorpay_signature?: string | null
+          provider?: string
           receipt: string
           refunded_amount?: number
           status?: string
@@ -207,15 +218,19 @@ export type Database = {
         }
         Update: {
           amount?: number
+          charged_amount?: number | null
+          charged_currency?: string | null
+          charged_tax?: number | null
+          checkout_url?: string | null
           created_at?: string
           currency?: string
+          dodo_payment_id?: string | null
+          dodo_session_id?: string
           error_code?: string | null
           error_description?: string | null
           id?: string
           promotion_id?: string
-          razorpay_order_id?: string
-          razorpay_payment_id?: string | null
-          razorpay_signature?: string | null
+          provider?: string
           receipt?: string
           refunded_amount?: number
           status?: string
@@ -239,25 +254,25 @@ export type Database = {
           },
         ]
       }
-      razorpay_webhook_events: {
+      dodo_webhook_events: {
         Row: {
           event: string
           id: string
-          order_id: string | null
+          session_id: string | null
           payment_id: string | null
           received_at: string
         }
         Insert: {
           event: string
           id: string
-          order_id?: string | null
+          session_id?: string | null
           payment_id?: string | null
           received_at?: string
         }
         Update: {
           event?: string
           id?: string
-          order_id?: string | null
+          session_id?: string | null
           payment_id?: string | null
           received_at?: string
         }

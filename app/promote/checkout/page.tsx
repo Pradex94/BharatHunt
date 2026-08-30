@@ -15,7 +15,7 @@
 
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { auth, currentUser } from "@clerk/nextjs/server";
+import { auth } from "@clerk/nextjs/server";
 import { ArrowLeft, Clock, ReceiptText, ShieldCheck, Sparkles } from "lucide-react";
 import type { Metadata } from "next";
 
@@ -53,8 +53,8 @@ const CRUMBS: Crumb[] = [
 const ASSURANCES = [
   {
     Icon: ShieldCheck,
-    title: "Payments handled by Razorpay",
-    body: "Card, UPI, netbanking and wallet details are collected by Razorpay on their own systems. Bharat Hunt never sees or stores them.",
+    title: "Payments handled by Dodo Payments",
+    body: "Card, UPI, netbanking and wallet details are collected by Dodo Payments on their own checkout. Bharat Hunt never sees or stores them, and Dodo is the merchant of record, so it issues the tax invoice.",
   },
   {
     Icon: Clock,
@@ -91,27 +91,55 @@ function formatDate(value: string | null): string {
   return date.toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
 }
 
-export default async function PromoteCheckoutPage() {
+/**
+ * Where Dodo Payments sends the customer back to.
+ *
+ * Read on the server and handed to the client component as plain props rather
+ * than being pulled out of `useSearchParams()` there, so the confirmation starts
+ * on the first render instead of after a hydration round trip -- this is the
+ * screen someone stares at immediately after paying.
+ *
+ * Neither value is trusted. `status` only decides which screen to draw, and
+ * `promotion` is a pointer the server action looks up among the caller's own
+ * rows before asking Dodo what actually happened.
+ */
+function readReturn(params: Record<string, string | string[] | undefined>): {
+  status: "success" | "cancelled" | null;
+  promotionId: string | null;
+} {
+  const first = (value: string | string[] | undefined) =>
+    Array.isArray(value) ? value[0] : value;
+
+  const status = first(params.status);
+  const promotion = first(params.promotion);
+
+  return {
+    status: status === "success" || status === "cancelled" ? status : null,
+    // Shape-checked here so a crafted query string never reaches an action as
+    // anything but a uuid-looking string.
+    promotionId:
+      typeof promotion === "string" && /^[0-9a-f-]{36}$/i.test(promotion) ? promotion : null,
+  };
+}
+
+export default async function PromoteCheckoutPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const { userId } = await auth();
   if (!userId) {
     redirect("/login");
   }
 
-  const user = await currentUser();
-
-  const [packages, products, history] = await Promise.all([
+  const [params, packages, products, history] = await Promise.all([
+    searchParams,
     getPromotionPackages(),
     getPromotableProducts(userId),
     getUserPromotions(userId),
   ]);
 
-  const buyer = {
-    name:
-      [user?.firstName, user?.lastName].filter(Boolean).join(" ") ||
-      user?.username ||
-      "",
-    email: user?.primaryEmailAddress?.emailAddress ?? "",
-  };
+  const ret = readReturn(params);
 
   return (
     <div className="flex flex-col">
@@ -135,7 +163,7 @@ export default async function PromoteCheckoutPage() {
       <section>
         <Container className="grid gap-10 py-12 md:py-16 lg:grid-cols-[1.25fr_0.75fr] lg:gap-14">
           <div className="min-w-0">
-            <PromotionCheckout packages={packages} products={products} buyer={buyer} />
+            <PromotionCheckout packages={packages} products={products} ret={ret} />
 
             {history.length > 0 && <PromotionHistory rows={history} />}
           </div>

@@ -82,7 +82,7 @@ const STEPS = [
   },
   {
     title: "Choose a placement and pay",
-    body: "Each placement has a stated price and a stated number of days. Payment is handled by Razorpay — card, UPI, netbanking or wallet — on their systems, never ours.",
+    body: "Each placement has a stated price and a stated number of days. Payment is handled by Dodo Payments — card, UPI, netbanking or wallet — on their checkout, never ours. Dodo is the merchant of record, so it adds the applicable tax and issues the invoice.",
   },
   {
     title: "Your slot goes live",
@@ -263,7 +263,7 @@ export default async function PromotePage() {
                 <H3 className="text-lg sm:text-xl">Ready when you are</H3>
                 <p className="text-sm leading-relaxed text-body">
                   Sign in, pick one of your published products, and check out. Payment is handled
-                  by Razorpay.
+                  by Dodo Payments.
                 </p>
               </div>
               <PromoteCta href="/promote/checkout" event="promote_view_packages" size="lg">
@@ -428,7 +428,7 @@ export default async function PromotePage() {
 
           <p className="flex items-center gap-2 text-xs text-white/45">
             <Check className="size-3.5 text-primary" aria-hidden="true" />
-            Fixed-price slots, paid securely through Razorpay.
+            Fixed-price slots, paid securely through Dodo Payments.
           </p>
         </Container>
       </section>

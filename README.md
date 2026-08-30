@@ -48,11 +48,11 @@ SENDGROVE_API_KEY=<keyId>:<keySecret>         # sent as the X-API-Key header
 EMAIL_FROM=Bharat Hunt <ads@bharathunt.org>   # must be a VERIFIED sender
 EMAIL_FALLBACK_FROM=Bharat Hunt <info@bharathunt.org>   # optional; see below
 
-# Razorpay — LIVE payments for /promote/checkout (REQUIRED to sell promotion slots)
-# All three are SERVER-ONLY. None is NEXT_PUBLIC_, and none may be.
-RAZORPAY_KEY_ID=rzp_live_xxxxxxxxxxxxxx
-RAZORPAY_KEY_SECRET=<your-live-key-secret>
-RAZORPAY_WEBHOOK_SECRET=<your-webhook-secret>   # a DIFFERENT value from the key secret
+# Dodo Payments — payments for /promote/checkout (REQUIRED to sell promotion slots)
+# Both are SERVER-ONLY. Dodo issues no publishable key; every key is secret.
+DODO_PAYMENTS_API_KEY=dodo_test_xxxxxxxxxxxxxxxx
+DODO_PAYMENTS_WEBHOOK_KEY=whsec_xxxxxxxxxxxxxxxx   # a DIFFERENT value from the API key
+DODO_PAYMENTS_ENVIRONMENT=test_mode                # anything but live_mode means test_mode
 
 # Cloudflare Turnstile — captcha on the /advertise inquiry form (REQUIRED for that form)
 NEXT_PUBLIC_TURNSTILE_SITE_KEY=<your-turnstile-site-key>
@@ -205,24 +205,45 @@ Type-check with `npx tsc --noEmit`.
 | `/admin` | Admin only — the review queue, plus every product and the platform stats |
 | `/admin/review/[id]` | Where the Approve / Send back links in the review email land |
 | `/promote` | Promotion marketing page — the auction board is a preview; links to checkout |
-| `/promote/checkout` | Buy a fixed-price promotion slot (Razorpay Standard Checkout) |
+| `/promote/checkout` | Buy a fixed-price promotion slot (Dodo Payments hosted checkout) |
 | `/api/webhooks/clerk` | Syncs Clerk users into the `profiles` table |
-| `/api/webhooks/razorpay` | Settles payments and activates promotions (signed, idempotent) |
+| `/api/webhooks/dodo` | Settles payments and activates promotions (signed, idempotent) |
 
-## Paid promotions (Razorpay)
+## Paid promotions (Dodo Payments)
 
-`/promote/checkout` sells fixed-price promotion slots through Razorpay Standard Checkout in **live
-mode**. There is no test-mode branch and no mock response anywhere in the path.
+`/promote/checkout` sells fixed-price promotion slots through Dodo Payments' hosted checkout. Dodo is
+a **Merchant of Record**: it is the legal seller on every transaction, so it calculates and remits
+the sales tax and issues the invoice. Two things follow from that and both are visible in the code.
 
-**The browser never decides the price.** The checkout posts a package id and a product id; the price
-is read from `promotion_packages.amount_paise` server-side and the Razorpay order is created from
-that figure. No parameter on `createPromotionOrder` can carry an amount.
+**The customer is charged more than the sticker price, on purpose.** `promotion_packages.amount_paise`
+is the net price we quote; Dodo adds the tax for the customer's jurisdiction on top. The checkout says
+so above the Pay button, `payments.amount` stores the net figure and `payments.charged_amount` stores
+what was actually taken, and the receipt shows the charged total so it agrees with the card statement.
 
-**Nothing is marked paid on a browser callback.** `verifyPromotionPayment` requires four independent
-things: the HMAC over `order_id|payment_id` verifies under `RAZORPAY_KEY_SECRET`; the payment row for
-that order belongs to the caller; Razorpay's own API reports the payment captured against that order;
-and the captured amount and currency equal what was recorded. Only then does the payment become
-`paid` and the promotion `active`.
+**The price lives in two places, and they are reconciled before every purchase.** A Dodo checkout
+session names a `product_id`, not an amount — so each package row carries a `dodo_product_id`, and
+`createPromotionCheckout` reads that product's catalogue price back from Dodo and **refuses to open a
+checkout unless it equals `amount_paise` in the same currency**, with no discount and no
+pay-what-you-want. That preserves what sending an explicit amount used to give for free: a customer is
+never charged a figure the page did not show them. A package with no `dodo_product_id` is hidden from
+the checkout entirely rather than offered with a Pay button that cannot work.
+
+**The browser never decides the price.** The checkout posts a package id and a product id. No
+parameter on `createPromotionCheckout` can carry an amount.
+
+**Nothing is marked paid because the customer came back.** Dodo returns them to
+`/promote/checkout?status=success&promotion=<id>`, which is a claim, not evidence.
+`confirmPromotionPayment` looks that promotion up **among the caller's own payment rows**, reads the
+checkout session id from that row rather than from the request, asks Dodo over the API whether the
+session produced a payment and what its status is, then re-reads the payment for its amount, currency
+and metadata. `settlePayment` then refuses anything that does not bind back: the session must be ours,
+the `promotion_id` in the session metadata must match, the currency must match, and the charge must
+not be *less* than the price we quoted. Only then does the payment become `paid` and the promotion
+`active`.
+
+A returned payment that is neither settled nor dead — a UPI mandate awaiting approval, an unfinished
+3DS step — is reported as **pending**, never as a failure. Telling that customer the payment failed is
+how they end up paying twice.
 
 **`promotions` and `payments` have SELECT policies only.** With RLS on and no INSERT/UPDATE/DELETE
 policy, the anon key cannot write them at all — the sole write path is the service-role client, and
@@ -231,16 +252,31 @@ launch review gate below.
 
 ### The webhook
 
-Point Razorpay at `https://bharathunt.org/api/webhooks/razorpay` and subscribe to `payment.captured`,
-`payment.authorized`, `payment.failed`, `refund.created` and `refund.processed`. The body is verified
-against `RAZORPAY_WEBHOOK_SECRET` — a **different value** from the key secret; swapping the two fails
-every delivery silently and paid promotions never activate.
+Point Dodo at `https://bharathunt.org/api/webhooks/dodo` and subscribe to `payment.succeeded`,
+`payment.failed`, `payment.cancelled`, `payment.processing` and `refund.succeeded`. The body is
+verified to the [Standard Webhooks](https://www.standardwebhooks.com) spec against
+`DODO_PAYMENTS_WEBHOOK_KEY` — a **different value** from the API key; swapping the two fails every
+delivery silently and paid promotions never activate.
 
-Delivery is at-least-once, so the handler is idempotent three ways: `razorpay_webhook_events` is a
-ledger keyed on Razorpay's `x-razorpay-event-id` and short-circuits a replay before any handler runs;
-every settlement update is conditioned on the row's current status; and a partial unique index
+`lib/dodo-signature.ts` implements that check with no SDK import and no `server-only` marker, so
+`npm test` can exercise it in plain Node. It is pinned to a golden vector generated from the
+`standardwebhooks` package the SDK itself verifies with, which is what catches a drift a round-trip
+test cannot see.
+
+Delivery is at-least-once, so the handler is idempotent four ways: the signed content includes the
+delivery timestamp, so a captured body stops verifying after five minutes; `dodo_webhook_events` is a
+ledger keyed on Dodo's `webhook-id` header and short-circuits a replay before any handler runs; every
+settlement update is conditioned on the row's current status; and a partial unique index
 (`promotions (product_id) where status = 'active'`) makes a second live slot for one product
-impossible rather than merely unlikely.
+impossible rather than merely unlikely. Refund totals are recomputed from Dodo's own refund list
+rather than accumulated per event, so a replayed refund cannot double-count.
+
+### Test mode
+
+Unlike the Razorpay integration this replaced, there **is** a test branch, because Dodo has two base
+URLs and two key formats. `DODO_PAYMENTS_ENVIRONMENT` must say `live_mode` exactly; anything else,
+including unset, selects test mode. A key whose prefix disagrees with the selected environment is
+refused before any request goes out.
 
 ### What is not wired yet
 
