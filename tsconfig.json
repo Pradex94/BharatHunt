@@ -33,5 +33,8 @@
     ".next/dev/types/**/*.ts",
     "**/*.mts"
   ],
-  "exclude": ["node_modules"]
+  // `video/` is a self-contained Remotion project with its own tsconfig,
+  // React copy and JSX runtime. Type-checking it from here would resolve its
+  // imports against the Next.js app's dependency tree and fail on both.
+  "exclude": ["node_modules", "video"]
 }

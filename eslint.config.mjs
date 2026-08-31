@@ -18,6 +18,10 @@ const eslintConfig = defineConfig([
     ".claude/**",
     ".agents/**",
     ".hallmark/**",
+    // Self-contained Remotion project. It ships its own flat config
+    // (@remotion/eslint-config-flat) and is linted by `npm run lint` inside
+    // video/, not by the Next.js rules out here.
+    "video/**",
   ]),
 ]);
 
