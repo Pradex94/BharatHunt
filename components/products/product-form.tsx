@@ -709,8 +709,21 @@ export function ProductForm({ product, detectedState = null }: ProductFormProps)
         </div>
       )}
 
-      {/* Step nav — a sidebar on desktop, a scrollable chip row on mobile */}
-      <nav aria-label="Launch steps" className="lg:sticky lg:top-20 lg:self-start">
+      {/*
+        Step nav — a sidebar on desktop, a scrollable chip row on mobile.
+
+        `min-w-0` is what makes the mobile half of that sentence true. A grid
+        item defaults to `min-width: auto`, which resolves to its content's
+        minimum size, so this column grew to fit all five nowrap chips laid end
+        to end -- 703px of column inside a 375px phone. The `overflow-x-auto` on
+        the <ol> below never engaged, because nothing was ever forcing it to:
+        the nav had all the room it asked for, and the *page* did the scrolling
+        instead. That is what pushed the form card off screen.
+
+        Measured at 375px: 703px document width before, 375px after, with the
+        chip row becoming genuinely scrollable only once this was added.
+      */}
+      <nav aria-label="Launch steps" className="min-w-0 lg:sticky lg:top-20 lg:self-start">
         <ol className="flex gap-2 overflow-x-auto pb-2 lg:flex-col lg:gap-1 lg:overflow-visible lg:pb-0">
           {STEPS.map((entry, index) => {
             const Icon = entry.icon;
@@ -773,7 +786,14 @@ export function ProductForm({ product, detectedState = null }: ProductFormProps)
             event.preventDefault();
           }
         }}
-        className="flex flex-col gap-6"
+        /*
+         * `min-w-0`: the same `min-width: auto` trap documented on the nav
+         * above. This column is well behaved today, but it holds every field on
+         * the page, and one future unbreakable string -- a long URL echoed back
+         * in an error, a pasted slug -- would silently widen the whole document
+         * again. It is `minmax(0,1fr)` at `lg` already; this is the mobile half.
+         */
+        className="flex min-w-0 flex-col gap-6"
       >
         {/* ── Step 1: Main info ───────────────────────────────────── */}
         <div className={panel("main")}>
@@ -1543,7 +1563,15 @@ export function ProductForm({ product, detectedState = null }: ProductFormProps)
         </div>
 
         {/* Step controls */}
-        <div className="flex items-center justify-between gap-3 border-t border-border pt-6">
+        {/*
+          `flex-wrap` because these controls cannot shrink: Button is
+          `shrink-0 whitespace-nowrap` by design, so Back + "Step n of 5" +
+          Next + Save changes is a fixed 379px of row. On the edit form, where
+          Save sits alongside Next on every step, that overflowed a 375px phone
+          by 4px and a 320px one by 59px. Wrapping only engages when the row
+          genuinely does not fit, so the desktop layout is unchanged.
+        */}
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-3 border-t border-border pt-6">
           <Button
             type="button"
             variant="outline"
