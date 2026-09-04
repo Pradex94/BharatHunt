@@ -59,3 +59,16 @@ server.err.log
 
 # ...except the committed template of it.
 !.env.example
+
+# Source investor spreadsheets.
+#
+# This repository is PUBLIC, and the workbooks hold real names, email addresses
+# and phone numbers for roughly 1,150 people. Committing one would publish that
+# to anyone who clones the repo, permanently and irrevocably -- git history
+# keeps a blob even after the file is deleted in a later commit.
+#
+# These files are an import *source*, not app data. `scripts/import-investors.mjs`
+# loads them into Supabase, and the database is the system of record. Keep the
+# workbook local (or in shared drive storage with access control) and never here.
+*.xlsx
+*.xls

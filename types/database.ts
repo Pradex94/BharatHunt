@@ -295,6 +295,7 @@ export type Database = {
           check_size_max_inr: number | null
           check_size_min_inr: number | null
           contact_details: string | null
+          country: string | null
           created_at: string
           email: string | null
           firm_name: string | null
@@ -308,10 +309,13 @@ export type Database = {
           location: string | null
           logo_url: string | null
           name: string
+          phone: string | null
           portfolio: string[]
           sectors: string[]
+          source_key: string | null
           sort_order: number
           thesis: string | null
+          title: string | null
           updated_at: string
           website: string | null
         }
@@ -319,6 +323,7 @@ export type Database = {
           check_size_max_inr?: number | null
           check_size_min_inr?: number | null
           contact_details?: string | null
+          country?: string | null
           created_at?: string
           email?: string | null
           firm_name?: string | null
@@ -332,10 +337,13 @@ export type Database = {
           location?: string | null
           logo_url?: string | null
           name: string
+          phone?: string | null
           portfolio?: string[]
           sectors?: string[]
+          source_key?: string | null
           sort_order?: number
           thesis?: string | null
+          title?: string | null
           updated_at?: string
           website?: string | null
         }
@@ -343,6 +351,7 @@ export type Database = {
           check_size_max_inr?: number | null
           check_size_min_inr?: number | null
           contact_details?: string | null
+          country?: string | null
           created_at?: string
           email?: string | null
           firm_name?: string | null
@@ -356,10 +365,13 @@ export type Database = {
           location?: string | null
           logo_url?: string | null
           name?: string
+          phone?: string | null
           portfolio?: string[]
           sectors?: string[]
+          source_key?: string | null
           sort_order?: number
           thesis?: string | null
+          title?: string | null
           updated_at?: string
           website?: string | null
         }

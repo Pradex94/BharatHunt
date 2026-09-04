@@ -84,6 +84,17 @@ const REQUIRED_STEPS: StepId[] = ["main", "links"];
 const PUBLISH_STALL_MS = 25_000;
 
 /**
+ * How far down the viewport the stepper has to sit to count as already in view.
+ *
+ * The site navbar is a 64px `sticky top-0` band, so anything above that line is
+ * behind it. The extra 32px is breathing room, and it is deliberately the same
+ * number as the `scroll-mt-24` on the anchor — the threshold that decides
+ * whether to scroll and the resting place it scrolls to have to agree, or a
+ * step change lands just shy of the threshold and re-scrolls on the next one.
+ */
+const NAV_OFFSET_PX = 96;
+
+/**
  * Which step a rejected launch rule belongs to, so we can jump the maker there.
  *
  * Partial because `ModerationCode` also covers rules only comments can break —
@@ -359,6 +370,8 @@ export function ProductForm({ product, detectedState = null }: ProductFormProps)
   // Whatever the form is currently complaining about, in priority order.
   const activeError = ruleError ?? state?.error ?? stepError ?? null;
   const errorRef = useRef<HTMLDivElement>(null);
+  /** Top of the stepper — where a step change scrolls back to. See `goToStep`. */
+  const topRef = useRef<HTMLDivElement>(null);
 
   // The banner lives below the step panels, so bring it into view whenever it
   // changes — otherwise a rejected publish just silently scrolls away.
@@ -443,7 +456,16 @@ export function ProductForm({ product, detectedState = null }: ProductFormProps)
   }
 
   /**
-   * Moves to a step and scrolls back to the top of the form.
+   * Moves to a step and puts the top of the new panel back in view.
+   *
+   * Not `window.scrollTo(0)`: above the form sit the page heading and the
+   * launch counter, and re-reading those between every step is wasted travel.
+   * The anchor is the top of the stepper itself, so a maker lands on the first
+   * field of the step they just opened with the nav still on screen.
+   *
+   * And only when it is actually off screen. Switching steps from the top of
+   * the page — which is where a maker is after any jump — would otherwise
+   * scroll *down* to the anchor, moving the page for no reason.
    *
    * `scroll: false` is for jumps caused by an error: the error banner sits
    * below the panels, so scrolling to the top would carry it off-screen and
@@ -454,7 +476,12 @@ export function ProductForm({ product, detectedState = null }: ProductFormProps)
     setStep(next);
     if (scroll) {
       setStepError(null);
-      if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
+      const top = topRef.current;
+      // `>= NAV_OFFSET_PX` means the anchor is already clear of the sticky
+      // navbar, so the maker can see where the step begins without moving.
+      if (top && top.getBoundingClientRect().top < NAV_OFFSET_PX) {
+        top.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
     }
   }
 
@@ -680,8 +707,15 @@ export function ProductForm({ product, detectedState = null }: ProductFormProps)
   const panel = (id: StepId) => cn("flex-col gap-6", step === id ? "flex" : "hidden");
   const card = "space-y-4 rounded-xl border border-border bg-card p-6";
 
+  const nextStep = STEPS[stepIndex + 1] ?? null;
+
   return (
-    <div className="grid gap-8 lg:grid-cols-[220px_minmax(0,1fr)]">
+    /*
+     * `scroll-mt-24` is the resting offset for the step-change scroll in
+     * `goToStep` — it clears the 64px sticky navbar so the nav and the first
+     * field of the new step both land on screen. Paired with `NAV_OFFSET_PX`.
+     */
+    <div ref={topRef} className="grid scroll-mt-24 gap-8 lg:grid-cols-[220px_minmax(0,1fr)]">
       {/*
         A launch is a handful of round trips even at its fastest, and the
         redirect at the end is the slowest part of it. This makes the wait
@@ -775,16 +809,21 @@ export function ProductForm({ product, detectedState = null }: ProductFormProps)
         // `moderateProduct` runs before submit, and the server re-checks
         // everything including URL shape.
         noValidate
-        // Every panel is mounted, so a stray Enter on step 1 would otherwise
-        // publish the whole form. Only the review step may submit that way.
+        // Every panel is mounted, so a stray Enter in a field on step 1 would
+        // otherwise publish the whole form. Only the review step may submit
+        // that way.
+        //
+        // The exemptions are not cosmetic. A button's click is generated *from*
+        // this keydown's default action, so blocking Enter everywhere also made
+        // Enter dead on every control in the form — Import, Upload, Remove, the
+        // platform-link toggles — for anyone driving it from the keyboard. Same
+        // for a link, and for the choice a <select> commits with Enter. Enter
+        // is only taken away where it has no job but to submit.
         onKeyDown={(event) => {
-          if (
-            event.key === "Enter" &&
-            step !== "review" &&
-            (event.target as HTMLElement).tagName !== "TEXTAREA"
-          ) {
-            event.preventDefault();
-          }
+          if (event.key !== "Enter" || step === "review") return;
+          const tag = (event.target as HTMLElement).tagName;
+          if (tag === "TEXTAREA" || tag === "BUTTON" || tag === "A" || tag === "SELECT") return;
+          event.preventDefault();
         }}
         /*
          * `min-w-0`: the same `min-width: auto` trap documented on the nav
@@ -1564,6 +1603,20 @@ export function ProductForm({ product, detectedState = null }: ProductFormProps)
 
         {/* Step controls */}
         {/*
+          Sticky, not static. Every panel above is a screen or more of fields —
+          "Main info" alone is name, tagline, description, category, pricing and
+          state — so Next sat below the fold on every step, and reaching it
+          meant scrolling back past fields the maker had just filled in. The
+          review step was the worst of it: Submit sat under the card preview and
+          the checklist, which is exactly where someone who has already decided
+          to launch stops reading.
+
+          `bottom-4` floats it clear of the viewport edge so it reads as a
+          toolbar over the form rather than browser chrome, and it settles into
+          its natural place at the end of the form, where there is nothing left
+          below it to cover. `z-30` sits under the navbar (z-40) and under the
+          publishing overlay (z-50), which has to cover everything.
+
           `flex-wrap` because these controls cannot shrink: Button is
           `shrink-0 whitespace-nowrap` by design, so Back + "Step n of 5" +
           Next + Save changes is a fixed 379px of row. On the edit form, where
@@ -1571,48 +1624,79 @@ export function ProductForm({ product, detectedState = null }: ProductFormProps)
           by 4px and a 320px one by 59px. Wrapping only engages when the row
           genuinely does not fit, so the desktop layout is unchanged.
         */}
-        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-3 border-t border-border pt-6">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={handleBack}
-            disabled={stepIndex === 0}
-            className={cn(stepIndex === 0 && "invisible")}
-          >
-            <ChevronLeft size={16} /> Back
-          </Button>
+        <div className="sticky bottom-4 z-30 overflow-hidden rounded-xl border border-border bg-card/95 shadow-soft backdrop-blur-md">
+          {/*
+            The sidebar says which step you are on; this says how much of the
+            launch is left. Decorative — "Step n of 5" below carries the same
+            fact in text.
+          */}
+          <div className="h-1 w-full bg-secondary-bg" aria-hidden="true">
+            <div
+              className="h-full rounded-r-full transition-[width] duration-300 ease-out"
+              style={{
+                width: `${((stepIndex + 1) / STEPS.length) * 100}%`,
+                backgroundImage: "var(--gradient-primary)",
+              }}
+            />
+          </div>
 
-          <span className="text-xs text-muted">
-            Step {stepIndex + 1} of {STEPS.length}
-          </span>
+          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-3 px-4 py-3">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleBack}
+              disabled={stepIndex === 0}
+              className={cn(stepIndex === 0 && "invisible")}
+            >
+              <ChevronLeft size={16} /> Back
+            </Button>
 
-          {/* When editing, the fields are already filled — let them save from
-              any step instead of clicking through to the end. */}
-          <div className="flex items-center gap-2">
-            {step !== "review" && (
-              <Button type="button" variant={product ? "outline" : "default"} onClick={handleNext}>
-                Next <ChevronRight size={16} />
-              </Button>
-            )}
-            {(step === "review" || product) && (
-              <Button type="submit" disabled={busy} size="lg" aria-busy={busy}>
-                {busy ? (
-                  <>
-                    <Loader2 size={16} className="animate-spin" aria-hidden="true" />
-                    {uploadingImage || galleryUploading > 0
-                      ? "Uploading image…"
-                      : product
-                        ? "Saving…"
-                        : "Submitting…"}
-                  </>
-                ) : product ? (
-                  "Save changes"
-                ) : (
-                  // Not "Publish": the maker submits, a reviewer publishes.
-                  "Submit for review"
-                )}
-              </Button>
-            )}
+            {/*
+              `min-w-0` + `truncate` so the "up next" hint gives way rather than
+              widening the bar past its column. Only one of the two counts is
+              ever displayed, so a screen reader reads the long form and not
+              both.
+            */}
+            <span className="min-w-0 truncate text-xs text-muted">
+              <span className="sm:hidden">
+                {stepIndex + 1}/{STEPS.length}
+              </span>
+              <span className="hidden sm:inline">
+                Step {stepIndex + 1} of {STEPS.length}
+              </span>
+              {/* Naming the next step makes the form feel finite rather than
+                  endless — you can see it is nearly over. */}
+              {nextStep && <span className="hidden md:inline"> · Up next: {nextStep.label}</span>}
+            </span>
+
+            {/* When editing, the fields are already filled — let them save from
+                any step instead of clicking through to the end. */}
+            <div className="flex items-center gap-2">
+              {step !== "review" && (
+                <Button type="button" variant={product ? "outline" : "default"} onClick={handleNext}>
+                  Next <ChevronRight size={16} />
+                </Button>
+              )}
+              {(step === "review" || product) && (
+                <Button type="submit" disabled={busy} size="lg" aria-busy={busy}>
+                  {busy ? (
+                    <>
+                      <Loader2 size={16} className="animate-spin" aria-hidden="true" />
+                      {uploadingImage || galleryUploading > 0
+                        ? "Uploading image…"
+                        : product
+                          ? "Saving…"
+                          : "Submitting…"}
+                    </>
+                  ) : product ? (
+                    "Save changes"
+                  ) : (
+                    // Not "Publish": the maker submits, a reviewer publishes.
+                    "Submit for review"
+                  )}
+                </Button>
+              )}
+            </div>
           </div>
         </div>
       </form>

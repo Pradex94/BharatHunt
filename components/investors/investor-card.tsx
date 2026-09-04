@@ -107,8 +107,15 @@ export function InvestorCard({
           <h3 className="text-base leading-snug font-semibold break-words text-ink">
             {investor.name}
           </h3>
+          {/* Title first, firm second. "Angel Investor" is the line that tells a
+              founder why this person is in an investor directory at all; the
+              employer is context. Both truncate — a scraped title can run to
+              "Head Digital - Sales, Parts & Accessories and Connected Platforms". */}
+          {investor.title && (
+            <p className="mt-0.5 truncate text-sm text-body">{investor.title}</p>
+          )}
           {investor.firmName && (
-            <p className="mt-0.5 truncate text-sm text-body">{investor.firmName}</p>
+            <p className="mt-0.5 truncate text-sm text-muted">{investor.firmName}</p>
           )}
           {investor.investorType && (
             <Badge variant="secondary" className="mt-2 h-5 max-w-full px-2 text-[11px]">

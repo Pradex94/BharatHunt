@@ -34,13 +34,13 @@ import {
   Building2,
   Filter,
   Info,
-  Layers,
+  Mail,
   MapPin,
-  ScrollText,
   Search,
   ShieldCheck,
   Sparkles,
   Target,
+  Users2,
 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -61,22 +61,31 @@ import {
   getInvestorDirectory,
   getInvestorDirectoryPlan,
   getInvestorDirectoryStats,
-  getInvestorLocations,
+  getInvestorFacets,
   getUserInvestorPurchases,
   hasInvestorDirectoryAccess,
   INVESTOR_PAGE_SIZE,
 } from "@/services/investors";
-import { formatPaise, INVESTOR_DISCLAIMER } from "@/lib/investors";
+import { EMPTY_INVESTOR_FACETS, formatPaise, INVESTOR_DISCLAIMER } from "@/lib/investors";
 
+/*
+ * The description names what the directory actually contains.
+ *
+ * An earlier draft said "investment stages and sectors", which the schema
+ * supports and the imported dataset does not carry a single value for. A meta
+ * description is the promise a searcher decides to click on, so it has to
+ * describe the product as shipped rather than as sketched -- and it is the one
+ * piece of copy on the page nobody can check before arriving.
+ */
 export const metadata: Metadata = {
   title: "Investor Directory for Indian Startups",
   alternates: { canonical: "/investors" },
   description:
-    "Discover investors, funds, investment stages and sectors with the Bharat Hunt Investor Directory. Explore free investor profiles or unlock the complete directory for ₹499.",
+    "Discover angel investors, VCs, micro VCs and family offices across India and beyond. Explore free investor profiles or unlock the complete Bharat Hunt Investor Directory for ₹499.",
   openGraph: {
     title: "Investor Directory for Indian Startups | Bharat Hunt",
     description:
-      "Discover investors, funds, investment stages and sectors with the Bharat Hunt Investor Directory. Explore free investor profiles or unlock the complete directory for ₹499.",
+      "Discover angel investors, VCs, micro VCs and family offices across India and beyond. Explore free investor profiles or unlock the complete Bharat Hunt Investor Directory for ₹499.",
     url: "/investors",
     type: "website",
   },
@@ -98,36 +107,49 @@ const CRUMBS: Crumb[] = [
  * A benefit card describing a feature the database cannot serve would be the
  * easiest lie on the page to tell and the fastest to be caught.
  */
+/**
+ * What the ₹499 buys.
+ *
+ * Every line here is checked against what the database actually holds. The
+ * imported dataset carries names, roles, firms, locations, investor types and
+ * contact details — and carries no investment stages, no sectors, no cheque
+ * sizes, no thesis and no portfolio. So there are no cards for those, and the
+ * copy claims none of them.
+ *
+ * This list is the easiest place on the site to tell a lie, because nobody can
+ * check it before paying. Anything added here has to be something
+ * `services/investors.ts` can actually return.
+ */
 const VALUE_CARDS = [
   {
     Icon: Building2,
     title: "Curated Investor Profiles",
-    body: "Every investor in one organised place — fund, type, and what they say they back — instead of thirty browser tabs.",
+    body: "Angels, VCs, micro VCs, family offices and accelerators in one organised place, instead of thirty browser tabs and a stale spreadsheet.",
   },
   {
-    Icon: Target,
-    title: "Investment Focus",
-    body: "The sectors and startup categories each investor concentrates on, tagged so you can filter rather than read.",
-  },
-  {
-    Icon: Layers,
-    title: "Funding Stage",
-    body: "Pre-Seed through Growth, recorded per investor, so you stop pitching a Series B fund on a pre-product idea.",
+    Icon: Users2,
+    title: "The Person, Not Just the Fund",
+    body: "Names and roles — Founder, Managing Partner, Venture Partner — so you know who you are actually writing to.",
   },
   {
     Icon: MapPin,
-    title: "Location",
-    body: "Where each investor operates from, across India's startup hubs — filterable by region.",
+    title: "India and Beyond",
+    body: "Investors across India's startup hubs plus the US, UK, Singapore, the UAE and Europe, filterable by country.",
   },
   {
-    Icon: ScrollText,
-    title: "Thesis & Portfolio",
-    body: "The investor's stated thesis and the kinds of companies they have backed, so a first email can actually be specific.",
+    Icon: Target,
+    title: "Investor Type",
+    body: "Filter to the kind of cheque you are raising — angel, syndicate, micro VC, VC, private equity or accelerator.",
+  },
+  {
+    Icon: Mail,
+    title: "Contact Details",
+    body: "Email, phone, website and LinkedIn where they are on record, so a warm intro is not the only way in.",
   },
   {
     Icon: Search,
     title: "Search & Filter",
-    body: "Search by investor, fund, sector or keyword, and narrow by stage, sector, type and location.",
+    body: "Search by investor name, firm or keyword, and narrow by investor type and country.",
   },
 ];
 
@@ -182,9 +204,9 @@ export default async function InvestorsPage({
   ]);
 
   const directory = hasAccess ? await getInvestorDirectory(userId, {}, 0) : null;
-  const [locations, purchases] = hasAccess
-    ? await Promise.all([getInvestorLocations(userId), getUserInvestorPurchases(userId!)])
-    : [[], []];
+  const [facets, purchases] = hasAccess
+    ? await Promise.all([getInvestorFacets(userId), getUserInvestorPurchases(userId!)])
+    : [EMPTY_INVESTOR_FACETS, []];
 
   const price = plan ? formatPaise(plan.amountPaise) : null;
 
@@ -307,8 +329,8 @@ export default async function InvestorsPage({
             <div className="flex flex-col gap-2">
               <H2>The Investor Directory</H2>
               <p className="text-base text-body">
-                Search and filter the full directory. Open any investor for their thesis,
-                portfolio and contact details.
+                Search and filter the full directory. Open any investor for their full profile
+                and contact details.
               </p>
             </div>
 
@@ -316,7 +338,7 @@ export default async function InvestorsPage({
               <InvestorDirectory
                 initialInvestors={directory.investors}
                 initialTotal={directory.total}
-                locations={locations}
+                facets={facets}
                 pageSize={INVESTOR_PAGE_SIZE}
               />
             ) : (
@@ -434,8 +456,8 @@ export default async function InvestorsPage({
                 <p className="text-base leading-relaxed text-body">
                   Investor research is the part of fundraising that eats weeks: a list here, a
                   tweet there, a spreadsheet someone shared in 2023. This is that work already
-                  done — every investor recorded the same way, with the stage, sector, cheque size
-                  and contact details in the same place on every profile.
+                  done — every investor recorded the same way, with the name, role, firm,
+                  location and contact details in the same place on every profile.
                 </p>
                 <ul className="flex flex-col gap-3 text-sm text-body">
                   {[
