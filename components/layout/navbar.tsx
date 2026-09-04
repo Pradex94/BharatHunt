@@ -37,12 +37,11 @@ import {
 /**
  * Index of the nav link that matches the current route, or -1.
  *
- * Compared on pathname only, and only the first match counts. `NAV_LINKS` holds
- * two entries pointing at /marketplace (`Products` and `Launches?sort=newest`),
- * and reading the query string here would mean `useSearchParams` inside a
- * layout-level client component -- which forces every page under it to opt out
- * of static rendering. First-match keeps `Products` the active item on
- * /marketplace, which is the right answer anyway.
+ * Compared on pathname only, and only the first match counts. Reading the query
+ * string here would mean `useSearchParams` inside a layout-level client
+ * component -- which forces every page under it to opt out of static
+ * rendering. So a link carrying a query string (`/marketplace?sort=newest`,
+ * say) highlights on its path alone.
  */
 function activeNavIndex(pathname: string): number {
   return NAV_LINKS.findIndex((link) => link.href.split("?")[0] === pathname);
