@@ -48,6 +48,9 @@ SENDGROVE_API_KEY=<keyId>:<keySecret>         # sent as the X-API-Key header
 EMAIL_FROM=Bharat Hunt <ads@bharathunt.org>   # must be a VERIFIED sender
 EMAIL_FALLBACK_FROM=Bharat Hunt <info@bharathunt.org>   # optional; see below
 
+# Promote — hidden unless this is exactly "true". See "Promote is hidden" below.
+NEXT_PUBLIC_PROMOTE_ENABLED=true
+
 # Dodo Payments — payments for /promote/checkout (REQUIRED to sell promotion slots)
 # Both are SERVER-ONLY. Dodo issues no publishable key; every key is secret.
 DODO_PAYMENTS_API_KEY=dodo_test_xxxxxxxxxxxxxxxx
@@ -204,10 +207,32 @@ Type-check with `npx tsc --noEmit`.
 | `/login`, `/signup` | Clerk auth |
 | `/admin` | Admin only — the review queue, plus every product and the platform stats |
 | `/admin/review/[id]` | Where the Approve / Send back links in the review email land |
-| `/promote` | Promotion marketing page — the auction board is a preview; links to checkout |
-| `/promote/checkout` | Buy a fixed-price promotion slot (Dodo Payments hosted checkout) |
+| `/promote` | Promotion marketing page — **hidden (404) unless `NEXT_PUBLIC_PROMOTE_ENABLED=true`** |
+| `/promote/checkout` | Buy a fixed-price promotion slot (Dodo Payments hosted checkout) — hidden with `/promote` |
 | `/api/webhooks/clerk` | Syncs Clerk users into the `profiles` table |
 | `/api/webhooks/dodo` | Settles payments and activates promotions (signed, idempotent) |
+
+## Promote is hidden
+
+Promote ships switched off. `PROMOTE_ENABLED` in `lib/constants.ts` reads
+`NEXT_PUBLIC_PROMOTE_ENABLED`, and while it is not exactly `"true"`:
+
+- `/promote` and `/promote/checkout` call `notFound()` as their first statement, so both
+  answer a real `404` (and Next injects `noindex`) rather than rendering,
+- the **Promote** entry drops out of `NAV_LINKS`, so it is in neither the desktop nor the
+  mobile nav,
+- `/promote` drops out of the sitemap.
+
+Nothing is deleted. The pages, the components, the packages, the Dodo checkout and the
+webhook are all still here and still wired up — set `NEXT_PUBLIC_PROMOTE_ENABLED=true` and
+redeploy (`NEXT_PUBLIC_*` is inlined at build time, so a variable change without a rebuild
+does nothing) and the whole surface returns.
+
+Two deliberate omissions. `/promote` is **not** added to `robots.txt`: `Disallow` stops
+crawling, not indexing, so it would stop Google ever seeing the 404 that actually removes
+the page from the index. And **promotions already paid for are untouched** — active
+placements keep running and keep rendering, and `/api/webhooks/dodo` still settles and
+activates them. Hiding the shop front does not cancel orders.
 
 ## Paid promotions (Dodo Payments)
 

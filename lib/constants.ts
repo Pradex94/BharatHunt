@@ -17,13 +17,33 @@ export type NavLink = {
   href: string;
 };
 
+/**
+ * Promote is hidden, not removed.
+ *
+ * The feature is intact — the pages, the packages, the Dodo checkout, the
+ * activation job all still exist and still work. This flag only decides whether
+ * the platform admits the page exists. While it is off, `/promote` and
+ * `/promote/checkout` answer 404, the nav link below is dropped, and the
+ * sitemap stops advertising the page. Set `NEXT_PUBLIC_PROMOTE_ENABLED=true`
+ * and redeploy to bring it back (`NEXT_PUBLIC_*` values are inlined at build
+ * time, so a variable change alone is not enough).
+ *
+ * 404 rather than a `Disallow` in robots.ts, deliberately: `Disallow` stops
+ * crawling, not indexing, so it would stop Google ever *seeing* the page is
+ * gone. A 404 is what actually drops it from the index.
+ *
+ * Note what this does not do: promotions already paid for keep running and
+ * promoted slots keep rendering. Hiding the shop front does not cancel orders.
+ */
+export const PROMOTE_ENABLED = process.env.NEXT_PUBLIC_PROMOTE_ENABLED === "true";
+
 export const NAV_LINKS: NavLink[] = [
   { label: "Home", href: "/" },
   { label: "Products", href: "/marketplace" },
   { label: "Launches", href: "/marketplace?sort=newest" },
   { label: "People", href: "/categories" },
   { label: "Resources", href: "/blog" },
-  { label: "Promote", href: "/promote" },
+  ...(PROMOTE_ENABLED ? [{ label: "Promote", href: "/promote" }] : []),
   { label: "Advertise", href: "/advertise" },
 ];
 

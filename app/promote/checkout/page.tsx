@@ -13,7 +13,7 @@
  *      charged them.
  */
 
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import { auth } from "@clerk/nextjs/server";
 import { ArrowLeft, Clock, ReceiptText, ShieldCheck, Sparkles } from "lucide-react";
@@ -30,6 +30,7 @@ import {
   getUserPromotions,
   type PromotionHistoryRow,
 } from "@/services/promotions";
+import { PROMOTE_ENABLED } from "@/lib/constants";
 import { formatPaise } from "@/lib/promotions";
 import { cn } from "@/lib/utils";
 
@@ -127,6 +128,12 @@ export default async function PromoteCheckoutPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  // Hidden with the rest of Promote (see `PROMOTE_ENABLED` in
+  // lib/constants.ts). Checked before `auth()` so a hidden route never sends
+  // anyone to /login on its way to a 404, and before anything streams so the
+  // response really is a 404.
+  if (!PROMOTE_ENABLED) notFound();
+
   const { userId } = await auth();
   if (!userId) {
     redirect("/login");
