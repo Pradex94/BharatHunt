@@ -120,8 +120,10 @@ describe("isFullInvestor", () => {
     id: "a",
     name: "Example Fund",
     firmName: null,
+    title: null,
     logoUrl: null,
     location: null,
+    country: null,
     investorType: null,
     stages: [],
     sectors: [],
@@ -147,6 +149,7 @@ describe("isFullInvestor", () => {
       ...preview,
       website: null,
       email: null,
+      phone: null,
       linkedin: null,
       contactDetails: null,
     };

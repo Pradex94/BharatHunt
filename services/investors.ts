@@ -27,8 +27,13 @@ import "server-only";
 import { createPublicClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import {
+  EMPTY_INVESTOR_FACETS,
   INVESTOR_FREE_PREVIEW_LIMIT,
+  INVESTOR_SECTORS,
+  INVESTOR_STAGES,
+  INVESTOR_TYPES,
   type InvestorDirectoryPlan,
+  type InvestorFacets,
   type InvestorFilters,
   type InvestorFull,
   type InvestorPreview,
@@ -49,10 +54,17 @@ function logFailure(event: string, error: { code?: string | null; message?: stri
 
 /** The columns the free tier is allowed to see. Contact fields are absent. */
 const PREVIEW_COLUMNS =
-  "id, name, firm_name, logo_url, location, investor_type, investment_stages, sectors, portfolio, check_size_min_inr, check_size_max_inr, thesis, is_sample";
+  "id, name, firm_name, title, logo_url, location, country, investor_type, investment_stages, sectors, portfolio, check_size_min_inr, check_size_max_inr, thesis, is_sample";
 
-/** Those plus the fields the purchase actually buys. */
-const FULL_COLUMNS = `${PREVIEW_COLUMNS}, website, email, linkedin, contact_details`;
+/**
+ * Those plus the fields the purchase actually buys.
+ *
+ * Every name added here must also be granted to nobody but `service_role` — see
+ * 20260905000000, which withholds `phone` from `anon`/`authenticated` the way
+ * 20260904020000 withheld the rest. A column added to this list but left
+ * publicly granted is a paid field given away.
+ */
+const FULL_COLUMNS = `${PREVIEW_COLUMNS}, website, email, phone, linkedin, contact_details`;
 
 /**
  * A row as PostgREST returns it. Written out rather than pulled from
@@ -64,8 +76,10 @@ type PreviewRow = {
   id: string;
   name: string;
   firm_name: string | null;
+  title: string | null;
   logo_url: string | null;
   location: string | null;
+  country: string | null;
   investor_type: string | null;
   investment_stages: string[] | null;
   sectors: string[] | null;
@@ -79,6 +93,7 @@ type PreviewRow = {
 type FullRow = PreviewRow & {
   website: string | null;
   email: string | null;
+  phone: string | null;
   linkedin: string | null;
   contact_details: string | null;
 };
@@ -92,8 +107,10 @@ function toPreview(row: PreviewRow): InvestorPreview {
     id: row.id,
     name: row.name,
     firmName: row.firm_name,
+    title: row.title,
     logoUrl: row.logo_url,
     location: row.location,
+    country: row.country,
     investorType: row.investor_type,
     stages: row.investment_stages ?? [],
     sectors: row.sectors ?? [],
@@ -110,6 +127,7 @@ function toFull(row: FullRow): InvestorFull {
     ...toPreview(row),
     website: row.website,
     email: row.email,
+    phone: row.phone,
     linkedin: row.linkedin,
     contactDetails: row.contact_details,
   };
@@ -362,9 +380,11 @@ export async function getInvestorDirectory(
   if (filters.stage) query = query.contains("investment_stages", [filters.stage]);
   if (filters.sector) query = query.contains("sectors", [filters.sector]);
   if (filters.investorType) query = query.eq("investor_type", filters.investorType);
-  if (filters.location) {
-    query = query.ilike("location", `%${filters.location.replace(/[%,]/g, " ").slice(0, 80)}%`);
-  }
+  // Equality on the normalised `country` column, not a LIKE over the free-text
+  // `location`. The display string is "Mumbai, Maharashtra" for one row and
+  // "Bengaluru Karnataka" for the next, so a substring match over it was never
+  // going to be a filter — it was a coincidence detector.
+  if (filters.location) query = query.eq("country", filters.location);
 
   const from = Math.max(0, page) * INVESTOR_PAGE_SIZE;
   const { data, error, count } = await query
@@ -384,42 +404,96 @@ export async function getInvestorDirectory(
 }
 
 /**
- * The distinct locations present in the directory, for the location filter.
+ * Which filter values the directory actually holds.
  *
- * Entitlement-gated like everything else premium: the set of cities a directory
- * covers is itself a fact about the dataset, and handing it to a visitor who
- * has not paid tells them most of what the "Location" benefit is worth.
+ * This replaced a `getInvestorLocations` that derived a filter list by taking
+ * the text after the last comma of each free-text location. That worked for the
+ * "City, State" shape the schema was sketched against, and fell apart on the
+ * real dataset, which is "City, State, Country" for most rows, "Delhi,India"
+ * for some, and "San Francisco Bay Area" — naming no country at all — for
+ * others. It would have offered a filter list mixing "India" and "Germany" with
+ * one American metro area. Countries are now resolved once at import into their
+ * own column, and this reads that column.
  *
- * Derived from the rows rather than kept in a lookup table, so an admin who
- * types a new city gets a filter entry for it with no second write to forget.
+ * The broader job is honesty about the rest of the filters. The vocabulary
+ * constants in lib/investors.ts describe what an investor record *can* say; this
+ * describes what the dataset *does* say. The imported workbook has no stages and
+ * no sectors, so those come back empty and the UI renders no such filters —
+ * rather than showing a founder six stage chips that match nothing. The day
+ * stage data arrives, the filter appears with no code change.
+ *
+ * Entitlement-gated like everything else premium: which countries and investor
+ * types a directory covers is itself a fact about the dataset, and handing it to
+ * someone who has not paid gives away most of what the filters are worth.
+ *
+ * One query over four small columns rather than four `select distinct` round
+ * trips. PostgREST has no DISTINCT, so the alternative is an RPC per facet; at
+ * this size reducing in memory is cheaper than four database functions to keep
+ * in step with the schema.
  */
-export async function getInvestorLocations(userId: string | null): Promise<string[]> {
-  if (!(await hasInvestorDirectoryAccess(userId))) return [];
+export async function getInvestorFacets(userId: string | null): Promise<InvestorFacets> {
+  if (!(await hasInvestorDirectoryAccess(userId))) return EMPTY_INVESTOR_FACETS;
 
   const supabase = createServiceClient();
-  const { data, error } = await supabase
-    .from("investors")
-    .select("location")
-    .eq("is_published", true)
-    .not("location", "is", null);
 
-  if (error) {
-    logFailure("investor_locations_query_failed", error);
-    return [];
+  /*
+   * Paged. PostgREST caps an unbounded select at 1,000 rows and returns the
+   * truncated page with no error, so at 1,140 investors this silently computed
+   * its facets from 88% of the directory -- a country present only in the tail
+   * would have had no filter chip, with nothing anywhere to say why.
+   */
+  const rows: {
+    investor_type: string | null;
+    country: string | null;
+    investment_stages: string[] | null;
+    sectors: string[] | null;
+  }[] = [];
+
+  for (let from = 0; ; from += 1000) {
+    const page = await supabase
+      .from("investors")
+      .select("investor_type, country, investment_stages, sectors")
+      .eq("is_published", true)
+      .range(from, from + 999);
+
+    if (page.error) {
+      logFailure("investor_facets_query_failed", page.error);
+      return EMPTY_INVESTOR_FACETS;
+    }
+    rows.push(...(page.data ?? []));
+    if ((page.data?.length ?? 0) < 1000) break;
   }
 
-  // Grouped by the state/region half of "Bengaluru, Karnataka": a filter listing
-  // every city separately is a list nobody scrolls, and founders think in
-  // "who invests out of Karnataka" more often than "who is in Koramangala".
-  const regions = new Set<string>();
-  for (const row of data ?? []) {
-    const location = (row.location ?? "").trim();
-    if (!location) continue;
-    const parts = location.split(",");
-    regions.add((parts[parts.length - 1] ?? location).trim());
+  const types = new Set<string>();
+  const countries = new Set<string>();
+  const stages = new Set<string>();
+  const sectors = new Set<string>();
+
+  for (const row of rows) {
+    if (row.investor_type) types.add(row.investor_type);
+    if (row.country) countries.add(row.country);
+    for (const stage of row.investment_stages ?? []) if (stage) stages.add(stage);
+    for (const sector of row.sectors ?? []) if (sector) sectors.add(sector);
   }
 
-  return [...regions].sort((a, b) => a.localeCompare(b));
+  /*
+   * Stages and types are ordered by their vocabulary, not alphabetically:
+   * "Series A" must not sort above "Seed", and an investor-type list reads best
+   * from smallest cheque to largest. Anything present in the data but absent
+   * from the vocabulary is appended rather than dropped — the data is the
+   * authority on what exists, the constant only on preferred order.
+   */
+  const ordered = (present: Set<string>, vocabulary: readonly string[]) => [
+    ...vocabulary.filter((value) => present.has(value)),
+    ...[...present].filter((value) => !vocabulary.includes(value)).sort((a, b) => a.localeCompare(b)),
+  ];
+
+  return {
+    stages: ordered(stages, INVESTOR_STAGES),
+    sectors: ordered(sectors, INVESTOR_SECTORS),
+    types: ordered(types, INVESTOR_TYPES),
+    countries: [...countries].sort((a, b) => a.localeCompare(b)),
+  };
 }
 
 // Receipts

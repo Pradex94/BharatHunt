@@ -47,6 +47,9 @@ async function requireAdmin(): Promise<{ ok: true; userId: string } | { ok: fals
 export type InvestorInput = {
   name?: unknown;
   firmName?: unknown;
+  title?: unknown;
+  phone?: unknown;
+  country?: unknown;
   logoUrl?: unknown;
   website?: unknown;
   location?: unknown;
@@ -140,6 +143,15 @@ function toRow(input: InvestorInput) {
   return {
     name: text(input.name, 120),
     firm_name: text(input.firmName, 160),
+    title: text(input.title, 200),
+    // Free text, not a parsed number: these are international, and the import
+    // normaliser (scripts/import-investors.mjs) keeps them as recorded for the
+    // same reason — reformatting a number you guessed the shape of corrupts it.
+    phone: text(input.phone, 40),
+    // Drives the country filter. Free text so an admin is not blocked by a
+    // vocabulary list, and `getInvestorFacets` derives the filter options from
+    // whatever is actually stored.
+    country: text(input.country, 60),
     logo_url: url(input.logoUrl),
     website: url(input.website),
     location: text(input.location, 120),

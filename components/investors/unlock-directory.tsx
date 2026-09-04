@@ -70,12 +70,21 @@ type Status = "idle" | "creating" | "confirming" | "pending" | "paid";
  * Nothing here promises a feature the database cannot serve, which is the one
  * rule a pricing list has to follow.
  */
+/**
+ * What ₹499 buys, in the order a founder cares about it.
+ *
+ * Each line maps to something the database actually holds and the code actually
+ * serves. The imported dataset has no stages, sectors, cheque sizes, thesis or
+ * portfolio, so none of those appear here — an earlier draft of this list
+ * promised all five, which would have been a promise the product could not keep
+ * to someone who had already paid.
+ */
 const BENEFITS = [
   "The complete investor directory, not just the free preview",
-  "Search by investor, fund, sector or keyword",
-  "Filter by stage, sector, location and investor type",
-  "Full profiles: thesis, portfolio and cheque size",
-  "Contact details recorded for each investor",
+  "Search by investor name, firm or keyword",
+  "Filter by investor type and country",
+  "Names, roles and firms — not just fund names",
+  "Email, phone, website and LinkedIn where they are on record",
   "Instant access, on this page, the moment payment clears",
 ];
 

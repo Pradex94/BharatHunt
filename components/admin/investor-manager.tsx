@@ -47,6 +47,9 @@ import type { AdminInvestorRow } from "@/services/investors";
 type Draft = {
   name: string;
   firmName: string;
+  title: string;
+  phone: string;
+  country: string;
   logoUrl: string;
   website: string;
   location: string;
@@ -68,6 +71,9 @@ type Draft = {
 const EMPTY_DRAFT: Draft = {
   name: "",
   firmName: "",
+  title: "",
+  phone: "",
+  country: "",
   logoUrl: "",
   website: "",
   location: "",
@@ -90,6 +96,9 @@ function toDraft(row: AdminInvestorRow): Draft {
   return {
     name: row.name,
     firmName: row.firmName ?? "",
+    title: row.title ?? "",
+    phone: row.phone ?? "",
+    country: row.country ?? "",
     logoUrl: row.logoUrl ?? "",
     website: row.website ?? "",
     location: row.location ?? "",
@@ -441,6 +450,13 @@ export function InvestorManager({ investors }: { investors: AdminInvestorRow[] }
                 placeholder="Fund or investor name"
               />
               <Field
+                label="Title / role"
+                value={editing.draft.title}
+                onChange={(title) => patch({ title })}
+                placeholder="Angel Investor"
+                hint="Shown on the card under the name. Public — visible in the free preview."
+              />
+              <Field
                 label="Firm"
                 value={editing.draft.firmName}
                 onChange={(firmName) => patch({ firmName })}
@@ -453,7 +469,14 @@ export function InvestorManager({ investors }: { investors: AdminInvestorRow[] }
                   value={editing.draft.location}
                   onChange={(location) => patch({ location })}
                   placeholder="Bengaluru, Karnataka"
-                  hint="The part after the last comma becomes the location filter."
+                  hint="Display only. Leave the country out — it has its own field."
+                />
+                <Field
+                  label="Country"
+                  value={editing.draft.country}
+                  onChange={(country) => patch({ country })}
+                  placeholder="India"
+                  hint="Drives the country filter. Match the spelling of existing rows."
                 />
                 <Field
                   label="Investor type"
@@ -545,6 +568,13 @@ export function InvestorManager({ investors }: { investors: AdminInvestorRow[] }
                   value={editing.draft.linkedin}
                   onChange={(linkedin) => patch({ linkedin })}
                   placeholder="https://linkedin.com/…"
+                />
+                <Field
+                  label="Phone"
+                  value={editing.draft.phone}
+                  onChange={(phone) => patch({ phone })}
+                  placeholder="+91 98765 43210"
+                  hint="Paid field — never shown in the free preview."
                 />
               </div>
 

@@ -48,13 +48,13 @@ export function LockedDirectory({
           {behindLock > 0 ? (
             <>
               <Numeric className="font-semibold text-ink">{behindLock}</Numeric> more investor{" "}
-              {behindLock === 1 ? "profile" : "profiles"} — with stage, sector, cheque size and
-              contact details — are part of the full directory.
+              {behindLock === 1 ? "profile" : "profiles"} — with role, firm, location and contact
+              details — are part of the full directory.
             </>
           ) : (
             <>
-              Stage, sector, cheque size and contact details for every investor are part of the
-              full directory.
+              Role, firm, location and contact details for every investor are part of the full
+              directory.
             </>
           )}
         </p>

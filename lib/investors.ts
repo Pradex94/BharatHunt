@@ -115,12 +115,23 @@ export const INVESTOR_SECTORS = [
 
 export type InvestorSector = (typeof INVESTOR_SECTORS)[number];
 
-/** What kind of cheque this is. */
+/**
+ * What kind of cheque this is.
+ *
+ * Ordered roughly by cheque size rather than alphabetically, for the same reason
+ * `INVESTOR_STAGES` is: the filter rail renders this array directly, and a
+ * founder scanning it is thinking about who writes what.
+ *
+ * "Private Equity" earns its place from the data rather than from theory -- 28
+ * rows of the imported workbook carry it as their stated type, and dropping them
+ * into "VC" would misdescribe what those firms actually do.
+ */
 export const INVESTOR_TYPES = [
   "Angel",
   "Syndicate",
   "Micro VC",
   "VC",
+  "Private Equity",
   "Accelerator",
   "Family Office",
   "CVC",
@@ -141,8 +152,13 @@ export type InvestorPreview = {
   id: string;
   name: string;
   firmName: string | null;
+  /** Role at the firm — "Angel Investor", "Founder & Managing Partner". */
+  title: string | null;
   logoUrl: string | null;
+  /** Free-text display location, country stripped ("Mumbai, Maharashtra"). */
   location: string | null;
+  /** Normalised country, resolved at import. Null when undeterminable. */
+  country: string | null;
   investorType: string | null;
   stages: string[];
   sectors: string[];
@@ -161,8 +177,37 @@ export type InvestorPreview = {
 export type InvestorFull = InvestorPreview & {
   website: string | null;
   email: string | null;
+  phone: string | null;
   linkedin: string | null;
   contactDetails: string | null;
+};
+
+/**
+ * Which filter values the directory actually holds.
+ *
+ * Computed from the rows rather than from the vocabulary constants above, and
+ * that distinction is the whole point. `INVESTOR_STAGES` describes what an
+ * investor record *can* say; this describes what the current dataset *does*
+ * say. The imported workbook carries no stages and no sectors at all, so those
+ * arrays come back empty and the directory renders no such filters — rather
+ * than offering a founder six stage chips that every one of them matches
+ * nothing.
+ *
+ * Self-correcting: the day stage data is added, the filter appears on its own
+ * with no code change.
+ */
+export type InvestorFacets = {
+  stages: string[];
+  sectors: string[];
+  types: string[];
+  countries: string[];
+};
+
+export const EMPTY_INVESTOR_FACETS: InvestorFacets = {
+  stages: [],
+  sectors: [],
+  types: [],
+  countries: [],
 };
 
 /** Narrowing helper for components that render either shape. */

@@ -18,7 +18,7 @@
  * of a directory whose rows are unevenly complete.
  */
 
-import { ExternalLink, Globe, Mail, MapPin, Wallet } from "lucide-react";
+import { ExternalLink, Globe, Mail, MapPin, Phone, Wallet } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { ProductLogo } from "@/components/products/product-logo";
@@ -147,8 +147,11 @@ export function InvestorDetailSheet({
                   <SheetTitle className="text-lg leading-snug font-bold break-words text-ink">
                     {investor.name}
                   </SheetTitle>
+                  {investor.title && (
+                    <SheetDescription className="mt-0.5">{investor.title}</SheetDescription>
+                  )}
                   {investor.firmName && (
-                    <SheetDescription className="mt-0.5">{investor.firmName}</SheetDescription>
+                    <p className="mt-0.5 text-sm text-muted">{investor.firmName}</p>
                   )}
                   <div className="mt-2 flex flex-wrap items-center gap-2">
                     {investor.investorType && (
@@ -167,11 +170,13 @@ export function InvestorDetailSheet({
             </SheetHeader>
 
             <div className="flex flex-col gap-6 px-4 pb-8">
-              {investor.location && (
+              {(investor.location || investor.country) && (
                 <Field label="Location">
                   <span className="flex items-center gap-1.5">
                     <MapPin className="size-3.5 shrink-0 text-muted" aria-hidden="true" />
-                    {investor.location}
+                    {/* `location` has the country stripped at import, so the two
+                        are recombined here rather than stored redundantly. */}
+                    {[investor.location, investor.country].filter(Boolean).join(", ")}
                   </span>
                 </Field>
               )}
@@ -212,7 +217,7 @@ export function InvestorDetailSheet({
                 future caller passes one in by mistake.
               */}
               {full ? (
-                (full.website || full.email || full.linkedin || full.contactDetails) && (
+                (full.website || full.email || full.phone || full.linkedin || full.contactDetails) && (
                   <div className="flex flex-col gap-3 rounded-2xl border border-border bg-secondary-bg/60 p-4">
                     <span className="text-[11px] font-medium tracking-[0.08em] text-muted uppercase">
                       Contact
@@ -225,6 +230,15 @@ export function InvestorDetailSheet({
                     {full.email && (
                       <OutboundLink href={`mailto:${full.email}`} icon={Mail}>
                         {full.email}
+                      </OutboundLink>
+                    )}
+                    {full.phone && (
+                      /* `tel:` rather than plain text, so a tap dials on a
+                         phone. The number is rendered exactly as recorded —
+                         reformatting international numbers into one canonical
+                         shape corrupts the ones that do not fit the guess. */
+                      <OutboundLink href={`tel:${full.phone.replace(/\s+/g, "")}`} icon={Phone}>
+                        {full.phone}
                       </OutboundLink>
                     )}
                     {full.linkedin && (

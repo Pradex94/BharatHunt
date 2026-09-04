@@ -43,9 +43,7 @@ import { searchInvestors } from "@/lib/actions/investors";
 import {
   activeFilterCount,
   EMPTY_INVESTOR_FILTERS,
-  INVESTOR_SECTORS,
-  INVESTOR_STAGES,
-  INVESTOR_TYPES,
+  type InvestorFacets,
   type InvestorFilters,
   type InvestorFull,
 } from "@/lib/investors";
@@ -107,13 +105,21 @@ function FilterGroup({
 export function InvestorDirectory({
   initialInvestors,
   initialTotal,
-  locations,
+  facets,
   pageSize,
 }: {
   initialInvestors: InvestorFull[];
   initialTotal: number;
-  /** Distinct regions, derived server-side from the rows themselves. */
-  locations: string[];
+  /**
+   * Which filter values the data actually holds, derived server-side from the
+   * rows themselves.
+   *
+   * Not the vocabulary constants. Those say what a record *can* carry; this says
+   * what these records *do* carry, and a group with nothing in it is not
+   * rendered at all. The current dataset has no stages and no sectors, so those
+   * two filters are simply absent rather than present-and-useless.
+   */
+  facets: InvestorFacets;
   pageSize: number;
 }) {
   const [filters, setFilters] = useState<InvestorFilters>(EMPTY_INVESTOR_FILTERS);
@@ -220,29 +226,35 @@ export function InvestorDirectory({
 
   /* The filter panel, rendered twice: inline on desktop, inside the drawer on
      mobile. One definition so the two cannot drift. */
+  const hasAnyFilter =
+    facets.stages.length + facets.sectors.length + facets.types.length + facets.countries.length >
+    0;
+
   const filterPanel = (
     <div className="flex flex-col gap-6">
+      {/* Each group renders only when the data has values for it — FilterGroup
+          returns null on an empty list. */}
       <FilterGroup
         label="Investment stage"
-        options={INVESTOR_STAGES}
+        options={facets.stages}
         value={filters.stage}
         onChange={(stage) => setFilter({ stage })}
       />
       <FilterGroup
         label="Sector"
-        options={INVESTOR_SECTORS}
+        options={facets.sectors}
         value={filters.sector}
         onChange={(sector) => setFilter({ sector })}
       />
       <FilterGroup
         label="Investor type"
-        options={INVESTOR_TYPES}
+        options={facets.types}
         value={filters.investorType}
         onChange={(investorType) => setFilter({ investorType })}
       />
       <FilterGroup
-        label="Location"
-        options={locations}
+        label="Country"
+        options={facets.countries}
         value={filters.location}
         onChange={(location) => setFilter({ location })}
       />
@@ -288,7 +300,9 @@ export function InvestorDirectory({
         <Button
           type="button"
           variant="outline"
-          className="shrink-0 gap-2 lg:hidden"
+          // Hidden outright when there is nothing to filter on, rather than
+          // opening a drawer with an empty panel in it.
+          className={cn("shrink-0 gap-2 lg:hidden", !hasAnyFilter && "hidden")}
           onClick={() => setDrawerOpen(true)}
         >
           <SlidersHorizontal className="size-4" aria-hidden="true" />
@@ -304,9 +318,11 @@ export function InvestorDirectory({
       <div className="flex flex-col gap-8 lg:flex-row lg:gap-10">
         {/* Desktop filter rail. `shrink-0` with a fixed basis so a long sector
             chip cannot squeeze the results column. */}
-        <aside className="hidden w-64 shrink-0 lg:block">
-          <div className="sticky top-24">{filterPanel}</div>
-        </aside>
+        {hasAnyFilter && (
+          <aside className="hidden w-64 shrink-0 lg:block">
+            <div className="sticky top-24">{filterPanel}</div>
+          </aside>
+        )}
 
         <div className="min-w-0 flex-1">
           <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
