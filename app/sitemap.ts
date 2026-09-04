@@ -48,6 +48,11 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
           },
         ] as MetadataRoute.Sitemap)
       : []),
+    // The Investor Directory's marketing half is fully public — hero, free
+    // preview, pricing — so the URL is worth indexing. The premium rows are
+    // never in the response for a signed-out request, which is what a crawler
+    // is, so there is nothing here to leak into an index.
+    { url: `${SITE_URL}/investors`, lastModified: now, changeFrequency: "weekly", priority: 0.7 },
     { url: `${SITE_URL}/advertise`, lastModified: now, changeFrequency: "monthly", priority: 0.6 },
     { url: `${SITE_URL}/blog`, lastModified: now, changeFrequency: "weekly", priority: 0.6 },
     { url: `${SITE_URL}/cookies`, lastModified: now, changeFrequency: "yearly", priority: 0.2 },

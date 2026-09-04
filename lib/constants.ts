@@ -42,6 +42,11 @@ export const NAV_LINKS: NavLink[] = [
   { label: "Products", href: "/marketplace" },
   { label: "Launches", href: "/marketplace?sort=newest" },
   { label: "People", href: "/categories" },
+  // "Investors", not "Investor Directory". The nav already carries six items
+  // and this one sits between "People" and "Resources", where the two-word
+  // label would be the widest thing in the row and force the menu to wrap a
+  // breakpoint earlier. The page's own h1 does the explaining.
+  { label: "Investors", href: "/investors" },
   { label: "Resources", href: "/blog" },
   ...(PROMOTE_ENABLED ? [{ label: "Promote", href: "/promote" }] : []),
   { label: "Advertise", href: "/advertise" },

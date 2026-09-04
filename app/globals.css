@@ -571,3 +571,122 @@
     min-height: 44px;
   }
 }
+
+/* ── /investors: directory hero + locked cards ───────────────────────────
+ * components/investors/*. Transform and opacity only, on eight nodes total —
+ * three hero cards, two connector paths, and one sheen per locked card. No
+ * JavaScript: the hero visual is a server component and none of this needs
+ * hydration, which is what keeps an animated first viewport off the LCP
+ * critical path (see the long note in components/ui/motion.tsx for what
+ * happened the last time first-viewport content waited on hydration).
+ *
+ * Every animation below ends on its resting value, because the global
+ * prefers-reduced-motion block earlier in this file collapses animations to
+ * 0.01ms and freezes them on their final frame. A frozen frame has to be the
+ * calm state — a card at its origin, a sheen off the edge — never a card
+ * hanging 14px above where it belongs.
+ */
+
+/* The floating investor cards. Three offsets and three durations, chosen so
+ * the cycles do not share a common period and the group never re-synchronises
+ * into a single bob. `translate3d` keeps each one on its own layer. */
+@keyframes bh-inv-float {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+  50% {
+    transform: translate3d(0, -10px, 0);
+  }
+}
+
+.bh-inv-float-a,
+.bh-inv-float-b,
+.bh-inv-float-c {
+  animation: bh-inv-float 7s ease-in-out infinite;
+  will-change: transform;
+}
+.bh-inv-float-b {
+  animation-duration: 8.5s;
+  animation-delay: -2.4s;
+}
+.bh-inv-float-c {
+  animation-duration: 9.5s;
+  animation-delay: -4.8s;
+}
+
+/* Signal travelling between two investors. The paths carry pathLength="100",
+ * so one dash reads the same on a short hop as on a long one, and the line
+ * rests dark for a third of the cycle rather than firing continuously. */
+@keyframes bh-inv-line {
+  0% {
+    stroke-dashoffset: 12;
+    opacity: 0;
+  }
+  12% {
+    opacity: 0.5;
+  }
+  55% {
+    opacity: 0.35;
+  }
+  70%,
+  100% {
+    stroke-dashoffset: -100;
+    opacity: 0;
+  }
+}
+.bh-inv-line {
+  stroke-dasharray: 12 100;
+  animation: bh-inv-line 5.5s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+.bh-inv-line-delay {
+  animation-delay: -2.75s;
+}
+
+/* The sheen crossing a locked card. One pseudo-free element, one transform,
+ * and a long pause between passes: this is meant to register as "there is
+ * something here" on a second look, not to strobe under the reader. */
+@keyframes bh-inv-shine {
+  0% {
+    transform: translateX(-120%);
+  }
+  /* Off the far edge by a third of the way through, then held there for the
+   * remaining two-thirds — the pause is a keyframe, not a delay, so the
+   * frozen reduced-motion frame lands on "gone". */
+  35%,
+  100% {
+    transform: translateX(120%);
+  }
+}
+.bh-inv-shine {
+  background: linear-gradient(
+    100deg,
+    transparent 30%,
+    rgb(255 107 26 / 0.07) 50%,
+    transparent 70%
+  );
+  animation: bh-inv-shine 4.5s ease-in-out infinite;
+  will-change: transform;
+}
+
+/* Phones: keep the cards, drop the ambience. The connector lines are already
+ * `hidden lg:block` in the markup; this is the paint cost of six simultaneous
+ * sheens on a locked grid, which is the one thing here that scales with row
+ * count rather than being a fixed handful of nodes. */
+@media (max-width: 640px) {
+  .bh-inv-shine {
+    animation: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bh-inv-line {
+    display: none;
+  }
+  .bh-inv-float-a,
+  .bh-inv-float-b,
+  .bh-inv-float-c,
+  .bh-inv-shine {
+    animation: none;
+  }
+}

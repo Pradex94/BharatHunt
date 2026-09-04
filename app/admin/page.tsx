@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@clerk/nextjs/server";
-import { Clock, ShieldCheck } from "lucide-react";
+import { Building2, Clock, ShieldCheck } from "lucide-react";
 
 import { getIsAdmin } from "@/lib/admin";
 import { getAllProductsAdmin, getPendingProductsAdmin, type PendingProductRow } from "@/services/admin";
@@ -67,16 +67,28 @@ export default async function AdminPage() {
     <main className="min-h-dvh bg-background py-12 md:py-16">
       <Container>
         <div className="mx-auto flex w-full max-w-5xl flex-col gap-8">
-          <div className="flex items-center gap-3">
-            <span className="flex size-10 items-center justify-center rounded-full bg-primary/10 text-primary">
-              <ShieldCheck className="size-5" />
-            </span>
-            <div>
-              <h1 className="text-2xl font-bold tracking-tight text-ink">Admin dashboard</h1>
-              <p className="text-sm text-muted">
-                Review every launch · moderate any product · unlimited launches.
-              </p>
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <span className="flex size-10 items-center justify-center rounded-full bg-primary/10 text-primary">
+                <ShieldCheck className="size-5" />
+              </span>
+              <div>
+                <h1 className="text-2xl font-bold tracking-tight text-ink">Admin dashboard</h1>
+                <p className="text-sm text-muted">
+                  Review every launch · moderate any product · unlimited launches.
+                </p>
+              </div>
             </div>
+
+            {/* The investor dataset is managed on its own screen — fifteen
+                fields per row do not belong beside a launch review queue. */}
+            <Link
+              href="/admin/investors"
+              className="inline-flex min-h-11 items-center gap-2 rounded-md border border-border bg-card px-4 text-sm font-semibold text-ink transition-colors hover:border-primary/30 hover:bg-secondary-bg"
+            >
+              <Building2 className="size-4" aria-hidden="true" />
+              Manage investors
+            </Link>
           </div>
 
           {/* Stats */}
