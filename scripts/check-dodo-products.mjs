@@ -8,6 +8,12 @@
  * none are given. Prints what came back and says plainly whether each one is
  * usable.
  *
+ * Pass `--paise=N` to also assert the price, which is what you want when
+ * checking a product this script has no expectation for -- the Investor
+ * Directory plan, say:
+ *
+ *   node scripts/check-dodo-products.mjs pdt_xxx --paise=49900
+ *
  * Why this exists
  * ---------------
  * Three things can be wrong about a product id and none of them is visible from
@@ -102,9 +108,28 @@ if (keyMode && keyMode !== environment) {
   process.exit(1);
 }
 
-const ids = process.argv.slice(2).filter((arg) => arg.startsWith("pdt_"));
+const args = process.argv.slice(2);
+const ids = args.filter((arg) => arg.startsWith("pdt_"));
+
+/*
+ * The expected price for ids given on the command line.
+ *
+ * Without it an argv id is only checked for shape -- one-time, INR, no discount
+ * -- and the single most likely mistake, a product priced at something other
+ * than what our own table quotes, would pass. `createInvestorCheckout` and
+ * `createPromotionCheckout` both refuse that mismatch at runtime, so this is
+ * about finding it now rather than from a customer's bug report.
+ */
+const paiseArg = args.find((arg) => arg.startsWith("--paise="));
+const expectedPaise = paiseArg ? Number.parseInt(paiseArg.slice("--paise=".length), 10) : null;
+
+if (paiseArg && !Number.isFinite(expectedPaise)) {
+  console.error(`--paise expects an integer number of paise, e.g. --paise=49900`);
+  process.exit(1);
+}
+
 const targets = ids.length
-  ? ids.map((id) => ({ id, packageId: null, paise: null }))
+  ? ids.map((id) => ({ id, packageId: null, paise: expectedPaise }))
   : EXPECTED;
 
 const rupees = (paise) => `₹${(paise / 100).toLocaleString("en-IN")}`;
@@ -173,4 +198,8 @@ if (failures) {
   console.error(`${failures} of ${targets.length} product(s) would not sell. Fix the above, then re-run.`);
   process.exit(1);
 }
-console.log(`All ${targets.length} products check out. Run supabase/link-dodo-products.sql next.`);
+console.log(
+  ids.length
+    ? `All ${targets.length} product(s) check out.`
+    : `All ${targets.length} products check out. Run supabase/link-dodo-products.sql next.`,
+);

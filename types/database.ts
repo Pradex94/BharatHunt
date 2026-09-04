@@ -254,6 +254,198 @@ export type Database = {
           },
         ]
       }
+      investor_directory_plans: {
+        Row: {
+          amount_paise: number
+          created_at: string
+          currency: string
+          description: string | null
+          dodo_product_id: string | null
+          id: string
+          is_active: boolean
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          amount_paise: number
+          created_at?: string
+          currency?: string
+          description?: string | null
+          dodo_product_id?: string | null
+          id: string
+          is_active?: boolean
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          amount_paise?: number
+          created_at?: string
+          currency?: string
+          description?: string | null
+          dodo_product_id?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      investors: {
+        Row: {
+          check_size_max_inr: number | null
+          check_size_min_inr: number | null
+          contact_details: string | null
+          created_at: string
+          email: string | null
+          firm_name: string | null
+          id: string
+          investment_stages: string[]
+          investor_type: string | null
+          is_free_preview: boolean
+          is_published: boolean
+          is_sample: boolean
+          linkedin: string | null
+          location: string | null
+          logo_url: string | null
+          name: string
+          portfolio: string[]
+          sectors: string[]
+          sort_order: number
+          thesis: string | null
+          updated_at: string
+          website: string | null
+        }
+        Insert: {
+          check_size_max_inr?: number | null
+          check_size_min_inr?: number | null
+          contact_details?: string | null
+          created_at?: string
+          email?: string | null
+          firm_name?: string | null
+          id?: string
+          investment_stages?: string[]
+          investor_type?: string | null
+          is_free_preview?: boolean
+          is_published?: boolean
+          is_sample?: boolean
+          linkedin?: string | null
+          location?: string | null
+          logo_url?: string | null
+          name: string
+          portfolio?: string[]
+          sectors?: string[]
+          sort_order?: number
+          thesis?: string | null
+          updated_at?: string
+          website?: string | null
+        }
+        Update: {
+          check_size_max_inr?: number | null
+          check_size_min_inr?: number | null
+          contact_details?: string | null
+          created_at?: string
+          email?: string | null
+          firm_name?: string | null
+          id?: string
+          investment_stages?: string[]
+          investor_type?: string | null
+          is_free_preview?: boolean
+          is_published?: boolean
+          is_sample?: boolean
+          linkedin?: string | null
+          location?: string | null
+          logo_url?: string | null
+          name?: string
+          portfolio?: string[]
+          sectors?: string[]
+          sort_order?: number
+          thesis?: string | null
+          updated_at?: string
+          website?: string | null
+        }
+        Relationships: []
+      }
+      investor_directory_purchases: {
+        Row: {
+          amount: number
+          charged_amount: number | null
+          charged_currency: string | null
+          charged_tax: number | null
+          checkout_url: string | null
+          created_at: string
+          currency: string
+          dodo_payment_id: string | null
+          dodo_session_id: string
+          error_code: string | null
+          error_description: string | null
+          id: string
+          paid_at: string | null
+          plan_id: string
+          receipt: string
+          refunded_amount: number
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          charged_amount?: number | null
+          charged_currency?: string | null
+          charged_tax?: number | null
+          checkout_url?: string | null
+          created_at?: string
+          currency?: string
+          dodo_payment_id?: string | null
+          dodo_session_id: string
+          error_code?: string | null
+          error_description?: string | null
+          id?: string
+          paid_at?: string | null
+          plan_id: string
+          receipt: string
+          refunded_amount?: number
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          charged_amount?: number | null
+          charged_currency?: string | null
+          charged_tax?: number | null
+          checkout_url?: string | null
+          created_at?: string
+          currency?: string
+          dodo_payment_id?: string | null
+          dodo_session_id?: string
+          error_code?: string | null
+          error_description?: string | null
+          id?: string
+          paid_at?: string | null
+          plan_id?: string
+          receipt?: string
+          refunded_amount?: number
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "investor_directory_purchases_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "investor_directory_plans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "investor_directory_purchases_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       dodo_webhook_events: {
         Row: {
           event: string

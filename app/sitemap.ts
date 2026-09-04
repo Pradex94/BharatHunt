@@ -2,7 +2,7 @@ import type { MetadataRoute } from "next";
 
 import { BLOG_POSTS } from "@/lib/blog";
 import { COLLECTIONS, MIN_PRODUCTS_TO_INDEX } from "@/lib/collections";
-import { CATEGORIES, SITE_URL } from "@/lib/constants";
+import { CATEGORIES, PROMOTE_ENABLED, SITE_URL } from "@/lib/constants";
 import { isIndexableProduct } from "@/lib/seo";
 import {
   getAllPublishedProductSlugs,
@@ -35,7 +35,24 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${SITE_URL}/collections`, lastModified: now, changeFrequency: "weekly", priority: 0.7 },
     { url: `${SITE_URL}/about`, lastModified: now, changeFrequency: "monthly", priority: 0.6 },
     { url: `${SITE_URL}/faq`, lastModified: now, changeFrequency: "monthly", priority: 0.5 },
-    { url: `${SITE_URL}/promote`, lastModified: now, changeFrequency: "monthly", priority: 0.7 },
+    // Promote is hidden by default (`PROMOTE_ENABLED`, lib/constants.ts) and
+    // the page answers 404 while it is, so listing it here would hand crawlers
+    // a dead URL. Flip the flag and the entry comes back with the page.
+    ...(PROMOTE_ENABLED
+      ? ([
+          {
+            url: `${SITE_URL}/promote`,
+            lastModified: now,
+            changeFrequency: "monthly",
+            priority: 0.7,
+          },
+        ] as MetadataRoute.Sitemap)
+      : []),
+    // The Investor Directory's marketing half is fully public — hero, free
+    // preview, pricing — so the URL is worth indexing. The premium rows are
+    // never in the response for a signed-out request, which is what a crawler
+    // is, so there is nothing here to leak into an index.
+    { url: `${SITE_URL}/investors`, lastModified: now, changeFrequency: "weekly", priority: 0.7 },
     { url: `${SITE_URL}/advertise`, lastModified: now, changeFrequency: "monthly", priority: 0.6 },
     { url: `${SITE_URL}/blog`, lastModified: now, changeFrequency: "weekly", priority: 0.6 },
     { url: `${SITE_URL}/cookies`, lastModified: now, changeFrequency: "yearly", priority: 0.2 },

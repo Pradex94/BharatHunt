@@ -48,6 +48,9 @@ SENDGROVE_API_KEY=<keyId>:<keySecret>         # sent as the X-API-Key header
 EMAIL_FROM=Bharat Hunt <ads@bharathunt.org>   # must be a VERIFIED sender
 EMAIL_FALLBACK_FROM=Bharat Hunt <info@bharathunt.org>   # optional; see below
 
+# Promote — hidden unless this is exactly "true". See "Promote is hidden" below.
+NEXT_PUBLIC_PROMOTE_ENABLED=true
+
 # Dodo Payments — payments for /promote/checkout (REQUIRED to sell promotion slots)
 # Both are SERVER-ONLY. Dodo issues no publishable key; every key is secret.
 DODO_PAYMENTS_API_KEY=dodo_test_xxxxxxxxxxxxxxxx
@@ -204,10 +207,34 @@ Type-check with `npx tsc --noEmit`.
 | `/login`, `/signup` | Clerk auth |
 | `/admin` | Admin only — the review queue, plus every product and the platform stats |
 | `/admin/review/[id]` | Where the Approve / Send back links in the review email land |
-| `/promote` | Promotion marketing page — the auction board is a preview; links to checkout |
-| `/promote/checkout` | Buy a fixed-price promotion slot (Dodo Payments hosted checkout) |
+| `/admin/investors` | Admin only — add, edit, publish and free-preview-flag investors |
+| `/investors` | Investor Directory — free preview for everyone, full directory after a one-time ₹499 purchase |
+| `/promote` | Promotion marketing page — **hidden (404) unless `NEXT_PUBLIC_PROMOTE_ENABLED=true`** |
+| `/promote/checkout` | Buy a fixed-price promotion slot (Dodo Payments hosted checkout) — hidden with `/promote` |
 | `/api/webhooks/clerk` | Syncs Clerk users into the `profiles` table |
-| `/api/webhooks/dodo` | Settles payments and activates promotions (signed, idempotent) |
+| `/api/webhooks/dodo` | Settles payments for **both** paid products — promotions and Investor Directory access (signed, idempotent) |
+
+## Promote is hidden
+
+Promote ships switched off. `PROMOTE_ENABLED` in `lib/constants.ts` reads
+`NEXT_PUBLIC_PROMOTE_ENABLED`, and while it is not exactly `"true"`:
+
+- `/promote` and `/promote/checkout` call `notFound()` as their first statement, so both
+  answer a real `404` (and Next injects `noindex`) rather than rendering,
+- the **Promote** entry drops out of `NAV_LINKS`, so it is in neither the desktop nor the
+  mobile nav,
+- `/promote` drops out of the sitemap.
+
+Nothing is deleted. The pages, the components, the packages, the Dodo checkout and the
+webhook are all still here and still wired up — set `NEXT_PUBLIC_PROMOTE_ENABLED=true` and
+redeploy (`NEXT_PUBLIC_*` is inlined at build time, so a variable change without a rebuild
+does nothing) and the whole surface returns.
+
+Two deliberate omissions. `/promote` is **not** added to `robots.txt`: `Disallow` stops
+crawling, not indexing, so it would stop Google ever seeing the 404 that actually removes
+the page from the index. And **promotions already paid for are untouched** — active
+placements keep running and keep rendering, and `/api/webhooks/dodo` still settles and
+activates them. Hiding the shop front does not cancel orders.
 
 ## Paid promotions (Dodo Payments)
 
@@ -283,6 +310,67 @@ refused before any request goes out.
 A purchased slot is charged, recorded and visible to its buyer, but **promoted placements are not yet
 rendered on the marketplace or homepage**. `getActivePromotions()` in `services/promotions.ts` is the
 seam those queries will read from. Do not advertise the checkout publicly until that is done.
+
+## Investor Directory (`/investors`)
+
+A curated investor dataset: a free preview for everyone, and the complete directory behind a
+one-time **₹499** purchase. It is the platform's second paid product and it reuses the first one's
+payment machinery rather than repeating it — `lib/dodo.ts`, `lib/dodo-signature.ts`, the single
+`/api/webhooks/dodo` route and the `dodo_webhook_events` idempotency ledger are all shared.
+
+**No new environment variables.** It runs on the `DODO_PAYMENTS_*` and Supabase values already
+documented above.
+
+### Access model
+
+| Who | Sees |
+| --- | --- |
+| Visitor (signed out) | Hero, free preview (4 investors, no contact fields), locked teaser, benefits, pricing |
+| Signed in, not paid | The same |
+| Paid | The full directory: search, filters, every profile, contact details |
+
+Access **is** a settled payment — `investor_directory_purchases.status = 'paid'`. There is no
+separate entitlement table to drift out of step, and a full refund flips the same row to `refunded`,
+which revokes access on the very next request.
+
+### How the free limit and the paywall are actually enforced
+
+Two independent gates, and the weaker one still fails closed:
+
+1. **RLS.** `investors` has a single SELECT policy: `is_published and is_free_preview`. The anon key
+   ships in the browser, so anyone can point PostgREST at `/rest/v1/investors` with their own Clerk
+   token — and get the preview rows, never the directory. Note the policy does *not* mention the
+   purchase: a paying customer's token gets exactly what a stranger's does.
+2. **Server code.** Premium rows are read only through `createServiceClient()` in
+   `services/investors.ts`, and only by `getInvestorDirectory()`, which takes a `userId` and
+   re-checks the purchase **itself** rather than trusting a caller to have done it.
+
+The free tier is a `.limit(INVESTOR_FREE_PREVIEW_LIMIT)` in the query, not a `.slice()` in a
+component — four rows are fetched, so four rows exist. The locked cards carry **no data at all**
+(they draw bars, not blurred text), and the "N more profiles" figure comes from a `count`-only query.
+
+### Setup
+
+1. Apply the migration: `supabase db push` (or run
+   `supabase/migrations/20260904000000_investor_directory.sql` in the SQL editor). It creates
+   `investors`, `investor_directory_plans` and `investor_directory_purchases`, and seeds **twelve
+   clearly-marked sample investors** so the page has something to render. They describe no real
+   investor — invented fund names, `example.com` addresses, no natural person — and `/investors`
+   displays a "Sample data" notice for as long as any of them exist.
+2. In the Dodo dashboard create a one-time INR **499.00** product (no discount, not
+   pay-what-you-want, not recurring).
+3. Verify it: `node scripts/check-dodo-products.mjs pdt_YOUR_ID --paise=49900`
+4. Link it: paste the id into `supabase/link-dodo-investor-plan.sql` and run that file.
+
+Until step 4, the plan has no `dodo_product_id`, nothing is purchasable, and the page says so — the
+same fail-closed posture the promotion packages use. The free preview stays open throughout.
+
+### Managing the data
+
+`/admin/investors` (admin only) is add / edit / delete, plus one-click **Published** and **Free
+preview** toggles. Anything saved there clears `is_sample`, so the demonstration notice disappears by
+itself as the seeds are replaced. Every action re-checks `getIsAdmin()` server-side — the page guard
+decides what is *rendered*, not what is authorized.
 
 ## Launch review
 

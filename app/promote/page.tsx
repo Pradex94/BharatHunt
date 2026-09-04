@@ -24,6 +24,7 @@
 
 import type { Metadata } from "next";
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import {
   ArrowRight,
   BarChart3,
@@ -45,7 +46,7 @@ import { PackageTiers } from "@/components/promote/package-tiers";
 import { PromoteCta } from "@/components/promote/promote-cta";
 import { getPromotionPackages } from "@/services/promotions";
 import { getPlatformStats } from "@/services/products";
-import { CATEGORIES, PRODUCT_CATEGORIES } from "@/lib/constants";
+import { CATEGORIES, PRODUCT_CATEGORIES, PROMOTE_ENABLED } from "@/lib/constants";
 
 // Prerendered, revalidated. Package prices change rarely and nothing on this
 // page varies by visitor; see the note at the top before changing this.
@@ -132,6 +133,12 @@ const TRANSPARENCY = [
 ];
 
 export default async function PromotePage() {
+  // Promote is hidden from the platform (see `PROMOTE_ENABLED` in
+  // lib/constants.ts). Nothing below is deleted — the page just stops answering
+  // until the flag is set. First statement in the component, so the 404 is a
+  // real 404: the check has to happen before anything streams.
+  if (!PROMOTE_ENABLED) notFound();
+
   // Independent reads, both public and cacheable — no reason to await in series.
   const [packages, stats] = await Promise.all([getPromotionPackages(), getPlatformStats()]);
 

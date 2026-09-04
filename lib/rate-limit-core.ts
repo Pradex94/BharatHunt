@@ -120,6 +120,39 @@ export const RATE_LIMITS = {
     message: "Too many verification attempts. Please wait a few minutes.",
   },
 
+  /**
+   * Opens a Dodo checkout for the investor directory. Same shape and the same
+   * reasoning as `promotionOrder`: two outbound requests to Dodo per attempt
+   * (the catalogue price is read back before a session is opened), and sessions
+   * accumulate against the account whether or not anyone pays them.
+   *
+   * A separate bucket rather than reusing `promotionOrder`, so a founder who has
+   * just bought a promotion is not refused a directory unlock by a counter that
+   * belongs to the other product.
+   */
+  investorUnlock: {
+    limit: 5,
+    windowSeconds: 600,
+    message: "Too many payment attempts. Please wait a few minutes and try again.",
+  },
+
+  /**
+   * Searching the investor directory — the only endpoint that returns premium
+   * rows, so the limit is doing a different job from `search`.
+   *
+   * That one protects a cached public read from load. This one is what makes
+   * walking the whole dataset expensive: every call is capped at one page, so
+   * the ceiling here is also the ceiling on how fast a paying customer can page
+   * through the product they bought. Sized for a person typing into a search box
+   * behind a 400ms debounce (a busy minute is perhaps a dozen calls) and well
+   * under what a script enumerating pages would want.
+   */
+  investorSearch: {
+    limit: 60,
+    windowSeconds: 60,
+    message: "Too many searches. Please slow down.",
+  },
+
   /** Sends real email through a paid provider — strictest, and keyed per IP. */
   newsletter: {
     limit: 3,

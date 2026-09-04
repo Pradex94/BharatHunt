@@ -9,6 +9,13 @@ import {
   refundPayment,
   settlePayment,
 } from "@/lib/promotion-activation";
+import {
+  failInvestorPurchase,
+  markInvestorPurchasePending,
+  refundInvestorPurchase,
+  settleInvestorPurchase,
+} from "@/lib/investor-access";
+import { INVESTOR_CHECKOUT_PURPOSE } from "@/lib/investors";
 
 /**
  * Dodo Payments webhook — the authoritative settlement path.
@@ -43,6 +50,22 @@ import {
  * The raw body is read with `request.text()` and hashed before anything parses
  * it. `JSON.parse` followed by `JSON.stringify` re-orders keys and drops
  * whitespace, which changes the digest and would reject every genuine delivery.
+ *
+ * Two products, one endpoint
+ * --------------------------
+ * Dodo posts every event for the account here, and the account now sells two
+ * things: a promotion slot and Investor Directory access. They settle into
+ * different tables through different functions, so each event has to be routed.
+ *
+ * The routing key is `metadata.purpose`, written server-side when the session is
+ * created. Promotion sessions predate the field and carry no `purpose`, so its
+ * *absence* means promotion — which is what keeps this change from touching the
+ * live promotion path at all, including for sessions opened before this deployed.
+ *
+ * Routing is not authorization. `purpose` decides which settler runs; that
+ * settler then looks the session id up in its own table and refuses anything it
+ * does not find (`unknown_session`). A mislabelled event therefore settles
+ * nothing, rather than settling the wrong thing.
  */
 
 /** Dodo's payment entity, narrowed to the fields this handler reads. */
@@ -79,6 +102,20 @@ type WebhookBody = {
   type?: string;
   data?: PaymentEntity & RefundEntity & { payload_type?: string };
 };
+
+/**
+ * Which product this event belongs to.
+ *
+ * Reads `metadata.purpose` and nothing else. Anything that is not exactly the
+ * investor sentinel — a missing field, a promotion, a value Dodo mangled — is a
+ * promotion, which is the pre-existing behaviour and therefore the safe default:
+ * the promotion settler refuses session ids it does not recognise, so a
+ * misrouted directory payment is logged and left for the retry rather than
+ * applied to the wrong account.
+ */
+function isInvestorEvent(entity: PaymentEntity): boolean {
+  return entity.metadata?.purpose === INVESTOR_CHECKOUT_PURPOSE;
+}
 
 /** 200 with a short body. Dodo only reads the status code. */
 function ok(handled: string) {
@@ -165,13 +202,26 @@ export async function POST(request: NextRequest) {
       // `checkout_session_id` is the join back to our own row, so an event
       // without one cannot be settled. That is not an error to retry: a payment
       // created outside our checkout (a dashboard charge, a payment link) is
-      // simply not a promotion purchase.
+      // simply not a purchase of either product.
       if (
         !entity.payment_id ||
         !entity.checkout_session_id ||
         typeof entity.total_amount !== "number"
       ) {
         return ok("ignored");
+      }
+
+      if (isInvestorEvent(entity)) {
+        await settleInvestorPurchase({
+          sessionId: entity.checkout_session_id,
+          paymentId: entity.payment_id,
+          chargedAmount: entity.total_amount,
+          currency: entity.currency ?? "INR",
+          tax: entity.tax ?? null,
+          metadataUserId:
+            typeof entity.metadata?.user_id === "string" ? entity.metadata.user_id : null,
+        });
+        return ok("settled");
       }
 
       await settlePayment({
@@ -191,8 +241,18 @@ export async function POST(request: NextRequest) {
     case "payment.failed":
     case "payment.cancelled": {
       if (!entity.checkout_session_id) return ok("ignored");
-      // No `userId`: the webhook has no session. `failPayment` only ever writes
-      // over a still-open payment, so it cannot undo a successful retry.
+      // No `userId` on either branch: the webhook has no session. Both failure
+      // recorders only ever write over a still-open row, so neither can undo a
+      // successful retry.
+      if (isInvestorEvent(entity)) {
+        await failInvestorPurchase({
+          sessionId: entity.checkout_session_id,
+          code: entity.error_code ?? event,
+          description: entity.error_message ?? null,
+        });
+        return ok("failed");
+      }
+
       await failPayment({
         sessionId: entity.checkout_session_id,
         code: entity.error_code ?? event,
@@ -205,6 +265,14 @@ export async function POST(request: NextRequest) {
       if (!entity.checkout_session_id) return ok("ignored");
       // Neither paid nor dead. Recorded so the customer's own history says
       // "in progress" rather than nothing at all while a mandate clears.
+      if (isInvestorEvent(entity)) {
+        await markInvestorPurchasePending({
+          sessionId: entity.checkout_session_id,
+          paymentId: entity.payment_id ?? null,
+        });
+        return ok("pending");
+      }
+
       await markPaymentPending({
         sessionId: entity.checkout_session_id,
         paymentId: entity.payment_id ?? null,
@@ -230,15 +298,31 @@ export async function POST(request: NextRequest) {
         return new Response("Could not read the payment", { status: 500 });
       }
 
+      const fullyRefunded =
+        remote.data.refundStatus === "full" ||
+        // `is_partial === false` on the event is Dodo's own statement that this
+        // refund covered the payment. Trusted only in the affirmative
+        // direction: `true` says nothing about what earlier refunds did.
+        entity.is_partial === false;
+
+      // A refund event carries the *refund*, which has no metadata of its own —
+      // so unlike the payment cases above, the routing key comes from the
+      // payment we just read back, where Dodo echoes the session's metadata.
+      // That read had to happen anyway for the refunded total, so this costs
+      // nothing extra.
+      if (remote.data.metadata.purpose === INVESTOR_CHECKOUT_PURPOSE) {
+        await refundInvestorPurchase({
+          paymentId,
+          refundedAmount: remote.data.refundedAmount,
+          fullyRefunded,
+        });
+        return ok("refunded");
+      }
+
       await refundPayment({
         paymentId,
         refundedAmount: remote.data.refundedAmount,
-        fullyRefunded:
-          remote.data.refundStatus === "full" ||
-          // `is_partial === false` on the event is Dodo's own statement that
-          // this refund covered the payment. Trusted only in the affirmative
-          // direction: `true` says nothing about what earlier refunds did.
-          entity.is_partial === false,
+        fullyRefunded,
       });
       return ok("refunded");
     }
