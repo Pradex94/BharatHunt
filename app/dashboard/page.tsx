@@ -17,6 +17,7 @@ import { ProductLogo } from "@/components/products/product-logo";
 import { getProductsByCreator, type MakerProduct } from "@/services/products";
 import { getIsAdmin } from "@/lib/admin";
 import { MAX_PRODUCTS_PER_USER, PRICING_TYPE_LABELS } from "@/lib/constants";
+import { hasPublicPage, productRowHref } from "@/lib/product-links";
 import { isIndexableProduct } from "@/lib/seo";
 import { cn } from "@/lib/utils";
 
@@ -197,8 +198,11 @@ function ProductRow({ product }: { product: MakerProduct }) {
       {/* Identity */}
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
+          {/* The badge beside this says "in review"; the link has to agree.
+              An unpublished row has no public page (lib/product-links.ts), so
+              it points at the submission instead. */}
           <Link
-            href={`/products/${product.slug}`}
+            href={productRowHref(product, "maker")}
             className="truncate font-semibold text-ink transition-colors hover:text-primary"
           >
             {product.name}
@@ -262,7 +266,7 @@ function ProductRow({ product }: { product: MakerProduct }) {
       {/* Actions */}
       <div className="flex shrink-0 items-center gap-3 border-t border-border pt-3 sm:border-t-0 sm:pt-0 sm:pl-2">
         {/* Only a published product has a public page; the others would 404. */}
-        {product.status === "published" && (
+        {hasPublicPage(product.status) && (
           <Link
             href={`/products/${product.slug}`}
             className="flex items-center gap-1 text-sm text-body transition-colors hover:text-primary"

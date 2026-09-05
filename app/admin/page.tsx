@@ -11,6 +11,7 @@ import { Numeric } from "@/components/ui/typography";
 import { DeleteProductButton } from "@/components/products/delete-product-button";
 import { ReviewActions } from "@/components/admin/review-actions";
 import { indiaStateName } from "@/lib/india-states";
+import { productRowHref } from "@/lib/product-links";
 
 export const metadata = {
   title: "Admin",
@@ -132,8 +133,12 @@ export default async function AdminPage() {
                   {products.map((product) => (
                     <tr key={product.id} className="border-b border-border/60 last:border-0">
                       <td className="px-4 py-2.5">
+                        {/* Only a live product has a public page. This table
+                            lists every status, so a row in review linked
+                            straight at /products/[slug] sent the reviewer to a
+                            404 instead of to the decision. */}
                         <Link
-                          href={`/products/${product.slug}`}
+                          href={productRowHref(product, "admin")}
                           className="font-medium text-ink hover:text-primary"
                         >
                           {product.name}
