@@ -1,0 +1,61 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "bharathunt",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2026-09-05",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "observability": {
+    "enabled": true
+  },
+  // Smart Placement moves the Worker close to the origin it talks to most
+  // (Supabase). The app makes ~3 Supabase round-trips per render, so pinning the
+  // compute near the database matters more than being near the viewer — this is
+  // the Workers equivalent of the old `vercel.json` "regions": ["bom1"] pin.
+  "placement": {
+    "mode": "smart"
+  },
+  // Incremental (ISR / full-route) cache. NOTE: the R2 bucket must be created
+  // before `wrangler deploy` — R2 has to be enabled once in the Cloudflare
+  // dashboard first. `opennextjs-cloudflare preview` simulates it locally, so
+  // local runs work without the remote bucket existing.
+  "r2_buckets": [
+    {
+      "binding": "NEXT_INC_CACHE_R2_BUCKET",
+      "bucket_name": "bharathunt-inc-cache"
+    }
+  ],
+  // Tag cache backing revalidateTag/revalidatePath.
+  "d1_databases": [
+    {
+      "binding": "NEXT_TAG_CACHE_D1",
+      "database_name": "bharathunt-tag-cache",
+      "database_id": "0a381201-00e5-4b62-b435-608625d8734c"
+    }
+  ],
+  // Durable Object queue that drains background ISR revalidations.
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "NEXT_CACHE_DO_QUEUE",
+        "class_name": "DOQueueHandler"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["DOQueueHandler"]
+    }
+  ],
+  // The queue calls the Worker back to run revalidations.
+  "services": [
+    {
+      "binding": "WORKER_SELF_REFERENCE",
+      "service": "bharathunt"
+    }
+  ]
+}
