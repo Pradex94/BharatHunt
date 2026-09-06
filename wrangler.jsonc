@@ -11,6 +11,34 @@
   "observability": {
     "enabled": true
   },
+  // Production traffic is attached as *routes*, not Custom Domains — deliberately.
+  //
+  // A Custom Domain requires the Worker to own the DNS record, so Cloudflare refuses to
+  // attach one on top of the existing Vercel-pointing records: "Hostname 'bharathunt.org'
+  // already has externally managed DNS records" (API code 100117). Honouring that would
+  // mean deleting the apex records first, which takes the site down for the window
+  // between the delete and the attach.
+  //
+  // A route instead runs the Worker *in front of* the existing proxied record. The DNS
+  // records stay exactly as they are, so the cutover has no downtime at all: Cloudflare
+  // hands the request to this Worker and the Vercel origin behind it is simply never
+  // consulted. Rollback is removing these two entries and redeploying — traffic falls
+  // back through to Vercel with no DNS edit and no propagation wait.
+  //
+  // Safe here because nothing in the app fetch()es its own hostname (a Worker on a route
+  // cannot call back into its own zone); SITE_URL only ever builds metadata, canonical
+  // and sitemap strings.
+  "routes": [
+    { "pattern": "bharathunt.org/*", "zone_name": "bharathunt.org" },
+    // www is served here too, so the www → apex 301 in next.config.ts runs on this
+    // Worker instead of leaving a second live origin on Vercel.
+    { "pattern": "www.bharathunt.org/*", "zone_name": "bharathunt.org" },
+    // Staging origin on the same build, for exercising production keys without touching
+    // the apex. This one stays a Custom Domain: Cloudflare created its DNS record itself,
+    // so there was never a pre-existing record to conflict with.
+    { "pattern": "cf.bharathunt.org", "custom_domain": true }
+  ],
+
   // Smart Placement moves the Worker close to the origin it talks to most
   // (Supabase). The app makes ~3 Supabase round-trips per render, so pinning the
   // compute near the database matters more than being near the viewer — this is
