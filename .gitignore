@@ -72,3 +72,9 @@ server.err.log
 # workbook local (or in shared drive storage with access control) and never here.
 *.xlsx
 *.xls
+
+# cloudflare / opennext
+.open-next/
+.wrangler/
+.dev.vars
+.dev.vars.*

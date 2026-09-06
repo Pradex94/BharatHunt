@@ -7,12 +7,16 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
+    "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
+    "cf-typegen": "wrangler types",
     "test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test \"tests/**/*.test.ts\"",
     "test:fixtures": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/gen-search-fixtures.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
     "@clerk/nextjs": "^7.5.20",
+    "@opennextjs/cloudflare": "^1.20.6",
     "@supabase/supabase-js": "^2.110.7",
     "@upstash/ratelimit": "^2.0.8",
     "@upstash/redis": "^1.38.1",
@@ -38,7 +42,8 @@
     "eslint-config-next": "^16.3.0",
     "shadcn": "^4.13.1",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "wrangler": "^4.129.0"
   },
   "overrides": {
     "nanoid": "^3.3.17"

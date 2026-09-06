@@ -56,6 +56,12 @@ async function readImageSize(file: File): Promise<{ width: number; height: numbe
  * shown. Vector images (which report no intrinsic width) are always allowed:
  * they cannot blur.
  */
+/** The subset of Cloudinary's unsigned-upload JSON we actually read. */
+type CloudinaryUploadResponse = {
+  secure_url?: string;
+  error?: { message?: string };
+};
+
 export async function uploadProductImage(
   file: File,
   options: { minWidth?: number } = {},
@@ -100,7 +106,7 @@ export async function uploadProductImage(
     });
 
     if (!response.ok) {
-      const error = await response.json();
+      const error = (await response.json()) as CloudinaryUploadResponse;
       const message = error.error?.message || "Unknown error";
       if (message.includes("Upload preset must be whitelisted")) {
         throw new Error(
@@ -110,7 +116,7 @@ export async function uploadProductImage(
       throw new Error(`Upload failed: ${message}`);
     }
 
-    const data = await response.json();
+    const data = (await response.json()) as CloudinaryUploadResponse;
 
     if (!data.secure_url) {
       throw new Error("Failed to get image URL from Cloudinary");

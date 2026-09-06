@@ -1,87 +1,66 @@
 /**
- * Coarse location for the current request, from the edge's geo headers.
+ * Coarse location for the current request, from Cloudflare's edge metadata.
  *
- * Server-only — `next/headers` can't run in the browser.
+ * Server-only.
  *
- * The edge resolves the client IP and forwards the result as request headers,
- * so there is no lookup to do and no third-party geo service to call. We read
- * only the derived fields: **the visitor's IP is never read, logged or
- * stored**, and nothing finer than a state is kept. (The *connecting* address
- * is looked at, once, to tell whether the request came through Cloudflare and
- * therefore which set of geo headers is the honest one — it is compared to a
- * list of edge ranges and then dropped.)
+ * On Cloudflare Workers the platform attaches the resolved geo to the request's
+ * `cf` object (`getCloudflareContext().cf`). Unlike request headers, `cf` is
+ * populated by Cloudflare's edge and cannot be set by the client, so it is the
+ * honest, un-spoofable source — there is no longer any need to check whether the
+ * request came *through* Cloudflare (it always does now that the app itself runs
+ * on Workers). We read only the derived fields: **the visitor's IP is never
+ * read, logged or stored**, and nothing finer than a state is kept. This also
+ * removes the old dependency on the "Add visitor location headers" managed
+ * transform — `cf.regionCode` and `cf.city` are present without it.
  *
- * This is a hint, not a fact. VPNs, corporate proxies and Indian mobile
- * carriers (which commonly present a whole circle from one hub city) all move
- * the apparent location, so the detected state is only ever used to *prefill* a
- * field the maker can correct before publishing — see `lib/actions/products.ts`.
+ * This is a hint, not a fact. VPNs, corporate proxies and Indian mobile carriers
+ * (which commonly present a whole circle from one hub city) all move the apparent
+ * location, so the detected state is only ever used to *prefill* a field the
+ * maker can correct before publishing — see `lib/actions/products.ts`.
  */
 
-import { headers } from "next/headers";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 
-import { isCloudflareIp } from "@/lib/cloudflare";
 import { normalizeIndiaStateCode } from "@/lib/india-states";
-import { connectingIpFrom } from "@/lib/rate-limit-ip";
 
 export type DetectedLocation = {
   /** ISO 3166-2:IN code, or null when the request isn't from India / is unknown. */
   stateCode: string | null;
   /** ISO 3166-1 alpha-2, e.g. "IN". Null on localhost. */
   country: string | null;
-  /** Nearest city Vercel could resolve — shown for context, never stored. */
+  /** Nearest city Cloudflare could resolve — shown for context, never stored. */
   city: string | null;
 };
 
 const EMPTY: DetectedLocation = { stateCode: null, country: null, city: null };
 
-/** Vercel percent-encodes the city so non-ASCII names survive the header. */
-function decodeCity(value: string | null): string | null {
-  if (!value) return null;
-  try {
-    return decodeURIComponent(value) || null;
-  } catch {
-    return value;
-  }
-}
-
 /*
- * Cloudflare's country header uses two placeholders that are not countries:
- * "XX" when it could not resolve one, "T1" for traffic arriving over Tor.
- * Neither is a location, so both read as unknown.
+ * Cloudflare's country uses two placeholders that are not countries: "XX" when
+ * it could not resolve one, "T1" for traffic arriving over Tor. Neither is a
+ * location, so both read as unknown.
  */
 const UNRESOLVED_COUNTRIES = new Set(["XX", "T1"]);
 
 export async function detectLocation(): Promise<DetectedLocation> {
-  // Locally there are no edge headers at all, so this returns EMPTY in dev —
-  // expected, and the form just starts blank.
-  const h = await headers();
-  const get = (name: string) => h.get(name);
+  // Locally (`next dev` without the Workers runtime) there is no `cf` object, so
+  // this returns EMPTY in dev — expected, and the form just starts blank.
+  let cf: IncomingRequestCfProperties | undefined;
+  try {
+    cf = (await getCloudflareContext({ async: true })).cf;
+  } catch {
+    return EMPTY;
+  }
+  if (!cf) return EMPTY;
 
-  /*
-   * Behind Cloudflare's proxy the platform resolves the *Cloudflare* data
-   * centre, not the visitor: every Indian request would look like Mumbai or
-   * Delhi. Cloudflare's own headers describe the real client, so they win when
-   * the connection came from a Cloudflare address — and only then, since these
-   * are ordinary request headers anyone could otherwise set. `cf-region-code`
-   * and `cf-ipcity` need the "Add visitor location headers" managed transform
-   * turned on; without it only the country arrives, and the state falls back to
-   * whatever the platform resolved.
-   */
-  const viaCloudflare = isCloudflareIp(connectingIpFrom(get));
-
-  const cfCountry = viaCloudflare ? h.get("cf-ipcountry")?.toUpperCase() : null;
+  const rawCountry = typeof cf.country === "string" ? cf.country.toUpperCase() : null;
   const country =
-    (cfCountry && !UNRESOLVED_COUNTRIES.has(cfCountry) ? cfCountry : null) ??
-    h.get("x-vercel-ip-country")?.toUpperCase() ??
-    null;
+    rawCountry && !UNRESOLVED_COUNTRIES.has(rawCountry) ? rawCountry : null;
 
-  const city = decodeCity((viaCloudflare ? h.get("cf-ipcity") : null) ?? h.get("x-vercel-ip-city"));
+  const city = typeof cf.city === "string" && cf.city ? cf.city : null;
 
-  // Subdivision codes are only unambiguous within their country: "GA" is Goa
-  // in India and Georgia in the US. Resolve a state only for Indian requests.
-  const region =
-    (viaCloudflare ? (h.get("cf-region-code") ?? h.get("cf-region")) : null) ??
-    h.get("x-vercel-ip-country-region");
+  // Subdivision codes are only unambiguous within their country: "GA" is Goa in
+  // India and Georgia in the US. Resolve a state only for Indian requests.
+  const region = typeof cf.regionCode === "string" ? cf.regionCode : null;
   const stateCode = country === "IN" ? normalizeIndiaStateCode(region) : null;
 
   return { stateCode, country, city };
