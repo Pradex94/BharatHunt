@@ -57,6 +57,23 @@ DODO_PAYMENTS_API_KEY=dodo_test_xxxxxxxxxxxxxxxx
 DODO_PAYMENTS_WEBHOOK_KEY=whsec_xxxxxxxxxxxxxxxx   # a DIFFERENT value from the API key
 DODO_PAYMENTS_ENVIRONMENT=test_mode                # anything but live_mode means test_mode
 
+# Funding Intelligence (/funding) — all optional; the feature works with none of them.
+# Shared secret for /api/funding/ingest. REQUIRED to run ingestion on a schedule;
+# without it the endpoint answers 503 and ingests nothing. The admin "Run
+# ingestion now" button works regardless (it authenticates the signed-in admin).
+FUNDING_INGEST_SECRET=<a-long-random-string>
+# Enables the model pass over each article. Without it, extraction is entirely
+# rule-based — the designed fallback, not a degraded mode.
+# ANTHROPIC_API_KEY=sk-ant-...
+# FUNDING_AI_MODEL=claude-haiku-4-5   # defaults to claude-opus-5
+# FUNDING_USD_INR_RATE=88             # charts only; cards never show a converted figure
+
+# AI Trending (/ai) — optional; the feature works with none of them.
+# Shared secret for /api/ai-news/ingest. REQUIRED only to run ingestion on a
+# schedule; without it the endpoint answers 503. The admin "Run AI News
+# Ingestion" button works regardless (it authenticates the signed-in admin).
+AI_NEWS_INGEST_SECRET=<a-long-random-string>
+
 # Cloudflare Turnstile — captcha on the /advertise inquiry form (REQUIRED for that form)
 NEXT_PUBLIC_TURNSTILE_SITE_KEY=<your-turnstile-site-key>
 TURNSTILE_SECRET_KEY=<your-turnstile-secret-key>
@@ -209,6 +226,16 @@ Type-check with `npx tsc --noEmit`.
 | `/admin/review/[id]` | Where the Approve / Send back links in the review email land |
 | `/admin/investors` | Admin only — add, edit, publish and free-preview-flag investors |
 | `/investors` | Investor Directory — free preview for everyone, full directory after a one-time ₹499 purchase |
+| `/funding` | Funding Intelligence — live funding feed, snapshot, filters, trends, roadmap, calculator |
+| `/funding/[startup-slug]` | A company's funding history, totals and investors |
+| `/funding/investors` | Investors seen in published rounds — deals, stages, sectors, recent investments |
+| `/funding/guides`, `/funding/guides/[slug]` | Ten fundraising guides (static, prerendered) |
+| `/admin/funding` | Admin only — review queue, source health, ingestion controls, manual entry |
+| `/api/funding/ingest` | Scheduled ingestion trigger — shared-secret only, 503 when unconfigured |
+| `/ai` | AI Trending — top story, trending rail, category/region filters, search, latest feed |
+| `/ai/[story-slug]` | One AI story: our summary, its entities, the trend score, every source covering it |
+| `/admin/ai-news` | Admin only — review queue, sources, ingestion controls, run log, manual entry |
+| `/api/ai-news/ingest` | Scheduled AI news ingestion trigger — shared-secret only, 503 when unconfigured |
 | `/promote` | Promotion marketing page — **hidden (404) unless `NEXT_PUBLIC_PROMOTE_ENABLED=true`** |
 | `/promote/checkout` | Buy a fixed-price promotion slot (Dodo Payments hosted checkout) — hidden with `/promote` |
 | `/api/webhooks/clerk` | Syncs Clerk users into the `profiles` table |
@@ -371,6 +398,288 @@ same fail-closed posture the promotion packages use. The free preview stays open
 preview** toggles. Anything saved there clears `is_sample`, so the demonstration notice disappears by
 itself as the seeds are replaced. Every action re-checks `getIsAdmin()` server-side — the page guard
 decides what is *rendered*, not what is authorized.
+
+## Funding Intelligence (`/funding`)
+
+Aggregated Indian startup funding news: a live feed of rounds, a company-level funding history, an
+investor directory derived from the reporting, trend charts, a ten-step fundraising roadmap with
+guides, and a "how much should I raise" calculator.
+
+**It works with no keys at all.** Extraction is rule-based by default, so a fresh clone can ingest,
+review and publish without an API key. `ANTHROPIC_API_KEY` adds a model pass on top; everything else
+is optional.
+
+### The pipeline
+
+```
+funding_sources  →  fetch  →  normalise  →  dedupe  →  classify  →  extract  →  funding_rounds
+   (config)         (RSS/     (URL, title,  (3 checks) (keywords)   (rules,      (status =
+                     GDELT)    hash)                                then AI)      'pending')
+                                                                                      ↓
+                                                              /admin/funding review → 'published'
+                                                                                      ↓
+                                                                                  /funding
+```
+
+Nothing publishes itself. Every extracted round lands as `status = 'pending'` and is invisible to the
+public RLS policy until an admin approves it — the same shape as the launch review queue below, and
+for a stronger reason: the product here *is* the claim that a figure was reported by a named source.
+
+### Running it twice is a no-op
+
+Three duplicate checks, in order. Only the first discards; the other two keep the article and attach
+it to the round it duplicates, because six outlets covering one Series A is a fact worth keeping.
+
+| # | Key | Catches |
+| --- | --- | --- |
+| 1 | `funding_news.normalized_url` (unique) | The same article, however it was linked |
+| 2 | `funding_news.content_hash` | The same story at a second URL (syndication, AMP split) |
+| 3 | `funding_rounds.event_key` (unique), then headline similarity | A *different* article about the same event |
+
+`event_key` is company + stage + month, deliberately without the amount: two outlets reporting one
+round as "₹20 crore" and "$2.4 million" disagree by the day's exchange rate, so keying on the figure
+would split one event in two.
+
+### Data trust rules
+
+* A card shows **what the source reported**, in the currency it reported. Nothing on a card is
+  converted. `amount_inr` exists only so the charts can add currencies, and the rate used is stamped
+  on each row so revising it never rewrites history.
+* An unreported amount is `null` and renders as "Undisclosed" — never `₹0`.
+* Unknown investors are `[]`, never a plausible fund.
+* A stage the vocabulary does not contain (`pre-Series A`, `bridge`) becomes `Undisclosed` rather
+  than being rounded to a neighbour.
+* Charts show "Not enough data yet" below three points, and every money total states how many of the
+  rounds actually carried a figure.
+* Summaries are generated **from the extracted fields**, never from the publisher's sentences — the
+  generator has no access to the article body, so it cannot reproduce a paragraph even by accident.
+
+### Adding a funding source
+
+No code change. Insert a row into `funding_sources` (or use `/admin/funding` to enable, disable and
+re-run an existing one):
+
+```sql
+insert into public.funding_sources (name, source_type, feed_url, publisher, enabled, priority, poll_interval_minutes)
+values ('Example Startup Desk', 'rss', 'https://example.com/feed', 'Example', true, 50, 30);
+```
+
+`source_type` is `rss`, `api`, `gdelt` or `manual`. **Check the publication's robots.txt first** — the
+seeded rows record what each one permits, and two ship disabled for that reason (see the header of
+`supabase/migrations/20260909020000_funding_sources_seed.sql`).
+
+Sources back off exponentially on failure (`poll_interval × 2^failures`, capped at a day) and are
+flagged unhealthy after three, which shows in the admin table.
+
+### How extraction works
+
+1. **Classify** — cheap keyword pass; roundups, IPOs, stake sales and VC fund closes are refused
+   here, before anything expensive runs.
+2. **Rule-based extraction** (`lib/funding/extract.ts`) — regex over the headline and body for the
+   amount, stage, company, investors, sector and city. Always runs. A field the text does not state
+   stays null.
+3. **Model pass** (`lib/funding/ai.ts`, optional) — may only *fill gaps* and rewrite the summary. It
+   cannot overwrite a fact a regex read out of the literal text; when the two disagree, the round is
+   flagged for review and its confidence is capped rather than one answer winning.
+4. **Confidence** is the lower of the two, and is internal only — the card says "AI extracted", never
+   a percentage.
+
+### Scheduling ingestion
+
+`/api/funding/ingest` accepts `GET` or `POST` with `Authorization: Bearer $FUNDING_INGEST_SECRET`
+(or `X-Ingest-Secret`). Unset secret ⇒ **503, ingests nothing** — unset means closed, never open.
+
+```bash
+curl -X POST https://bharathunt.org/api/funding/ingest \
+  -H "Authorization: Bearer $FUNDING_INGEST_SECRET"
+```
+
+`?source=<uuid>` runs one source and ignores its interval. Every run is idempotent, so overlapping
+triggers are harmless.
+
+* **Cloudflare Workers** (this project's target) — add a cron trigger in `wrangler.jsonc` and call
+  the URL from the scheduled handler, or point any external scheduler at it.
+* **Vercel** — `vercel.json` → `{ "crons": [{ "path": "/api/funding/ingest", "schedule": "*/15 * * * *" }] }`,
+  with `FUNDING_INGEST_SECRET` set (Vercel sends it as a Bearer token).
+* **Anything else** — GitHub Actions, cron-job.org, a cron box. It is one authenticated HTTP call.
+
+Every 10–15 minutes suits the high-priority feeds; per-source `poll_interval_minutes` means a
+frequent cron does not turn into a frequent poll of every source.
+
+### Reviewing
+
+`/admin/funding` (admin only) has the review queue ordered **lowest confidence first** — the records
+most likely to be wrong are seen first, since nobody is waiting on the other end of this queue. From
+there: publish, reject, edit any field, feature, hide, add a round by hand, enable/disable a source,
+and **Run ingestion now** with per-run counts (fetched, new, rounds, duplicates, rejected, errors)
+and per-source health.
+
+Editing recomputes what depends on the edit — `amount_inr`, the slug, the `event_key`, and the
+startup/investor links — so a corrected stage cannot leave a stale dedupe key behind.
+
+### Alerts
+
+Schema only, by design (`funding_alert_subscriptions`). A row is one saved filter over fields
+`/funding` already filters on, with a `last_notified_at` watermark. Nothing sends anything yet.
+
+## AI Trending (`/ai`)
+
+What is happening in AI right now: news, launches, models, companies, funding and research,
+collected from official sources, research feeds and reporting, grouped into **stories** rather than
+articles, and ranked by the **BharatHunt Trend Score**.
+
+**It works with no keys at all.** Classification, entity extraction, summarisation and the trend
+score are all rule-based and run in-process. There is no AI API key in this pipeline and nothing in
+it claims otherwise — see `lib/ai-news/classify.ts` for why that is a design choice rather than a
+gap.
+
+### The pipeline
+
+```
+ai_news_sources → fetch → normalise → AI relevance → dedupe → classify → group → score → ai_stories
+   (config)        (RSS/    (URL,       (lexicon +    (3       (category, (entity   (trend   (published
+                    arXiv/    title,      source        checks)  region,    + title   score)   or pending)
+                    HN/       hash)       prior)                 entities)  + window)             ↓
+                    GDELT)                                                                       /ai
+```
+
+### Articles and stories are different things
+
+Six publications covering one model release is **six articles and one story**. One table would force
+a choice between throwing five sources away and printing the same headline six times, so
+deduplication runs on articles (`normalized_url`, then `content_hash`, then a headline/entity/time
+similarity check) and grouping runs on events (`story_key`).
+
+That extra coverage is the product. `source_count` is both the "Covered by 4 sources" line and the
+largest single term in the trend score, and it is maintained by a Postgres trigger counting
+*distinct publications* — so no code path can inflate it, and four articles from one outlet's three
+sections stay one source.
+
+### The BharatHunt Trend Score
+
+Ours, not an industry metric and not anyone else's "trending" number. 0-100, from five observed
+signals (`lib/ai-news/trend.ts`):
+
+| Term | Weight | What it measures |
+| --- | --- | --- |
+| Recency | 32% | Hours since the story was last covered, on an 18-hour half-life |
+| Sources | 28% | Distinct publications covering it, log-scaled, saturating at six |
+| Velocity | 20% | Articles per hour **right now** — the term that makes trending different from popular |
+| Authority | 12% | Reliability of the covering sources (a lab's own post is not an aggregator link) |
+| Engagement | 8% | Story-page opens here, plus a source API's own count where one exists (Hacker News points + comments) |
+
+**A story that cannot be dated gets no score at all**, not a zero: two of the five terms are
+time-derived, and re-weighting the rest to fill the gap would be inventing a number. It renders with
+no badge and sorts last. The same rule governs the percentages on "Trending AI topics" and "AI
+companies making noise" — `ai_trending_topics` and `ai_trending_entities` return `NULL` for a change
+whose earlier window was too small to divide by, and the UI prints the count alone.
+
+Scores are recomputed for every story covered in the last week at the end of **every** run,
+including runs that ingested nothing — recency decays with the clock, so a story nobody is covering
+has to fall on its own. One snapshot per story per hour is kept in `ai_trend_snapshots`, which is
+what lets `/ai/[slug]` say "+9 today" rather than only "popular".
+
+### What it will not do
+
+It reads feeds and documented public APIs and stops there. It does not follow the article link,
+render the page, extract the body, work around a paywall, present false credentials or retry through
+a block. Politeness is enforced in three places: `poll_interval_minutes` per source decides whether a
+fetch happens at all, a 12s timeout bounds how long a connection is held, and a 4MB cap bounds how
+much is read. A failing source is backed off exponentially, not retried tightly.
+
+**Nothing a publisher wrote is republished.** Summaries are composed by `lib/ai-news/summarize.ts`
+from facts the pipeline established — the headline restated, the entities extracted, how many
+sources are covering it, how we filed it. The feed's own excerpt is stored (classification reads it)
+and is never rendered. Every link goes to the publisher.
+
+### What publishes itself, and what waits
+
+A story goes live without a human when its source is marked `auto_publish` **and** the classifier's
+relevance cleared `AUTO_PUBLISH_RELEVANCE` (0.55). Everything else lands in the review queue at
+`/admin/ai-news`. The gap is deliberate: a news page that needed an admin for every story would be
+empty most of the day, and one that published everything would have no review step at all. Both
+aggregators (Hacker News, GDELT) are `auto_publish = false` — an aggregator entry is a pointer to
+somebody else's reporting, which makes it excellent corroboration and poor evidence.
+
+Pending stories are invisible to the public RLS policy, so the queue is real rather than decorative.
+
+### Running it twice is a no-op
+
+`ai_news_articles.normalized_url` is unique and is checked *before* anything expensive happens, so a
+re-run over the same feed contents classifies nothing and writes nothing. Rejected articles are
+stored too — that is what makes the second pass cheap, because an article already judged "not about
+AI" is recognised by URL and never scored again.
+
+### Scheduling ingestion
+
+`POST /api/ai-news/ingest` with `Authorization: Bearer $AI_NEWS_INGEST_SECRET`. Every 10-15 minutes
+is the intended cadence; running it more often is safe but pointless, because each source is skipped
+until its own `poll_interval_minutes` has elapsed.
+
+It is **not** wired to a scheduler in this repo, deliberately — the project is mid-migration from
+Vercel to Cloudflare and the right mechanism differs by target:
+
+- **Vercel**: add a `crons` entry to `vercel.json`. Note that Hobby plans allow only daily crons, so
+  a `*/10` schedule fails the deployment on that tier:
+  ```json
+  "crons": [{ "path": "/api/ai-news/ingest", "schedule": "*/10 * * * *" }]
+  ```
+- **Cloudflare**: OpenNext's Worker exports only a `fetch` handler, so a Cron Trigger cannot invoke
+  it directly. Use a small separate scheduled Worker (or any external scheduler) that fetches the
+  URL with the header.
+
+### Testing it
+
+```bash
+node scripts/ai-news-dry-run.mjs              # every seeded source, no database writes
+node scripts/ai-news-dry-run.mjs --verbose    # per-article keep/reject verdicts and scores
+node scripts/ai-news-dry-run.mjs --only=arXiv # one source
+```
+
+The dry run reads its source list straight out of `20260910020000_ai_news_sources_seed.sql`, so it
+always exercises the configuration that will be deployed. It fetches, parses, classifies, groups and
+scores against **today's** live feeds and prints what it would write, then exits non-zero if any
+source failed — the check unit tests cannot perform, because "is this feed still alive" is not a
+question a fixture can answer. Every endpoint in the seed was verified with it before being
+committed; feeds that answered 404/410, that rejected an identified bot, or that served HTML from
+their `/feed/` path were removed rather than left to fail on a schedule.
+
+Then `npm test` covers the logic: 150 assertions across normalisation, classification, grouping, the
+trend score, the feed parsers and the summariser — including the brief's own cases ("New smartphone
+launched" rejected, "New smartphone launches with on-device AI model" kept; eight articles in two
+hours outranking ten over a month).
+
+### Adding a source
+
+Insert a row into `ai_news_sources` (or add it to the seed migration and re-run it — the
+`on conflict` clause re-syncs configuration in place without resetting health counters or overriding
+an operator's `enabled` flag):
+
+| Column | What to set |
+| --- | --- |
+| `source_type` | `rss`, `atom`, `arxiv`, `hn`, `gdelt` or `manual` — picks the adapter |
+| `source_category` | `official`, `research`, `news`, `blog`, `aggregator` — sets the relevance prior |
+| `reliability_score` | 0-1, by hand. Feeds the authority term; never derived from our own output |
+| `region` | `india` or `global` — a prior only; article content overrides it |
+| `poll_interval_minutes` | The politeness contract. 15-20 for wires, 60 for blogs, 180+ for papers |
+| `auto_publish` | Whether its stories may go live without review |
+
+Then run `node scripts/ai-news-dry-run.mjs --only=<name>` to confirm it parses before enabling it.
+
+### Known limits
+
+- **No semantic similarity.** Grouping is entity + folded-verb word overlap + a time window, because
+  there is no embedding provider configured and a similarity function pretending to be semantic
+  would be worse than none. It therefore misses pairs a reader would call obvious, and the admin
+  merge control is what covers that rather than a looser threshold — a wrong merge destroys a story
+  while a missed one merely shows it twice.
+- **GDELT is seeded disabled.** The adapter is implemented and unit-tested, but
+  `api.gdeltproject.org` was unreachable from the network this was built on, so it was never
+  verified end to end. Enable it in `/admin/ai-news` once a fetch from the deployment environment
+  succeeds.
+- **Alerts, digests and personalised feeds are not built.** The schema is shaped to allow them
+  (entities are first-class rows, stories carry stable slugs and trend history), and nothing here
+  pretends they exist.
 
 ## Launch review
 

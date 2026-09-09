@@ -3,7 +3,10 @@ import type { MetadataRoute } from "next";
 import { BLOG_POSTS } from "@/lib/blog";
 import { COLLECTIONS, MIN_PRODUCTS_TO_INDEX } from "@/lib/collections";
 import { CATEGORIES, PROMOTE_ENABLED, SITE_URL } from "@/lib/constants";
+import { FUNDING_GUIDES } from "@/lib/funding/guides";
 import { isIndexableProduct } from "@/lib/seo";
+import { getAllAiStorySlugs } from "@/services/ai-news";
+import { getFundedStartupSlugs } from "@/services/funding";
 import {
   getAllPublishedProductSlugs,
   getCategoryCounts,
@@ -31,6 +34,10 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const staticRoutes: MetadataRoute.Sitemap = [
     { url: `${SITE_URL}`, lastModified: now, changeFrequency: "daily", priority: 1 },
     { url: `${SITE_URL}/marketplace`, lastModified: now, changeFrequency: "hourly", priority: 0.9 },
+    // The most frequently changing page on the site: a new ingestion run every
+    // ten minutes, so `hourly` understates it and anything shorter is not a
+    // value crawlers act on.
+    { url: `${SITE_URL}/ai`, lastModified: now, changeFrequency: "hourly", priority: 0.9 },
     { url: `${SITE_URL}/categories`, lastModified: now, changeFrequency: "weekly", priority: 0.7 },
     { url: `${SITE_URL}/collections`, lastModified: now, changeFrequency: "weekly", priority: 0.7 },
     { url: `${SITE_URL}/about`, lastModified: now, changeFrequency: "monthly", priority: 0.6 },
@@ -130,6 +137,72 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     }),
   );
 
+  /*
+   * Funding Intelligence.
+   *
+   * The three hubs are always listed — they are useful and indexable even
+   * before any round is published, because the roadmap, the ten guides and the
+   * calculator are real content that does not depend on the dataset.
+   *
+   * The company profiles come from `getFundedStartupSlugs`, which reads through
+   * the same RLS predicate the page does (`published_round_count > 0`). So this
+   * cannot advertise a profile that answers 404 — the two agree by construction
+   * rather than by a filter kept in step by hand.
+   */
+  const fundingHubRoutes: MetadataRoute.Sitemap = [
+    { url: `${SITE_URL}/funding`, lastModified: now, changeFrequency: "hourly", priority: 0.9 },
+    {
+      url: `${SITE_URL}/funding/investors`,
+      lastModified: now,
+      changeFrequency: "daily",
+      priority: 0.7,
+    },
+    {
+      url: `${SITE_URL}/funding/guides`,
+      lastModified: now,
+      changeFrequency: "monthly",
+      priority: 0.7,
+    },
+  ];
+
+  const fundingGuideRoutes: MetadataRoute.Sitemap = FUNDING_GUIDES.map((guide) => ({
+    url: `${SITE_URL}/funding/guides/${guide.slug}`,
+    lastModified: now,
+    changeFrequency: "monthly",
+    priority: 0.6,
+  }));
+
+  /*
+   * Every published AI story.
+   *
+   * One URL per *story*, never per source article — six publications covering
+   * one model release is one entry here, which is the whole point of the
+   * story/article split in 20260910000000 and what section 28 asks for. The
+   * slugs come from the same RLS predicate the page reads through
+   * (`status = published and not is_hidden`), so this cannot advertise a URL
+   * that answers 404: the two agree by construction rather than by a filter
+   * kept in step by hand.
+   *
+   * `lastModified` is `last_seen_at` — when the story was last *covered*, not
+   * when we first saw it. A story that picked up three more sources this
+   * morning has genuinely changed, and that is the signal a crawler wants.
+   */
+  const aiStories = await getAllAiStorySlugs();
+  const aiStoryRoutes: MetadataRoute.Sitemap = aiStories.map((story) => ({
+    url: `${SITE_URL}/ai/${story.slug}`,
+    lastModified: story.last_seen_at ? new Date(story.last_seen_at) : now,
+    changeFrequency: "daily",
+    priority: 0.6,
+  }));
+
+  const fundedStartups = await getFundedStartupSlugs();
+  const fundingStartupRoutes: MetadataRoute.Sitemap = fundedStartups.map((startup) => ({
+    url: `${SITE_URL}/funding/${startup.slug}`,
+    lastModified: startup.updated ? new Date(startup.updated) : now,
+    changeFrequency: "weekly",
+    priority: 0.6,
+  }));
+
   return [
     ...staticRoutes,
     ...categoryRoutes,
@@ -137,5 +210,9 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     ...blogRoutes,
     ...marketplaceRoutes,
     ...productRoutes,
+    ...fundingHubRoutes,
+    ...fundingGuideRoutes,
+    ...fundingStartupRoutes,
+    ...aiStoryRoutes,
   ];
 }

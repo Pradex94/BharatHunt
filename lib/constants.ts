@@ -40,6 +40,16 @@ export const PROMOTE_ENABLED = process.env.NEXT_PUBLIC_PROMOTE_ENABLED === "true
 export const NAV_LINKS: NavLink[] = [
   { label: "Home", href: "/" },
   { label: "Products", href: "/marketplace" },
+  // "AI Trends", not "AI Trending" — the page's own h1 is the long form, and
+  // this row is already tight enough that one extra character per label pushes
+  // the desktop menu into the search box a breakpoint earlier. Placed second
+  // because it is the most-changing thing on the site: it has new content every
+  // ten minutes, and Investors and Resources do not.
+  { label: "AI Trends", href: "/ai" },
+  // "Funding", not "Funding Intelligence" — same reasoning as the label below.
+  // It sits next to Products because the two are the discovery half of the
+  // platform: what launched, and who is being funded.
+  { label: "Funding", href: "/funding" },
   // "Investors", not "Investor Directory". The nav row is already crowded and
   // the two-word label would be the widest thing in it, forcing the menu to
   // wrap a breakpoint earlier. The page's own h1 does the explaining.

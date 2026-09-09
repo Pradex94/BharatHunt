@@ -174,6 +174,55 @@ export const RATE_LIMITS = {
     windowSeconds: 3600,
     message: "Too many attempts. Please try again later.",
   },
+
+  /**
+   * The funding ingestion endpoint (`/api/funding/ingest`), keyed per IP.
+   *
+   * Its real gate is a shared secret, and this sits in front of that gate for
+   * the reason every secret-checked endpoint needs one: without it, the URL is
+   * an unlimited oracle for guessing the secret. Twelve an hour is far more
+   * than the tightest sensible cron cadence needs (a five-minute schedule
+   * spends twelve) and far less than a guessing run requires.
+   *
+   * Deliberately not keyed on the presented secret — that would let an attacker
+   * get a fresh budget per guess, which is the opposite of the point.
+   */
+  fundingIngest: {
+    limit: 12,
+    windowSeconds: 3600,
+    message: "Too many ingestion requests.",
+  },
+
+  /**
+   * The AI news ingestion endpoint (`/api/ai-news/ingest`), keyed per IP.
+   *
+   * Same shape and same reasoning as `fundingIngest` above: the real gate is a
+   * shared secret, and this sits in front of it so the URL is not an unlimited
+   * oracle for guessing that secret. Sized for the tightest sensible cadence
+   * this pipeline supports — a ten-minute cron spends six an hour — with room
+   * for a couple of manual runs on top.
+   */
+  aiNewsIngest: {
+    limit: 15,
+    windowSeconds: 3600,
+    message: "Too many ingestion requests.",
+  },
+
+  /**
+   * Counting an open of an AI story page, keyed per IP.
+   *
+   * This one is not really about load — it is one tiny UPDATE — it is about the
+   * counter being an *input to a public ranking*. `view_count` feeds the
+   * engagement term of the BharatHunt Trend Score, so an unbounded increment
+   * endpoint would be a way to push a chosen story up the page. Sixty an hour
+   * is far more than a person reading stories generates and far less than
+   * moving a log-scaled term by a visible amount requires.
+   */
+  aiStoryView: {
+    limit: 60,
+    windowSeconds: 3600,
+    message: "Too many requests.",
+  },
 } as const satisfies Record<string, RateLimitPolicy>;
 
 export type RateLimitName = keyof typeof RATE_LIMITS;
