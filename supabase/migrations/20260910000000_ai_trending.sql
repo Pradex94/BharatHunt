@@ -52,6 +52,37 @@
 create extension if not exists pg_trgm with schema extensions;
 
 -- ---------------------------------------------------------------------------
+-- 0. An immutable array join
+-- ---------------------------------------------------------------------------
+-- `array_to_string` is only STABLE. It can invoke the element type's output
+-- function, and in general that need not be immutable -- so PostgreSQL refuses
+-- it inside a stored generated column outright:
+--
+--   ERROR: generation expression is not immutable (SQLSTATE 42P17)
+--
+-- Wrapping it for `text[]` specifically is safe, because text's output function
+-- is the identity. This is the same trick, for the same reason, as
+-- `public.search_normalize_array` in 20260809120000 -- which is where this
+-- project learned the lesson the first time.
+--
+-- `create or replace` and defined in every migration that needs it, so each
+-- file stays independently applicable rather than depending on the order the
+-- others ran in.
+
+create or replace function public.text_array_join(value_list text[], separator text)
+returns text
+language sql
+immutable
+parallel safe
+set search_path = ''
+as $$
+  select pg_catalog.array_to_string(
+    coalesce(value_list, '{}'::text[]),
+    coalesce(separator, ' ')
+  )
+$$;
+
+-- ---------------------------------------------------------------------------
 -- 1. Sources
 -- ---------------------------------------------------------------------------
 -- Configuration, not code. An operator disables a feed that started returning
@@ -228,8 +259,10 @@ create table if not exists public.ai_stories (
   updated_at        timestamptz not null default now(),
 
   -- One free-text column for the search index to read, maintained by Postgres
-  -- so it can never fall behind the row. `lower`, `coalesce`, `array_to_string`
-  -- and `||` are all immutable, which is what a stored generated column needs.
+  -- so it can never fall behind the row. `lower`, `coalesce` and `||` are all
+  -- immutable, which is what a stored generated column needs; `array_to_string`
+  -- is NOT, which is why the keywords array goes through
+  -- `public.text_array_join` above.
   search_text       text generated always as (
                       lower(
                         coalesce(title, '') || ' ' ||
@@ -238,7 +271,7 @@ create table if not exists public.ai_stories (
                         coalesce(sub_category, '') || ' ' ||
                         coalesce(entity_text, '') || ' ' ||
                         coalesce(top_source_name, '') || ' ' ||
-                        array_to_string(keywords, ' ')
+                        public.text_array_join(keywords, ' ')
                       )
                     ) stored
 );
@@ -644,7 +677,7 @@ returns trigger
 language plpgsql
 security definer
 set search_path = ''
-as $
+as $$
 begin
   -- Branched on TG_OP with OLD and NEW referenced only where they exist.
   --
@@ -681,7 +714,7 @@ begin
 
   return null;
 end;
-$;
+$$;
 
 drop trigger if exists ai_news_articles_aggregate on public.ai_news_articles;
 create trigger ai_news_articles_aggregate
@@ -701,7 +734,7 @@ create or replace function public.ai_stories_stamp_published()
 returns trigger
 language plpgsql
 set search_path = ''
-as $
+as $$
 declare
   -- OLD does not exist on an INSERT, and reading it there is an error rather
   -- than a null (see the note in ai_articles_touch_story). Reading it once,
@@ -720,7 +753,7 @@ begin
 
   return new;
 end;
-$;
+$$;
 
 drop trigger if exists ai_stories_stamp_published on public.ai_stories;
 create trigger ai_stories_stamp_published

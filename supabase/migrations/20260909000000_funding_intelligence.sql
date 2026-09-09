@@ -49,6 +49,37 @@
 create extension if not exists pg_trgm with schema extensions;
 
 -- ---------------------------------------------------------------------------
+-- 0. An immutable array join
+-- ---------------------------------------------------------------------------
+-- `array_to_string` is only STABLE. It can invoke the element type's output
+-- function, and in general that need not be immutable -- so PostgreSQL refuses
+-- it inside a stored generated column outright:
+--
+--   ERROR: generation expression is not immutable (SQLSTATE 42P17)
+--
+-- Wrapping it for `text[]` specifically is safe, because text's output function
+-- is the identity. This is the same trick, for the same reason, as
+-- `public.search_normalize_array` in 20260809120000 -- which is where this
+-- project learned the lesson the first time.
+--
+-- `create or replace` and defined in every migration that needs it, so each
+-- file stays independently applicable rather than depending on the order the
+-- others ran in.
+
+create or replace function public.text_array_join(value_list text[], separator text)
+returns text
+language sql
+immutable
+parallel safe
+set search_path = ''
+as $$
+  select pg_catalog.array_to_string(
+    coalesce(value_list, '{}'::text[]),
+    coalesce(separator, ' ')
+  )
+$$;
+
+-- ---------------------------------------------------------------------------
 -- 1. Sources
 -- ---------------------------------------------------------------------------
 -- Configuration, not code. An operator disables a feed that has started
@@ -362,8 +393,10 @@ create table if not exists public.funding_rounds (
   created_at         timestamptz not null default now(),
   updated_at         timestamptz not null default now(),
   -- One free-text column for the search index to read, maintained by Postgres
-  -- so it can never fall behind the row. `array_to_string`, `lower`, `coalesce`
-  -- and `||` are all immutable, which is what a stored generated column needs.
+  -- so it can never fall behind the row. `lower`, `coalesce` and `||` are all
+  -- immutable, which is what a stored generated column needs; `array_to_string`
+  -- is NOT, which is why the investors array goes through
+  -- `public.text_array_join` above.
   search_text        text generated always as (
                        lower(
                          coalesce(startup_name, '') || ' ' ||
@@ -374,7 +407,7 @@ create table if not exists public.funding_rounds (
                          coalesce(location, '') || ' ' ||
                          coalesce(city, '') || ' ' ||
                          coalesce(lead_investor, '') || ' ' ||
-                         array_to_string(investors, ' ')
+                         public.text_array_join(investors, ' ')
                        )
                      ) stored
 );
