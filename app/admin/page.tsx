@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@clerk/nextjs/server";
-import { Building2, Clock, ShieldCheck } from "lucide-react";
+import { Building2, Clock, Newspaper, ShieldCheck, Sparkles } from "lucide-react";
 
 import { getIsAdmin } from "@/lib/admin";
 import { getAllProductsAdmin, getPendingProductsAdmin, type PendingProductRow } from "@/services/admin";
@@ -81,15 +81,32 @@ export default async function AdminPage() {
               </div>
             </div>
 
-            {/* The investor dataset is managed on its own screen — fifteen
-                fields per row do not belong beside a launch review queue. */}
-            <Link
-              href="/admin/investors"
-              className="inline-flex min-h-11 items-center gap-2 rounded-md border border-border bg-card px-4 text-sm font-semibold text-ink transition-colors hover:border-primary/30 hover:bg-secondary-bg"
-            >
-              <Building2 className="size-4" aria-hidden="true" />
-              Manage investors
-            </Link>
+            {/* Each dataset is managed on its own screen — fifteen investor
+                fields, or an ingestion pipeline with its own source table and
+                ingestion controls, do not belong beside a launch queue. */}
+            <div className="flex flex-wrap items-center gap-2">
+              <Link
+                href="/admin/ai-news"
+                className="inline-flex min-h-11 items-center gap-2 rounded-md border border-border bg-card px-4 text-sm font-semibold text-ink transition-colors hover:border-primary/30 hover:bg-secondary-bg"
+              >
+                <Sparkles className="size-4" aria-hidden="true" />
+                AI news
+              </Link>
+              <Link
+                href="/admin/funding"
+                className="inline-flex min-h-11 items-center gap-2 rounded-md border border-border bg-card px-4 text-sm font-semibold text-ink transition-colors hover:border-primary/30 hover:bg-secondary-bg"
+              >
+                <Newspaper className="size-4" aria-hidden="true" />
+                Manage funding
+              </Link>
+              <Link
+                href="/admin/investors"
+                className="inline-flex min-h-11 items-center gap-2 rounded-md border border-border bg-card px-4 text-sm font-semibold text-ink transition-colors hover:border-primary/30 hover:bg-secondary-bg"
+              >
+                <Building2 className="size-4" aria-hidden="true" />
+                Manage investors
+              </Link>
+            </div>
           </div>
 
           {/* Stats */}
