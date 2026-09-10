@@ -620,9 +620,26 @@ function trimTrailingClause(name: string): string {
  * "new investor Tancom Electronics", "Eight Roads Ventures also participating".
  * The name is in there; the article's words around it are not part of it.
  */
+/**
+ * How a publication introduces an investor, stripped back to the investor.
+ *
+ * The second rule is the one production needed: YourStory's "…backed by
+ * deep-tech venture capital firm Speciale Invest" stored the whole descriptor
+ * as the investor's name, so the round card named a firm that does not exist
+ * and the investor directory would have grown an entry for it.
+ *
+ * It only fires when the descriptor ends in an unambiguous category noun —
+ * "firm", "fund", "major" — because that is the word that separates a
+ * description from a name. "Speciale Invest" survives; so does "Blume Ventures",
+ * whose category-sounding word is part of what it is called.
+ */
+const INVESTOR_DESCRIPTOR =
+  /^(?:the\s+)?(?:[A-Za-z-]+\s+){0,4}?(?:venture\s+capital|vc|private\s+equity|investment|angel|deep-?tech|growth|impact)\s+(?:firm|fund|major|platform|company|house|arm)\s+/i;
+
 function trimInvestorFraming(name: string): string {
   return name
     .replace(/^(?:the\s+)?(?:existing|new|returning|current|other|lead)\s+(?:backer|investor|investors|participant)s?\s+/i, "")
+    .replace(INVESTOR_DESCRIPTOR, "")
     .replace(/\s+(?:also\s+)?(?:participating|participated|among others|and others|amongst others)\.?$/i, "")
     .trim();
 }

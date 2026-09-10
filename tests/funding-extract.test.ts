@@ -645,3 +645,30 @@ describe("buildSummary — original prose, assembled from fields", () => {
     assert.doesNotMatch(summary, /real-time asset monitoring/);
   });
 });
+
+describe("extractInvestors — a description is not a name", () => {
+  /*
+   * From production: YourStory's QNu Labs story stored the investor as
+   * "deep-tech venture capital firm Speciale Invest", which would have put a
+   * firm that does not exist on a public card and in the investor directory.
+   */
+  it("strips the category descriptor a publication leads with", () => {
+    const { investors, leadInvestor } = extractInvestors(
+      "QNu Labs raises Rs 200 Cr led by deep-tech venture capital firm Speciale Invest",
+    );
+    assert.deepEqual(investors, ["Speciale Invest"]);
+    assert.equal(leadInvestor, "Speciale Invest");
+  });
+
+  it("keeps names whose own words sound like a category", () => {
+    // "Ventures" and "Capital" are part of what these firms are called, and the
+    // trimmer must not reach into them.
+    for (const [title, expected] of [
+      ["Startup raises Rs 10 Cr led by Blume Ventures", "Blume Ventures"],
+      ["Startup raises Rs 10 Cr led by All In Capital", "All In Capital"],
+      ["Startup raises Rs 10 Cr led by Speciale Invest", "Speciale Invest"],
+    ] as const) {
+      assert.deepEqual(extractInvestors(title).investors, [expected], title);
+    }
+  });
+});
