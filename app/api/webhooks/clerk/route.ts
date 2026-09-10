@@ -22,7 +22,24 @@ function buildUsername(clerkUsername: string | null, email: string | undefined, 
 }
 
 export async function POST(request: NextRequest) {
-  const event = await verifyWebhook(request);
+  /*
+   * A bad signature is the caller's fault, not ours, and it must answer 400.
+   *
+   * `verifyWebhook` throws on an unsigned, missigned or replayed request. Left
+   * uncaught that becomes a 500, and Svix treats 5xx as "the endpoint is
+   * unwell, try again" -- so a request that can never succeed is retried on a
+   * backoff for hours. 4xx tells Svix the delivery is dead and to stop.
+   *
+   * The reason is deliberately not echoed back: whoever sent an invalid
+   * signature does not get to learn how it was invalid.
+   */
+  let event: Awaited<ReturnType<typeof verifyWebhook>>;
+  try {
+    event = await verifyWebhook(request);
+  } catch {
+    return new Response("Invalid signature", { status: 400 });
+  }
+
   const supabase = createServiceClient();
 
   if (event.type === "user.created" || event.type === "user.updated") {

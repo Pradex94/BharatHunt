@@ -503,8 +503,8 @@ triggers are harmless.
   with `FUNDING_INGEST_SECRET` set (Vercel sends it as a Bearer token).
 * **Anything else** — GitHub Actions, cron-job.org, a cron box. It is one authenticated HTTP call.
 
-Every 10–15 minutes suits the high-priority feeds; per-source `poll_interval_minutes` means a
-frequent cron does not turn into a frequent poll of every source.
+Per-source `poll_interval_minutes` -- floored at **four hours** by migration `20260910040000` -- means
+a frequent cron does not turn into a frequent poll of every source.
 
 ### Reviewing
 
@@ -612,9 +612,11 @@ AI" is recognised by URL and never scored again.
 
 ### Scheduling ingestion
 
-`POST /api/ai-news/ingest` with `Authorization: Bearer $AI_NEWS_INGEST_SECRET`. Every 10-15 minutes
-is the intended cadence; running it more often is safe but pointless, because each source is skipped
-until its own `poll_interval_minutes` has elapsed.
+`POST /api/ai-news/ingest` with `Authorization: Bearer $AI_NEWS_INGEST_SECRET`. Running it often is
+safe: each source is skipped until its own `poll_interval_minutes` has elapsed, and that is floored at
+**four hours** (migration `20260910040000`). So the trigger cadence is an upper bound on *asking*, not
+a fetch rate -- a frequent cron drains the queue of sources that have come due, it does not poll any
+one of them more often.
 
 It is **not** wired to a scheduler in this repo, deliberately — the project is mid-migration from
 Vercel to Cloudflare and the right mechanism differs by target:
