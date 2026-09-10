@@ -1,0 +1,33 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "bharathunt-ingest-scheduler",
+  "main": "index.js",
+  "compatibility_date": "2026-09-05",
+
+  // No `fetch` handler and no public URL. Cron is the only way in, so a
+  // workers.dev hostname would be a public address that serves nothing —
+  // and one more thing to have to reason about.
+  "workers_dev": false,
+
+  // Every ten minutes. Not because the feeds change that fast — they do not —
+  // but because each app invocation stops inside the Workers subrequest ceiling
+  // and therefore handles only a few new articles. Frequent, small, idempotent
+  // passes are how the backlog drains; a source that is not due yet is skipped
+  // by `poll_interval_minutes` and costs one query.
+  "triggers": {
+    "crons": ["*/10 * * * *"]
+  },
+
+  // Direct binding to the app Worker: no DNS, no TLS, no trip out to the
+  // internet and back, and it does not consume an external subrequest.
+  "services": [
+    {
+      "binding": "APP",
+      "service": "bharathunt"
+    }
+  ],
+
+  "observability": {
+    "enabled": true
+  }
+}

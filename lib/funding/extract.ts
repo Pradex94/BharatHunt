@@ -250,39 +250,70 @@ const USD_AMOUNT = new RegExp(
 const AMOUNT_DISQUALIFIERS =
   /\b(valu\w*|revenue|profit|loss|turnover|market cap|gmv|arr|salar\w*|worth|topline|ebitda|debt of|repay\w*|sold|stake|buyback|ipo)\b/i;
 
+/**
+ * The same nouns, read on the *other* side of the figure.
+ *
+ * "Fashion brand Theater raises Series A at Rs 400 Cr valuation" puts the
+ * disqualifying noun *after* the number, where the leading window cannot see
+ * it. The first live production run duly recorded that company's valuation as
+ * the money it raised — the exact fabrication the brief forbids.
+ *
+ * Deliberately tight: it must match immediately after the figure, past at most
+ * one short connector. Widening it would break the sentence that states both —
+ * "raised Rs 100 Cr at a Rs 1,000 Cr valuation" — where the real amount is
+ * followed a few words later by a valuation it must survive.
+ */
+const TRAILING_AMOUNT_DISQUALIFIERS =
+  /^[\s,]*(?:pre-money|post-money|in|at)?[\s-]*(?:valu\w*|market cap|revenue|arr|gmv|turnover|topline|ebitda)\b/i;
+
 type AmountMatch = { text: string; value: number; currency: string };
 
 function matchAmount(text: string, pattern: RegExp, currency: string): AmountMatch | null {
-  const found = pattern.exec(text);
-  if (!found || found.index === undefined) return null;
-
   /*
-   * Seventy characters, clipped at the clause boundary.
+   * Every match, not just the first.
    *
-   * Forty was not enough: "revenue grew nearly sevenfold to more than Rs 1,400
-   * crore" puts forty-three characters between the disqualifying noun and the
-   * figure, so the guard read a clean window and accepted a revenue line as a
-   * funding round. Clipping at the last sentence break is what makes the wider
-   * window safe — a "valuation" in the *previous* sentence says nothing about
-   * this one, and reaching into it would suppress real amounts.
+   * `exec` returning one match meant a disqualified leading figure discarded
+   * the whole text, so "at a Rs 400 Cr valuation, Theater raised Rs 50 Cr" lost
+   * the real amount along with the fake one. Walking the matches lets the first
+   * *acceptable* figure win instead.
    */
-  const window = text.slice(Math.max(0, found.index - 70), found.index);
-  const clauseStart = Math.max(window.lastIndexOf(". "), window.lastIndexOf("; "));
-  const before = clauseStart >= 0 ? window.slice(clauseStart + 2) : window;
-  if (AMOUNT_DISQUALIFIERS.test(before)) return null;
+  const scanner = new RegExp(pattern.source, pattern.flags.includes("g") ? pattern.flags : `${pattern.flags}g`);
 
-  const digits = Number(found[1].replace(/,/g, ""));
-  if (!Number.isFinite(digits) || digits <= 0) return null;
+  for (const found of text.matchAll(scanner)) {
+    if (found.index === undefined) continue;
 
-  const unit = (found[2] ?? "").toLowerCase();
-  const multiplier = unit ? (MULTIPLIERS[unit] ?? 1) : 1;
-  const value = Math.round(digits * multiplier);
+    /*
+     * Seventy characters, clipped at the clause boundary.
+     *
+     * Forty was not enough: "revenue grew nearly sevenfold to more than Rs 1,400
+     * crore" puts forty-three characters between the disqualifying noun and the
+     * figure, so the guard read a clean window and accepted a revenue line as a
+     * funding round. Clipping at the last sentence break is what makes the wider
+     * window safe — a "valuation" in the *previous* sentence says nothing about
+     * this one, and reaching into it would suppress real amounts.
+     */
+    const window = text.slice(Math.max(0, found.index - 70), found.index);
+    const clauseStart = Math.max(window.lastIndexOf(". "), window.lastIndexOf("; "));
+    const before = clauseStart >= 0 ? window.slice(clauseStart + 2) : window;
+    if (AMOUNT_DISQUALIFIERS.test(before)) continue;
 
-  // A round of eleven rupees, or of a hundred thousand crore, is a parse
-  // failure wearing a number. Both ends are far outside any real round.
-  if (value < 100_000 || value > 5_000_000_000_000) return null;
+    const end = found.index + found[0].length;
+    if (TRAILING_AMOUNT_DISQUALIFIERS.test(text.slice(end, end + 30))) continue;
 
-  return { text: found[0].trim().replace(/\s+/g, " "), value, currency };
+    const digits = Number(found[1].replace(/,/g, ""));
+    if (!Number.isFinite(digits) || digits <= 0) continue;
+
+    const unit = (found[2] ?? "").toLowerCase();
+    const multiplier = unit ? (MULTIPLIERS[unit] ?? 1) : 1;
+    const value = Math.round(digits * multiplier);
+
+    // A round of eleven rupees, or of a hundred thousand crore, is a parse
+    // failure wearing a number. Both ends are far outside any real round.
+    if (value < 100_000 || value > 5_000_000_000_000) continue;
+
+    return { text: found[0].trim().replace(/\s+/g, " "), value, currency };
+  }
+  return null;
 }
 
 /**

@@ -157,6 +157,68 @@ describe("extractAmount — the figure, and only the right figure", () => {
   });
 });
 
+describe("extractAmount — a valuation is not an amount raised", () => {
+  /*
+   * Every case here is drawn from a real Entrackr headline that reached
+   * production. The first one was stored with `amount = "Rs 400 Cr"` — the
+   * company's valuation, presented on a public page as the money it raised.
+   */
+  it("refuses a figure the sentence labels a valuation after the number", () => {
+    assert.equal(
+      extractAmount("Exclusive: Fashion brand Theater raises Series A at Rs 400 Cr valuation"),
+      null,
+    );
+  });
+
+  it("refuses the same shape with the qualifiers publishers actually use", () => {
+    for (const title of [
+      "Startup raises Series B at $120 Mn valuation",
+      "Company closes round at Rs 900 Cr post-money valuation",
+      "Firm raises Series A at Rs 250 Cr pre-money valuation",
+      "Brand raises funding at Rs 300 Cr, valuing it among the top players",
+    ]) {
+      assert.equal(extractAmount(title), null, title);
+    }
+  });
+
+  it("still reads the amount when a valuation follows it later in the sentence", () => {
+    // The regression the tight window protects: both figures present, and the
+    // one that is the raise must survive.
+    const found = extractAmount("Theater raises Rs 100 Cr at a Rs 1,000 Cr valuation");
+    assert.ok(found, "the raise must still be read");
+    assert.equal(found.amountNumeric, 1_000_000_000);
+  });
+
+  it("gives up rather than guess when a valuation leads the same clause", () => {
+    /*
+     * "At a Rs 400 Cr valuation, Theater raised Rs 50 Cr in Series A" has a
+     * real answer — Rs 50 Cr — and we deliberately do not reach for it. The
+     * leading window clips at a sentence break, not a comma, because clipping
+     * at a comma would let "Its revenue, which grew fast, hit Rs 1,400 crore"
+     * through as a round.
+     *
+     * So the trade is: lose an amount that was there, never invent one that
+     * was not. The card says "Undisclosed", which is true, and the source link
+     * is right beside it. That is the direction the brief requires.
+     */
+    assert.equal(
+      extractAmount("At a Rs 400 Cr valuation, Theater raised Rs 50 Cr in Series A"),
+      null,
+    );
+  });
+
+  it("leaves ordinary raises alone", () => {
+    for (const [title, expected] of [
+      ["Carrum Mobility raises $10 Mn in Series B led by Uber", 10_000_000],
+      ["DigitalPaani raises Rs 22 Cr led by Navam Capital", 220_000_000],
+    ] as const) {
+      const found = extractAmount(title);
+      assert.ok(found, title);
+      assert.equal(found.amountNumeric, expected, title);
+    }
+  });
+});
+
 describe("extractStage", () => {
   it("reads Series A", () => {
     assert.equal(extractStage("OORJAA Raises Rs 9.7 Crore in Series A First Close"), "Series A");

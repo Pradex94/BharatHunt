@@ -21,6 +21,12 @@ import {
   titleSimilarity,
 } from "@/lib/funding/normalize";
 import { fetchSourceItems, type FeedItem, type SourceRow } from "@/lib/funding/sources";
+import {
+  createSubrequestBudget,
+  MAX_SUBREQUESTS_PER_ARTICLE,
+  subrequestLimitFromEnv,
+  type SubrequestBudget,
+} from "@/lib/funding/subrequest-budget";
 
 /**
  * The ingestion run: sources in, funding rounds out.
@@ -50,6 +56,21 @@ import { fetchSourceItems, type FeedItem, type SourceRow } from "@/lib/funding/s
  *
  * Nothing here publishes. Every round lands as `status = 'pending'` and is
  * invisible to the public RLS policy until an admin acts on it.
+ *
+ * Two budgets, not one
+ * --------------------
+ * A run stops for either of two reasons, and they are different reasons.
+ * `budgetMs` is wall clock. `SubrequestBudget` is the Cloudflare Workers cap on
+ * outbound calls per invocation — 50 on the Free plan, un-raisable there — which
+ * the first production run walked straight into: ~8 Supabase calls per article
+ * across 40 articles meant everything after the fifth threw, including the two
+ * writes that record what happened. See lib/funding/subrequest-budget.ts.
+ *
+ * What keeps the call count survivable is that the per-article duplicate checks
+ * are hoisted out of the loop: one query per source asks which of this batch's
+ * URLs and content hashes are already known, and the two cheap checks then run
+ * in memory. In steady state most of a feed is already-seen, so a pass costs a
+ * couple of calls rather than one per article.
  */
 
 /** Failures before a source is marked unhealthy in the admin table. */
@@ -101,6 +122,16 @@ export type IngestionResult = IngestionCounts & {
   failures: { source: string; error: string }[];
   /** True when the time budget stopped the run before every due source ran. */
   budgetExhausted: boolean;
+  /**
+   * True when the *subrequest* budget stopped it instead — the Workers per-
+   * invocation call ceiling. Reported separately from `budgetExhausted` because
+   * the two ask for different responses: a wall-clock stop means the run was
+   * slow, a call-budget stop means there is more work than one invocation can
+   * legally do and the cron simply needs to come round again.
+   */
+  callBudgetExhausted: boolean;
+  /** Outbound calls this run spent, against the ceiling it was given. */
+  subrequestsUsed: number;
 };
 
 export type RunIngestionOptions = {
@@ -135,11 +166,28 @@ export async function runIngestion(options: RunIngestionOptions = {}): Promise<I
   };
   const failures: { source: string; error: string }[] = [];
   let budgetExhausted = false;
+  let callBudgetExhausted = false;
 
+  const budget = createSubrequestBudget(
+    subrequestLimitFromEnv(process.env.FUNDING_SUBREQUEST_LIMIT),
+  );
+
+  budget.spend();
   const sources = await selectSources(supabase, { sourceId, force });
 
   for (const source of sources) {
     if (Date.now() > deadline) {
+      budgetExhausted = true;
+      break;
+    }
+    /*
+     * Starting a source costs a feed fetch, a duplicate-lookup query and the
+     * two bookkeeping writes at the end even if every article turns out to be
+     * known. If one article could not fit on top of that, the source is left
+     * for the next invocation rather than half-walked.
+     */
+    if (!budget.canAfford(MAX_SUBREQUESTS_PER_ARTICLE + 2)) {
+      callBudgetExhausted = true;
       budgetExhausted = true;
       break;
     }
@@ -157,16 +205,40 @@ export async function runIngestion(options: RunIngestionOptions = {}): Promise<I
     let errorDetail: string | null = null;
 
     try {
+      budget.spend();
       const items = await fetchSourceItems(source);
       perSource.articlesFetched = items.length;
+
+      /*
+       * One query for the whole batch, replacing the two per-article lookups
+       * that used to open each article's turn. See `loadKnownArticles`.
+       */
+      const known = await loadKnownArticles(supabase, budget, items);
 
       for (const item of items) {
         if (Date.now() > deadline) {
           budgetExhausted = true;
           break;
         }
+        /*
+         * Checked here rather than after the cheap in-memory rejections below,
+         * because an article that costs nothing should not end the pass — but
+         * an article that would cost more than is left must not be begun.
+         */
+        if (!budget.canAfford(MAX_SUBREQUESTS_PER_ARTICLE)) {
+          const normalized = normalizeUrl(item.url);
+          // Already-known articles are free: no call is made for them, so the
+          // pass can keep walking the feed and only stops on real work.
+          if (normalized && known.urls.has(normalized)) {
+            perSource.duplicates += 1;
+            continue;
+          }
+          callBudgetExhausted = true;
+          budgetExhausted = true;
+          break;
+        }
         try {
-          const outcome = await ingestItem(supabase, source, item);
+          const outcome = await ingestItem(supabase, budget, source, item, known);
           if (outcome === "created") perSource.articlesCreated += 1;
           if (outcome === "duplicate") perSource.duplicates += 1;
           if (outcome === "rejected") perSource.rejected += 1;
@@ -188,12 +260,12 @@ export async function runIngestion(options: RunIngestionOptions = {}): Promise<I
         }
       }
 
-      await markSourceHealthy(supabase, source.id);
+      await markSourceHealthy(supabase, budget, source.id);
     } catch (error) {
       errorDetail = error instanceof Error ? error.message : "Unknown error";
       perSource.errors += 1;
       failures.push({ source: source.name, error: errorDetail });
-      await markSourceFailed(supabase, source.id, errorDetail);
+      await markSourceFailed(supabase, budget, source.id, errorDetail);
     }
 
     counts.articlesFetched += perSource.articlesFetched;
@@ -203,7 +275,7 @@ export async function runIngestion(options: RunIngestionOptions = {}): Promise<I
     counts.rejected += perSource.rejected;
     counts.errors += perSource.errors;
 
-    await writeLog(supabase, {
+    await writeLog(supabase, budget, {
       run_id: runId,
       source_id: source.id,
       source_name: source.name,
@@ -229,6 +301,8 @@ export async function runIngestion(options: RunIngestionOptions = {}): Promise<I
     durationMs: Date.now() - startedAt.getTime(),
     failures,
     budgetExhausted,
+    callBudgetExhausted,
+    subrequestsUsed: budget.used,
   };
 }
 
@@ -287,8 +361,13 @@ async function selectSources(
     }));
 }
 
-async function markSourceHealthy(supabase: SupabaseServiceClient, id: string): Promise<void> {
+async function markSourceHealthy(
+  supabase: SupabaseServiceClient,
+  budget: SubrequestBudget,
+  id: string,
+): Promise<void> {
   const now = new Date().toISOString();
+  budget.spend();
   await supabase
     .from("funding_sources")
     .update({
@@ -303,6 +382,7 @@ async function markSourceHealthy(supabase: SupabaseServiceClient, id: string): P
 
 async function markSourceFailed(
   supabase: SupabaseServiceClient,
+  budget: SubrequestBudget,
   id: string,
   message: string,
 ): Promise<void> {
@@ -310,6 +390,7 @@ async function markSourceFailed(
 
   // Read-then-write rather than an atomic increment: there is no RPC for this
   // and a lost update here costs one step of backoff, not correctness.
+  budget.spend(2);
   const { data } = await supabase
     .from("funding_sources")
     .select("consecutive_failures")
@@ -340,8 +421,10 @@ async function markSourceFailed(
  */
 async function writeLog(
   supabase: SupabaseServiceClient,
+  budget: SubrequestBudget,
   row: TablesInsert<"funding_ingestion_logs">,
 ): Promise<void> {
+  budget.spend();
   const { error } = await supabase.from("funding_ingestion_logs").insert(row);
   if (error) {
     console.error(`[funding] failed to write ingestion log: ${error.message}`);
@@ -352,22 +435,98 @@ async function writeLog(
 
 type ItemOutcome = "created" | "round" | "duplicate" | "rejected";
 
+/**
+ * What this feed's articles already are in the database.
+ *
+ * `urls` answers duplicate check 1, `hashByUrl`/`idByHash` answer check 2. Both
+ * used to be a query per article, which is what put the run over the Workers
+ * subrequest ceiling. One query for the batch is the same two answers, and the
+ * checks themselves then cost nothing.
+ *
+ * A hash present here is necessarily a *different* article than the one being
+ * considered, because the lookup happens before anything in this batch is
+ * inserted — which is exactly the `.neq("id", newsId)` the per-article query
+ * used to need.
+ */
+type KnownArticles = {
+  urls: Set<string>;
+  idByHash: Map<string, string>;
+};
+
+const EMPTY_KNOWN: KnownArticles = { urls: new Set(), idByHash: new Map() };
+
+async function loadKnownArticles(
+  supabase: SupabaseServiceClient,
+  budget: SubrequestBudget,
+  items: FeedItem[],
+): Promise<KnownArticles> {
+  const urls = items.map((item) => normalizeUrl(item.url)).filter((url): url is string => !!url);
+  if (urls.length === 0) return EMPTY_KNOWN;
+
+  // Hashes are computed from the same fields the insert will use, so a match
+  // here means the identical story is already stored under another URL.
+  const hashes = await Promise.all(
+    items.map((item) => {
+      const { headline } = splitPublisherSuffix(item.title);
+      return contentHash(headline, item.summary);
+    }),
+  );
+
+  budget.spend();
+  const { data, error } = await supabase
+    .from("funding_news")
+    .select("id, normalized_url, content_hash")
+    .or(`normalized_url.in.(${quoteList(urls)}),content_hash.in.(${quoteList(hashes)})`);
+
+  if (error) {
+    /*
+     * Degrade to "know nothing" rather than fail the source. The per-article
+     * paths still hold the line: `normalized_url` is unique, so a re-inserted
+     * article is refused by the index and read as a duplicate (23505), and the
+     * event-level checks still run. The cost of this fallback is calls, not
+     * correctness — and the budget guard keeps that bounded.
+     */
+    console.error(`[funding] duplicate prefetch failed, continuing unbatched: ${error.message}`);
+    return EMPTY_KNOWN;
+  }
+
+  const known: KnownArticles = { urls: new Set(), idByHash: new Map() };
+  for (const row of data ?? []) {
+    if (row.normalized_url) known.urls.add(row.normalized_url);
+    // First writer wins: any one article with this hash is enough to find the
+    // round it produced, and picking a stable one keeps re-runs identical.
+    if (row.content_hash && !known.idByHash.has(row.content_hash)) {
+      known.idByHash.set(row.content_hash, row.id);
+    }
+  }
+  return known;
+}
+
+/**
+ * PostgREST `in.(…)` is a comma-separated list inside parentheses, so a value
+ * containing a comma, a quote or a parenthesis would otherwise change the shape
+ * of the filter. URLs legitimately contain commas and parentheses. Double
+ * quotes around each value, with embedded quotes and backslashes escaped, is
+ * what the syntax asks for.
+ */
+function quoteList(values: string[]): string {
+  return values.map((value) => `"${value.replace(/(["\\])/g, "\\$1")}"`).join(",");
+}
+
 async function ingestItem(
   supabase: SupabaseServiceClient,
+  budget: SubrequestBudget,
   source: SourceRow,
   item: FeedItem,
+  known: KnownArticles,
 ): Promise<ItemOutcome> {
   const normalizedUrl = normalizeUrl(item.url);
   // An article we cannot key is an article we cannot promise not to duplicate.
   if (!normalizedUrl) return "rejected";
 
   // ── Check 1: the same article ─────────────────────────────────────────
-  const { data: existing } = await supabase
-    .from("funding_news")
-    .select("id")
-    .eq("normalized_url", normalizedUrl)
-    .maybeSingle();
-  if (existing) return "duplicate";
+  // In memory, from the batch lookup — this was a query per article.
+  if (known.urls.has(normalizedUrl)) return "duplicate";
 
   /*
    * Google News puts the publisher after a trailing " - " and names it again in
@@ -384,6 +543,7 @@ async function ingestItem(
 
   const candidate = isFundingCandidate(headline, item.summary);
 
+  budget.spend();
   const { data: inserted, error: insertError } = await supabase
     .from("funding_news")
     .insert({
@@ -417,18 +577,15 @@ async function ingestItem(
   if (!candidate) return "rejected";
 
   // ── Check 2: the same story at another URL ────────────────────────────
-  const { data: sameHash } = await supabase
-    .from("funding_news")
-    .select("id")
-    .eq("content_hash", hash)
-    .neq("id", newsId)
-    .limit(1);
+  // In memory, from the batch lookup. Anything it holds was stored before this
+  // article was inserted, so a hit is necessarily a different row.
+  const twinId = known.idByHash.get(hash);
 
-  if (sameHash && sameHash.length > 0) {
-    const roundId = await roundForArticle(supabase, sameHash[0].id);
+  if (twinId) {
+    const roundId = await roundForArticle(supabase, budget, twinId);
     if (roundId) {
-      await attachCoverage(supabase, roundId, newsId);
-      await setNewsStatus(supabase, newsId, "processed");
+      await attachCoverage(supabase, budget, roundId, newsId);
+      await setNewsStatus(supabase, budget, newsId, "processed");
       return "duplicate";
     }
     // The earlier copy never became a round (it was rejected, or is still
@@ -445,7 +602,7 @@ async function ingestItem(
   });
 
   if (!isStorableRound(base)) {
-    await setNewsStatus(supabase, newsId, "rejected", "No company or no substantive facts");
+    await setNewsStatus(supabase, budget, newsId, "rejected", "No company or no substantive facts");
     return "rejected";
   }
 
@@ -456,13 +613,13 @@ async function ingestItem(
   // also be the thing that supplied the company name, and a record that was
   // storable before must still be storable after.
   if (!refined.startupName) {
-    await setNewsStatus(supabase, newsId, "rejected", "No company named");
+    await setNewsStatus(supabase, budget, newsId, "rejected", "No company named");
     return "rejected";
   }
 
   const startupSlug = slugify(refined.startupName);
   if (!startupSlug) {
-    await setNewsStatus(supabase, newsId, "rejected", "Company name has no usable slug");
+    await setNewsStatus(supabase, budget, newsId, "rejected", "Company name has no usable slug");
     return "rejected";
   }
 
@@ -474,7 +631,7 @@ async function ingestItem(
   });
 
   // ── Check 3: a different article about the same event ─────────────────
-  const existingRoundId = await findSameEvent(supabase, {
+  const existingRoundId = await findSameEvent(supabase, budget, {
     eventKey,
     startupSlug,
     headline,
@@ -482,14 +639,14 @@ async function ingestItem(
   });
 
   if (existingRoundId) {
-    await attachCoverage(supabase, existingRoundId, newsId);
-    await setNewsStatus(supabase, newsId, "processed");
+    await attachCoverage(supabase, budget, existingRoundId, newsId);
+    await setNewsStatus(supabase, budget, newsId, "processed");
     return "duplicate";
   }
 
   // ── Store ─────────────────────────────────────────────────────────────
   const converted = toInr(refined.amountNumeric, refined.currency);
-  const startupId = await ensureStartup(supabase, {
+  const startupId = await ensureStartup(supabase, budget, {
     name: refined.startupName,
     slug: startupSlug,
     industry: refined.industry,
@@ -542,15 +699,15 @@ async function ingestItem(
         .select("id")
         .eq("event_key", eventKey)
         .maybeSingle();
-      if (winner) await attachCoverage(supabase, winner.id, newsId);
-      await setNewsStatus(supabase, newsId, "processed");
+      if (winner) await attachCoverage(supabase, budget, winner.id, newsId);
+      await setNewsStatus(supabase, budget, newsId, "processed");
       return "duplicate";
     }
     throw new Error(`Failed to store round: ${roundError.message}`);
   }
 
-  await linkInvestors(supabase, round.id, refined.investors, refined.leadInvestor);
-  await setNewsStatus(supabase, newsId, "processed");
+  await linkInvestors(supabase, budget, round.id, refined.investors, refined.leadInvestor);
+  await setNewsStatus(supabase, budget, newsId, "processed");
 
   return "round";
 }
@@ -559,10 +716,12 @@ async function ingestItem(
 
 async function setNewsStatus(
   supabase: SupabaseServiceClient,
+  budget: SubrequestBudget,
   id: string,
   status: string,
   reason?: string,
 ): Promise<void> {
+  budget.spend();
   await supabase
     .from("funding_news")
     .update({ status, ...(reason ? { rejected_reason: reason.slice(0, 300) } : {}) })
@@ -571,8 +730,10 @@ async function setNewsStatus(
 
 async function roundForArticle(
   supabase: SupabaseServiceClient,
+  budget: SubrequestBudget,
   newsId: string,
 ): Promise<string | null> {
+  budget.spend();
   const { data } = await supabase
     .from("funding_rounds")
     .select("id")
@@ -584,9 +745,11 @@ async function roundForArticle(
 /** Idempotent by primary key, so re-linking the same pair is a no-op. */
 async function attachCoverage(
   supabase: SupabaseServiceClient,
+  budget: SubrequestBudget,
   roundId: string,
   newsId: string,
 ): Promise<void> {
+  budget.spend();
   await supabase
     .from("funding_round_articles")
     .upsert({ round_id: roundId, news_id: newsId }, { onConflict: "round_id,news_id", ignoreDuplicates: true });
@@ -604,8 +767,10 @@ async function attachCoverage(
  */
 async function findSameEvent(
   supabase: SupabaseServiceClient,
+  budget: SubrequestBudget,
   input: { eventKey: string; startupSlug: string; headline: string; announcementDate: string },
 ): Promise<string | null> {
+  budget.spend(2);
   const { data: exact } = await supabase
     .from("funding_rounds")
     .select("id")
@@ -645,6 +810,7 @@ async function findSameEvent(
  */
 async function ensureStartup(
   supabase: SupabaseServiceClient,
+  budget: SubrequestBudget,
   input: {
     name: string;
     slug: string;
@@ -656,6 +822,7 @@ async function ensureStartup(
   const normalized = normalizeEntityName(input.name);
   if (!normalized) return null;
 
+  budget.spend(3);
   const { data: existing } = await supabase
     .from("funding_startups")
     .select("id")
@@ -696,6 +863,7 @@ async function ensureStartup(
 
 async function linkInvestors(
   supabase: SupabaseServiceClient,
+  budget: SubrequestBudget,
   roundId: string,
   investors: string[],
   leadInvestor: string | null,
@@ -704,6 +872,15 @@ async function linkInvestors(
     const normalized = normalizeEntityName(name);
     const slug = slugify(name);
     if (!normalized || !slug) continue;
+
+    /*
+     * Each investor costs its own lookup, possibly an insert and a slug probe,
+     * and the link row. Stopping here leaves the round stored and its
+     * `investors` text[] intact -- only the directory join is deferred, and the
+     * next run over the same event fills it in.
+     */
+    if (!budget.canAfford(4)) break;
+    budget.spend(4);
 
     let investorId: string | null = null;
 
