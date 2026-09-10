@@ -1,0 +1,117 @@
+name: Scheduled ingestion
+
+# Drives the two ingestion endpoints on a schedule.
+#
+# Why not the Cloudflare Cron Trigger in workers/ingest-scheduler
+# ---------------------------------------------------------------
+# That Worker is correct and is deployed, and its schedule registers cleanly --
+# `wrangler deploy` reports `schedule: */10 * * * *` every time. It simply does
+# not fire on this account. Measured on 2026-09-10, not assumed:
+#
+#   * two separate `wrangler tail` windows on the scheduler, 12 minutes each,
+#     recorded zero invocations;
+#   * `ai_ingestion_runs` gained no row for 19 hours, and that table gets a
+#     `running` row written BEFORE any work, so an empty table means the handler
+#     was never entered rather than that it failed;
+#   * as a control the schedule was temporarily set to `* * * * *` and left for
+#     eight minutes. Still zero runs and zero `last_attempt_at` movement.
+#
+# So the Worker is kept (it costs nothing, and it starts working the moment
+# Cron Triggers do) and the actual schedule lives here. This repo is public, so
+# Actions minutes are free and the run history is visible, and the endpoints are
+# ordinary authenticated HTTP -- moving back to the Worker later is deleting
+# this file, not a code change.
+#
+# Cadence
+# -------
+# Each source carries its own `poll_interval_minutes`, floored at four hours by
+# migration 20260910040000, and a run takes only the sources actually due, at
+# most eight. So this is an upper bound on *asking*, not a fetch rate: most runs
+# find nothing due and return immediately. Every 30 minutes means a batch of
+# sources coming due together is worked through in about ninety minutes instead
+# of waiting a whole cycle.
+#
+# Both runs are idempotent -- `normalized_url` is unique and is checked before
+# any expensive work -- so an overlapping or repeated trigger is harmless.
+#
+# Required repository secrets (Settings -> Secrets -> Actions), which are
+# SEPARATE from the Worker secrets of the same name:
+#   gh secret set AI_NEWS_INGEST_SECRET
+#   gh secret set FUNDING_INGEST_SECRET
+
+on:
+  schedule:
+    # Every 30 minutes, offset off the hour: the top of the hour is the busiest
+    # slot on GitHub's scheduler and the likeliest to be delayed or dropped.
+    - cron: "7,37 * * * *"
+  workflow_dispatch:
+
+# Nothing here reads or writes the repository.
+permissions:
+  contents: read
+
+concurrency:
+  # Serialise without cancelling: an in-flight ingestion is doing useful work
+  # and killing it mid-run wastes the fetches it has already made.
+  group: scheduled-ingestion
+  cancel-in-progress: false
+
+jobs:
+  ingest:
+    name: Poll sources
+    runs-on: ubuntu-latest
+    # Each endpoint bounds itself; this is only a backstop against a hang.
+    timeout-minutes: 10
+
+    env:
+      SITE_URL: https://bharathunt.org
+
+    steps:
+      - name: AI Trending
+        env:
+          INGEST_SECRET: ${{ secrets.AI_NEWS_INGEST_SECRET }}
+        run: |
+          set -euo pipefail
+          if [ -z "${INGEST_SECRET}" ]; then
+            echo "::error::AI_NEWS_INGEST_SECRET is not set in repository secrets. Add it with: gh secret set AI_NEWS_INGEST_SECRET"
+            exit 1
+          fi
+          # Comfortably exceeds the endpoint's own 45s run budget.
+          code=$(curl -sS --max-time 120 -o response.json -w '%{http_code}' \
+            -X POST "${SITE_URL}/api/ai-news/ingest" \
+            -H "Authorization: Bearer ${INGEST_SECRET}" \
+            -H "X-Ingest-Trigger: scheduled")
+          echo "HTTP ${code}"
+          # The body is the run summary -- sources attempted, articles kept,
+          # per-source errors. Truncated because a bad day is verbose.
+          head -c 4000 response.json || true
+          echo
+          if [ "${code}" != "200" ]; then
+            echo "::error::AI news ingestion returned HTTP ${code}"
+            exit 1
+          fi
+
+      - name: Funding Intelligence
+        # Runs even when the step above failed: they are independent pipelines
+        # and one being down is no reason to skip the other. `!cancelled()`
+        # rather than `always()`, so a cancelled run really does stop.
+        if: ${{ !cancelled() }}
+        env:
+          INGEST_SECRET: ${{ secrets.FUNDING_INGEST_SECRET }}
+        run: |
+          set -euo pipefail
+          if [ -z "${INGEST_SECRET}" ]; then
+            echo "::error::FUNDING_INGEST_SECRET is not set in repository secrets. Add it with: gh secret set FUNDING_INGEST_SECRET"
+            exit 1
+          fi
+          code=$(curl -sS --max-time 120 -o response.json -w '%{http_code}' \
+            -X POST "${SITE_URL}/api/funding/ingest" \
+            -H "Authorization: Bearer ${INGEST_SECRET}" \
+            -H "X-Ingest-Trigger: scheduled")
+          echo "HTTP ${code}"
+          head -c 4000 response.json || true
+          echo
+          if [ "${code}" != "200" ]; then
+            echo "::error::Funding ingestion returned HTTP ${code}"
+            exit 1
+          fi
