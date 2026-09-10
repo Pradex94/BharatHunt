@@ -89,8 +89,21 @@ async function handle(request: NextRequest): Promise<Response> {
    */
   const sourceId = request.nextUrl.searchParams.get("source")?.trim() || undefined;
 
+  /*
+   * Who asked, recorded on the log row.
+   *
+   * Worth the few lines: with everything through this route logged as "cron",
+   * a run triggered by hand and a run triggered by the scheduler were
+   * indistinguishable afterwards — which made "is the cron actually firing?"
+   * unanswerable from the data, and produced one confident wrong answer before
+   * this existed. The allowlist is what stops the field becoming a place a
+   * caller can write arbitrary text into the log.
+   */
+  const claimed = request.headers.get("x-ingest-trigger")?.trim().toLowerCase();
+  const trigger = claimed === "scheduled" || claimed === "manual" ? claimed : "cron";
+
   try {
-    const result = await runIngestion({ trigger: "cron", sourceId, force: Boolean(sourceId) });
+    const result = await runIngestion({ trigger, sourceId, force: Boolean(sourceId) });
     return json(result, 200);
   } catch (error) {
     // `runIngestion` handles per-source failure itself, so reaching here means

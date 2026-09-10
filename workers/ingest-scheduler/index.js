@@ -51,6 +51,11 @@ async function runOne(env, target) {
         headers: {
           authorization: `Bearer ${secret}`,
           "user-agent": "BharatHuntScheduler/1.0",
+          // Recorded on the run's log row, so a scheduled run is afterwards
+          // distinguishable from someone calling the endpoint by hand. Without
+          // it both read as "cron" and "is the schedule actually firing?" is a
+          // question the data cannot answer.
+          "x-ingest-trigger": "scheduled",
         },
       }),
     );
