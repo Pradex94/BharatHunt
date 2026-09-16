@@ -20,6 +20,21 @@ export function isMissingColumnError(
 }
 
 /**
+ * True when a referenced table doesn't exist yet — an unapplied migration
+ * (`42P01 undefined_table`) or PostgREST not knowing the table (`PGRST205`).
+ * Lets a feature whose migration is pending show "not set up yet" instead of
+ * a 500.
+ */
+export function isMissingTableError(
+  error: { code?: string | null; message?: string | null } | null | undefined,
+): boolean {
+  if (!error) return false;
+  const code = error.code ?? "";
+  const message = (error.message ?? "").toLowerCase();
+  return code === "42P01" || code === "PGRST205" || message.includes("could not find the table");
+}
+
+/**
  * True when the request never reached a verdict — the connection stalled, timed
  * out or was aborted — as opposed to the database answering with a complaint.
  *

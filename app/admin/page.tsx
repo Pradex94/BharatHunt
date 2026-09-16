@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@clerk/nextjs/server";
-import { Building2, Clock, Newspaper, ShieldCheck, Sparkles } from "lucide-react";
+import { Building2, Clock, Newspaper, Rocket, ShieldCheck, Sparkles } from "lucide-react";
 
 import { getIsAdmin } from "@/lib/admin";
 import { getAllProductsAdmin, getPendingProductsAdmin, type PendingProductRow } from "@/services/admin";
@@ -85,6 +85,13 @@ export default async function AdminPage() {
                 fields, or an ingestion pipeline with its own source table and
                 ingestion controls, do not belong beside a launch queue. */}
             <div className="flex flex-wrap items-center gap-2">
+              <Link
+                href="/admin/launch-agent"
+                className="inline-flex min-h-11 items-center gap-2 rounded-md border border-border bg-card px-4 text-sm font-semibold text-ink transition-colors hover:border-primary/30 hover:bg-secondary-bg"
+              >
+                <Rocket className="size-4" aria-hidden="true" />
+                Launch platforms
+              </Link>
               <Link
                 href="/admin/ai-news"
                 className="inline-flex min-h-11 items-center gap-2 rounded-md border border-border bg-card px-4 text-sm font-semibold text-ink transition-colors hover:border-primary/30 hover:bg-secondary-bg"

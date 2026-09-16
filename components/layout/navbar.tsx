@@ -149,6 +149,9 @@ export function Navbar() {
                     <DropdownMenuItem onClick={() => router.push("/dashboard")}>
                       Your products
                     </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => router.push("/dashboard/launch-agent")}>
+                      Launch Agent
+                    </DropdownMenuItem>
                     {isAdmin && (
                       <DropdownMenuItem onClick={() => router.push("/admin")}>
                         Admin dashboard
@@ -248,6 +251,13 @@ export function Navbar() {
                         className={buttonVariants({ variant: "outline", className: "w-full" })}
                       >
                         Your products
+                      </Link>
+                      <Link
+                        href="/dashboard/launch-agent"
+                        onClick={() => setMobileOpen(false)}
+                        className={buttonVariants({ variant: "outline", className: "w-full" })}
+                      >
+                        Launch Agent
                       </Link>
                       {isAdmin && (
                         <Link

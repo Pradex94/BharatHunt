@@ -115,3 +115,27 @@ jobs:
             echo "::error::Funding ingestion returned HTTP ${code}"
             exit 1
           fi
+
+      - name: Launch Agent campaigns
+        # Analyses campaigns queued when a product is approved. Optional: makers
+        # opening Launch Agent analyse their own campaign on the spot, so until
+        # the secret is set this step only notes that it skipped.
+        if: ${{ !cancelled() }}
+        env:
+          JOB_SECRET: ${{ secrets.LAUNCH_AGENT_JOB_SECRET }}
+        run: |
+          set -euo pipefail
+          if [ -z "${JOB_SECRET}" ]; then
+            echo "::notice::LAUNCH_AGENT_JOB_SECRET is not set — skipping. Add it with: gh secret set LAUNCH_AGENT_JOB_SECRET"
+            exit 0
+          fi
+          code=$(curl -sS --max-time 60 -o response.json -w '%{http_code}' \
+            -X POST "${SITE_URL}/api/launch-agent/jobs" \
+            -H "Authorization: Bearer ${JOB_SECRET}")
+          echo "HTTP ${code}"
+          head -c 2000 response.json || true
+          echo
+          if [ "${code}" != "200" ]; then
+            echo "::error::Launch Agent jobs returned HTTP ${code}"
+            exit 1
+          fi

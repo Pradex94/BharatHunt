@@ -209,6 +209,41 @@ export const RATE_LIMITS = {
   },
 
   /**
+   * Launch Agent generation: analysing a campaign, preparing a platform,
+   * regenerating a kit. Rule-based and cheap per call, but each one rewrites
+   * JSON rows, so it is bounded like a write — and generation endpoints are
+   * exactly what the security brief asked to limit.
+   */
+  launchAgentGenerate: {
+    limit: 40,
+    windowSeconds: 600,
+    message: "You're generating launch kits very quickly. Try again in a few minutes.",
+  },
+  /** Launch Agent edits: saving copy, moving a date, marking a status. */
+  launchAgentUpdate: {
+    limit: 120,
+    windowSeconds: 600,
+    message: "Too many changes. Try again shortly.",
+  },
+  launchCopilot: {
+    limit: 30,
+    windowSeconds: 300,
+    message: "Launch Copilot needs a short break. Try again in a few minutes.",
+  },
+  /** The secret-gated campaign job endpoint, keyed per IP — same reasoning as `fundingIngest`. */
+  launchAgentJobs: {
+    limit: 15,
+    windowSeconds: 3600,
+    message: "Too many job requests.",
+  },
+  /** Public registry JSON. Cached and small; bounded so it is not a free scrape target. */
+  launchPlatformsApi: {
+    limit: 60,
+    windowSeconds: 60,
+    message: "Too many requests. Please slow down.",
+  },
+
+  /**
    * Counting an open of an AI story page, keyed per IP.
    *
    * This one is not really about load — it is one tiny UPDATE — it is about the
