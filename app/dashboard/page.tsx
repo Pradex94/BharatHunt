@@ -6,7 +6,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@clerk/nextjs/server";
-import { ArrowUpRight, Clock, Eye, MessageSquare, Package, Plus, TrendingUp } from "lucide-react";
+import { ArrowUpRight, Clock, Eye, MessageSquare, Package, Plus, Rocket, TrendingUp } from "lucide-react";
 
 import { Container } from "@/components/ui/container";
 import { Numeric } from "@/components/ui/typography";
@@ -109,11 +109,16 @@ export default async function DashboardPage({
                       : `You've used all ${MAX_PRODUCTS_PER_USER} launch slots. Delete one to free a slot.`}
               </p>
             </div>
-            {canLaunch && (
-              <Link href="/submit" className={buttonVariants({ size: "sm" })}>
-                <Plus size={16} /> Launch a product
+            <div className="flex flex-wrap items-center gap-2">
+              <Link href="/dashboard/launch-agent" className={buttonVariants({ size: "sm", variant: "outline" })}>
+                <Rocket size={16} /> Launch Agent
               </Link>
-            )}
+              {canLaunch && (
+                <Link href="/submit" className={buttonVariants({ size: "sm" })}>
+                  <Plus size={16} /> Launch a product
+                </Link>
+              )}
+            </div>
           </div>
 
           {/* Straight off the submit form — the launch is stored, not live. */}
@@ -272,6 +277,14 @@ function ProductRow({ product }: { product: MakerProduct }) {
             className="flex items-center gap-1 text-sm text-body transition-colors hover:text-primary"
           >
             View <ArrowUpRight size={14} />
+          </Link>
+        )}
+        {product.status === "published" && (
+          <Link
+            href={`/dashboard/launch-agent/${product.slug}`}
+            className="flex items-center gap-1 text-sm font-semibold text-primary transition-colors hover:underline"
+          >
+            <Rocket size={14} /> Launch Agent
           </Link>
         )}
         {product.status === "draft" && <SubmitForReviewButton productId={product.id} />}

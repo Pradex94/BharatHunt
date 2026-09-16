@@ -2082,6 +2082,253 @@ export type Database = {
           },
         ]
       }
+      launch_platforms: {
+        Row: {
+          id: string
+          slug: string
+          name: string
+          description: string
+          website_url: string
+          submission_url: string | null
+          guidelines_url: string | null
+          category: string
+          automation_level: string
+          api_supported: boolean
+          requires_user_action: boolean
+          active: boolean
+          requirements: Json
+          supported_product_types: string[]
+          audience_tags: string[]
+          fit_rules: Json
+          content_style: string
+          launch_rules: Json
+          instructions: string
+          adapter: string
+          priority: number
+          verified_at: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          slug: string
+          name: string
+          description?: string
+          website_url: string
+          submission_url?: string | null
+          guidelines_url?: string | null
+          category?: string
+          automation_level?: string
+          api_supported?: boolean
+          requires_user_action?: boolean
+          active?: boolean
+          requirements?: Json
+          supported_product_types?: string[]
+          audience_tags?: string[]
+          fit_rules?: Json
+          content_style?: string
+          launch_rules?: Json
+          instructions?: string
+          adapter?: string
+          priority?: number
+          verified_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          slug?: string
+          name?: string
+          description?: string
+          website_url?: string
+          submission_url?: string | null
+          guidelines_url?: string | null
+          category?: string
+          automation_level?: string
+          api_supported?: boolean
+          requires_user_action?: boolean
+          active?: boolean
+          requirements?: Json
+          supported_product_types?: string[]
+          audience_tags?: string[]
+          fit_rules?: Json
+          content_style?: string
+          launch_rules?: Json
+          instructions?: string
+          adapter?: string
+          priority?: number
+          verified_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+        ]
+      }
+      launch_campaigns: {
+        Row: {
+          id: string
+          product_id: string
+          user_id: string
+          status: string
+          overall_score: number | null
+          analysis: Json
+          engine_version: string | null
+          product_updated_at: string | null
+          access_tier: string
+          attempts: number
+          error_message: string | null
+          analyzed_at: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          product_id: string
+          user_id: string
+          status?: string
+          overall_score?: number | null
+          analysis?: Json
+          engine_version?: string | null
+          product_updated_at?: string | null
+          access_tier?: string
+          attempts?: number
+          error_message?: string | null
+          analyzed_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          product_id?: string
+          user_id?: string
+          status?: string
+          overall_score?: number | null
+          analysis?: Json
+          engine_version?: string | null
+          product_updated_at?: string | null
+          access_tier?: string
+          attempts?: number
+          error_message?: string | null
+          analyzed_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "launch_campaigns_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "launch_campaigns_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      launch_platform_campaigns: {
+        Row: {
+          id: string
+          campaign_id: string
+          platform_id: string
+          status: string
+          automation_level: string
+          fit_score: number
+          priority: string
+          recommended: boolean
+          reason: string
+          generated_content: Json
+          content_overrides: Json
+          content_variant: number
+          requirements: Json
+          readiness: number
+          scheduled_for: string | null
+          submission_url: string | null
+          utm_url: string | null
+          published_url: string | null
+          submitted_at: string | null
+          published_at: string | null
+          last_checked_at: string | null
+          error_message: string | null
+          prepared_at: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          campaign_id: string
+          platform_id: string
+          status?: string
+          automation_level: string
+          fit_score?: number
+          priority?: string
+          recommended?: boolean
+          reason?: string
+          generated_content?: Json
+          content_overrides?: Json
+          content_variant?: number
+          requirements?: Json
+          readiness?: number
+          scheduled_for?: string | null
+          submission_url?: string | null
+          utm_url?: string | null
+          published_url?: string | null
+          submitted_at?: string | null
+          published_at?: string | null
+          last_checked_at?: string | null
+          error_message?: string | null
+          prepared_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          campaign_id?: string
+          platform_id?: string
+          status?: string
+          automation_level?: string
+          fit_score?: number
+          priority?: string
+          recommended?: boolean
+          reason?: string
+          generated_content?: Json
+          content_overrides?: Json
+          content_variant?: number
+          requirements?: Json
+          readiness?: number
+          scheduled_for?: string | null
+          submission_url?: string | null
+          utm_url?: string | null
+          published_url?: string | null
+          submitted_at?: string | null
+          published_at?: string | null
+          last_checked_at?: string | null
+          error_message?: string | null
+          prepared_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "launch_platform_campaigns_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "launch_campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "launch_platform_campaigns_platform_id_fkey"
+            columns: ["platform_id"]
+            isOneToOne: false
+            referencedRelation: "launch_platforms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never

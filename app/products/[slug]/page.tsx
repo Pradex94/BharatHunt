@@ -25,6 +25,7 @@ import { DeleteProductButton } from "@/components/products/delete-product-button
 import { ProductGallery } from "@/components/products/product-gallery";
 import { ProductLogo } from "@/components/products/product-logo";
 import { ProductReach } from "@/components/products/product-reach";
+import { LaunchAgentOwnerCta } from "@/components/launch-agent/owner-cta";
 import { ProductVideo } from "@/components/products/product-video";
 import { OfferBox } from "@/components/products/offer-box";
 import { JsonLd } from "@/components/seo/json-ld";
@@ -504,6 +505,9 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
           </div>
         )}
       </div>
+
+      {/* Owner-only: the page is published by construction, so the campaign exists or is one click away. */}
+      {isOwner && <LaunchAgentOwnerCta slug={product.slug} />}
 
       <ProductReach
         productUrl={productUrl}

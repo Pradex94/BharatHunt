@@ -16,6 +16,7 @@ import { buildProductLaunchEmail } from "@/lib/emails/product-launch";
 import { signReviewToken } from "@/lib/review-token";
 import { createServiceClient } from "@/lib/supabase/service";
 import { PRODUCTS_CACHE_PREFIX } from "@/services/products";
+import { enqueueLaunchCampaign } from "@/services/launch-agent";
 
 /**
  * The review queue's engine: everything that happens to a product between
@@ -183,7 +184,13 @@ export async function approveProductById(productId: string): Promise<ReviewOutco
   }
 
   const product = toSubject(data);
-  await revalidateAfterReview(product.slug);
+  /*
+   * Launch Agent: queue the distribution plan now that the product is live.
+   * One fail-open insert and no analysis — the approval never waits for it.
+   * The analysis runs when the maker opens Launch Agent, or on the next
+   * scheduled job run (app/api/launch-agent/jobs/route.ts).
+   */
+  await Promise.all([revalidateAfterReview(product.slug), enqueueLaunchCampaign(data.id, data.creator_id)]);
 
   // The maker's "you're live" receipt, the same one a launch used to send at
   // submission time. It belongs here now: it is only true once approved.

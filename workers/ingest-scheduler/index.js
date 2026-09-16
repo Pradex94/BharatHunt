@@ -38,38 +38,66 @@ const TARGETS = [
   { name: "ai-news", path: "/api/ai-news/ingest", secret: "AI_NEWS_INGEST_SECRET" },
 ];
 
+function buildRequest(target, secret) {
+  return new Request(`https://bharathunt.org${target.path}`, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${secret}`,
+      "user-agent": "BharatHuntScheduler/1.0",
+      // Recorded on the run's log row, so a scheduled run is afterwards
+      // distinguishable from someone calling the endpoint by hand. Without
+      // it both read as "cron" and "is the schedule actually firing?" is a
+      // question the data cannot answer.
+      "x-ingest-trigger": "scheduled",
+    },
+  });
+}
+
 async function runOne(env, target) {
   const secret = env[target.secret];
   if (!secret) {
     return { target: target.name, skipped: "no secret configured" };
   }
 
-  try {
-    const response = await env.APP.fetch(
-      new Request(`https://bharathunt.org${target.path}`, {
-        method: "POST",
-        headers: {
-          authorization: `Bearer ${secret}`,
-          "user-agent": "BharatHuntScheduler/1.0",
-          // Recorded on the run's log row, so a scheduled run is afterwards
-          // distinguishable from someone calling the endpoint by hand. Without
-          // it both read as "cron" and "is the schedule actually firing?" is a
-          // question the data cannot answer.
-          "x-ingest-trigger": "scheduled",
-        },
-      }),
-    );
+  /*
+   * The service binding first, a public request second.
+   *
+   * The binding is better when it works — it stays inside Cloudflare and costs
+   * no external subrequest. But a binding that is missing or misconfigured
+   * fails in the quietest possible way: the run is skipped, no row is written,
+   * and the only trace is a log line nobody is watching. Falling back to the
+   * ordinary public route means a broken binding costs efficiency rather than
+   * the entire schedule, and `via` records which path actually ran so the
+   * difference is visible afterwards instead of guessed at.
+   */
+  const attempts = [
+    { via: "service-binding", send: () => env.APP?.fetch(buildRequest(target, secret)) },
+    { via: "public-fetch", send: () => fetch(buildRequest(target, secret)) },
+  ];
 
-    // The body is a counts summary, never article content, so it is safe to log
-    // and it is the only record of a cron run that nobody watched.
-    const body = await response.text();
-    return { target: target.name, status: response.status, body: body.slice(0, 500) };
-  } catch (error) {
-    return {
-      target: target.name,
-      error: error instanceof Error ? error.message : "unknown error",
-    };
+  const errors = [];
+  for (const attempt of attempts) {
+    try {
+      const response = await attempt.send();
+      if (!response) {
+        errors.push(`${attempt.via}: binding unavailable`);
+        continue;
+      }
+      // The body is a counts summary, never article content, so it is safe to
+      // log and it is the only record of a run nobody watched.
+      const body = await response.text();
+      return {
+        target: target.name,
+        via: attempt.via,
+        status: response.status,
+        body: body.slice(0, 400),
+      };
+    } catch (error) {
+      errors.push(`${attempt.via}: ${error instanceof Error ? error.message : "unknown"}`);
+    }
   }
+
+  return { target: target.name, error: errors.join(" | ") };
 }
 
 export default {

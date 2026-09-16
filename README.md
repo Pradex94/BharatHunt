@@ -74,6 +74,12 @@ FUNDING_INGEST_SECRET=<a-long-random-string>
 # Ingestion" button works regardless (it authenticates the signed-in admin).
 AI_NEWS_INGEST_SECRET=<a-long-random-string>
 
+# Launch Agent (/launch-agent) — optional; the feature works without it.
+# Shared secret for /api/launch-agent/jobs, which analyses campaigns queued when a
+# product is approved. Without it the endpoint answers 503 and nothing breaks:
+# opening Launch Agent analyses that campaign on the spot.
+LAUNCH_AGENT_JOB_SECRET=<a-long-random-string>
+
 # Cloudflare Turnstile — captcha on the /advertise inquiry form (REQUIRED for that form)
 NEXT_PUBLIC_TURNSTILE_SITE_KEY=<your-turnstile-site-key>
 TURNSTILE_SECRET_KEY=<your-turnstile-secret-key>
@@ -236,6 +242,12 @@ Type-check with `npx tsc --noEmit`.
 | `/ai/[story-slug]` | One AI story: our summary, its entities, the trend score, every source covering it |
 | `/admin/ai-news` | Admin only — review queue, sources, ingestion controls, run log, manual entry |
 | `/api/ai-news/ingest` | Scheduled AI news ingestion trigger — shared-secret only, 503 when unconfigured |
+| `/launch-agent` | Launch Agent front door — what it does; signed-in makers are sent to their products |
+| `/dashboard/launch-agent` | Every product you own, with its Launch Agent readiness |
+| `/dashboard/launch-agent/[slug]` | One product's campaign — score, platform cards, checklists, kits, timeline, Copilot |
+| `/admin/launch-agent` | Admin only — the launch platform registry (add, edit, disable, re-verify) |
+| `/api/launch-agent/platforms` | Public platform directory as JSON |
+| `/api/launch-agent/jobs` | Queued-campaign analysis trigger — shared-secret only, 503 when unconfigured |
 | `/promote` | Promotion marketing page — **hidden (404) unless `NEXT_PUBLIC_PROMOTE_ENABLED=true`** |
 | `/promote/checkout` | Buy a fixed-price promotion slot (Dodo Payments hosted checkout) — hidden with `/promote` |
 | `/api/webhooks/clerk` | Syncs Clerk users into the `profiles` table |
@@ -716,6 +728,78 @@ approving is a POST, because mail scanners fetch every link in a message before 
 
 Existing published products are untouched by the migration. **Apply it before deploying the app** —
 a build that inserts `'pending'` against the old `products_status_check` cannot accept a launch.
+
+## Launch Agent (`/launch-agent`)
+
+> Launch once on BharatHunt. Get your product ready for discovery everywhere.
+
+When a product is approved, a `launch_campaigns` row is queued for it. Opening Launch Agent scores
+every platform in the registry against that listing, drafts platform-specific copy, checks each
+platform's requirements against the product's own fields, and suggests a launch sequence.
+
+**It is rule-based, and the UI says so.** Like AI Trending and funding extraction, this deployment
+runs no language model (see the note under Funding Intelligence). Fit scores come from a weighted
+lexicon over the maker's own fields plus the per-platform rules in the registry; launch copy comes
+from deterministic templates chosen by each platform's `content_style`. Everything is in
+`lib/launch-agent/`, dependency-free and covered by `tests/launch-agent-*.test.ts`.
+
+### What it will not do
+
+- **It never publishes anywhere.** No platform in the registry offers an approved API for a
+  third-party app to post on a maker's behalf — Product Hunt's API is read-only by default and
+  excludes commercial use without permission — so nothing ships as `AUTOMATED`. Assisted platforms
+  get their official form opened, pre-filled where the platform supports it (Hacker News's own
+  `submitlink` endpoint, Reddit's `submit` parameters); the maker presses submit.
+- **It never claims a launch that did not happen.** "Submitted" and "Published" on a non-automated
+  platform are the maker's own report, labelled *marked by you*, and publishing requires pasting the
+  live URL. `canMarkManually` refuses those transitions for an `AUTOMATED` platform entirely.
+- **It never invents traction.** No template has a slot for user counts, revenue, testimonials,
+  reviews or rankings, and a test asserts none appears across every platform, variant and tone.
+  Personal facts the maker has not given us are left as `[bracketed prompts]` to fill in.
+- **It never reports traffic it cannot see.** BharatHunt cannot measure visits that land on a
+  maker's own site from another platform, so the analytics panel shows only real counts plus the
+  `utm_source` values to look for in their own analytics.
+- **Product text is data, never instructions.** There is no model to steer, and the Copilot only
+  matches a message against keyword lists. A description saying "ignore previous instructions" ends
+  up quoted in a draft and nowhere else — asserted in `tests/launch-agent-content.test.ts`.
+
+### The platform registry is configuration, not code
+
+`launch_platforms` holds every platform: URLs, requirements, audience tags, fit rules, launch
+rhythm, content style, automation level and the adapter key. Admins edit it at
+`/admin/launch-agent` — adding a platform needs no deploy. Eleven are seeded, each checked against
+the platform's own site on the date in `verified_at`; requirements confirmed there carry
+`"verified": true` and the UI labels them *from the platform's site*.
+
+A row can only be `AUTOMATED` if it also declares an approved API and no required user action — a
+check constraint in the migration, the same rule in `validatePlatformInput`, and once more in
+`parsePlatformRow`, which downgrades a lying row to `ASSISTED` rather than trusting it.
+
+### Adapters
+
+`lib/launch-agent/adapters.ts` is the only place platform-specific behaviour lives:
+`checkRequirements` / `prepareSubmission` / optional `submit`, `getStatus`, `getPublishedUrl`.
+Platforms resolve to an adapter by registry key, falling back to the adapter for their automation
+level, so nothing else in the app branches on a platform slug. `AutomatedAdapter` is the contract a
+future approved integration fills in; unconfigured, its `submit` fails loudly instead of pretending.
+
+### Security
+
+Ownership is proved server-side on every call: the product id a client posts is only a lookup key,
+the row is loaded by the server, and `authorizeCampaignAccess` compares `creator_id` with the Clerk
+session — a product that is not yours answers 404, exactly as a missing one does. None of the three
+tables has a write policy, so a maker's own session cannot set `status = 'PUBLISHED'` through
+PostgREST; every write goes through `createServiceClient()` after that check. Reads are the
+exception: RLS returns a maker only their own campaign rows. Generation endpoints are rate limited
+(`launchAgentGenerate`, `launchAgentUpdate`, `launchCopilot`), and every stored JSON blob is
+re-validated on the way out, so a malformed row degrades to an empty section instead of a crash.
+
+### Publishing never waits for it
+
+Approval writes one row and returns; the analysis happens when the maker opens Launch Agent, or on
+the schedule. `POST /api/launch-agent/jobs` with `Authorization: Bearer $LAUNCH_AGENT_JOB_SECRET`
+drains queued campaigns (the same shared-secret gate as the ingestion routes, behind the same per-IP
+limiter). It is wired into `.github/workflows/ingest.yml` and skips itself while the secret is unset.
 
 ## Project structure
 
