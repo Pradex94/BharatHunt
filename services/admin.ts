@@ -1,5 +1,10 @@
 import "server-only";
 
+import {
+  ADMIN_PRODUCT_STATUSES,
+  sanitizeAdminSearch,
+  type AdminProductStatus,
+} from "@/lib/admin-filters";
 import { createServiceClient } from "@/lib/supabase/service";
 
 export type AdminProductRow = {
@@ -15,24 +20,85 @@ export type AdminProductRow = {
   creator: { display_name: string; username: string } | null;
 };
 
+export type AdminProductQuery = {
+  status?: AdminProductStatus | null;
+  q?: string;
+  limit?: number;
+};
+
 /**
- * Every product (all statuses, all creators) for the admin dashboard. Uses the
- * service-role client, so callers MUST verify `getIsAdmin()` first.
+ * Products for the admin table (all statuses, all creators), narrowed by the
+ * filters the page puts in the URL. Uses the service-role client, so callers
+ * MUST verify `getIsAdmin()` first.
+ *
+ * The filtering is done by Postgres rather than by the page, so a search
+ * reaches every product rather than only the most recent page of them — the
+ * row cap exists to keep one response sane, and a term that matches something
+ * older than the cap is exactly when an admin is searching in the first place.
  */
-export async function getAllProductsAdmin(): Promise<AdminProductRow[]> {
+export async function getAllProductsAdmin(
+  query: AdminProductQuery = {},
+): Promise<AdminProductRow[]> {
   const supabase = createServiceClient();
-  const { data, error } = await supabase
+  let request = supabase
     .from("products")
     .select(
       "id, slug, name, status, category, pricing_type, upvote_count, comment_count, created_at, creator:profiles!products_creator_id_fkey(display_name, username)",
-    )
+    );
+
+  if (query.status) {
+    request = request.eq("status", query.status);
+  }
+
+  const term = sanitizeAdminSearch(query.q);
+  if (term) {
+    request = request.or(`name.ilike.%${term}%,slug.ilike.%${term}%,tagline.ilike.%${term}%`);
+  }
+
+  const { data, error } = await request
     .order("created_at", { ascending: false })
-    .limit(500);
+    .limit(query.limit ?? 200);
 
   if (error) {
     throw new Error(`Failed to load products for admin: ${error.message}`);
   }
   return (data ?? []) as AdminProductRow[];
+}
+
+export type AdminProductCounts = Record<AdminProductStatus, number> & { total: number };
+
+/**
+ * How many products sit at each status, counted by the database.
+ *
+ * Head counts rather than a tally of the rows the table happens to be showing:
+ * that table is filtered and capped, so counting it would report the filter
+ * back to itself — "2 in review" whenever the admin was looking at two of them.
+ *
+ * A failure reports zero rather than throwing. These are a signpost above a
+ * page whose real work — the queue and the table — does not depend on them.
+ */
+export async function getAdminProductCounts(): Promise<AdminProductCounts> {
+  const supabase = createServiceClient();
+
+  const counts = await Promise.all(
+    ADMIN_PRODUCT_STATUSES.map(async (status) => {
+      const { count, error } = await supabase
+        .from("products")
+        .select("id", { count: "exact", head: true })
+        .eq("status", status);
+      if (error) {
+        console.error(`[admin] could not count "${status}" products: ${error.message}`);
+        return 0;
+      }
+      return count ?? 0;
+    }),
+  );
+
+  const byStatus = Object.fromEntries(
+    ADMIN_PRODUCT_STATUSES.map((status, index) => [status, counts[index]]),
+  ) as Record<AdminProductStatus, number>;
+
+  return { ...byStatus, total: counts.reduce((sum, value) => sum + value, 0) };
 }
 
 export type PendingProductRow = AdminProductRow & {

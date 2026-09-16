@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { auth, currentUser } from "@clerk/nextjs/server";
 
-import { getIsAdmin } from "@/lib/admin";
+import { getIsAdmin, isAdminUser } from "@/lib/admin";
 import { checkRateLimitByIpAndUser } from "@/lib/rate-limit";
 import {
   approveProductById,
@@ -108,6 +108,17 @@ export async function submitForReview(productId: string): Promise<ReviewOutcome>
   }
 
   const user = await currentUser();
+
+  /*
+   * An admin resubmitting their own draft is the approver, so there is nobody
+   * left to wait for. Same reasoning as `createProduct`: the update above had
+   * to write 'pending' because the review trigger refuses any other status from
+   * a user's session, and the publish then happens service-role.
+   */
+  if (isAdminUser(user)) {
+    return approveProductById(data.id);
+  }
+
   const makerName =
     [user?.firstName, user?.lastName].filter(Boolean).join(" ") || user?.username || null;
 

@@ -16,7 +16,13 @@ import { MAX_GALLERY_IMAGES, MAX_PRODUCTS_PER_USER, PRODUCT_PLATFORMS } from "@/
 import { hostnameOf, moderateProduct } from "@/lib/moderation";
 import { isIndiaStateCode } from "@/lib/india-states";
 import { detectStateCode } from "@/lib/request-geo";
-import { notifyReviewers, sendSubmissionAck, type ReviewSubject } from "@/lib/review";
+import {
+  notifyReviewers,
+  publishProductById,
+  sendLaunchReceipt,
+  sendSubmissionAck,
+  type ReviewSubject,
+} from "@/lib/review";
 
 export type ProductFormState = { error?: string } | undefined;
 
@@ -339,27 +345,30 @@ const BOOKKEEPING_DEADLINE_MS = 8_000;
  * work that fails *after* the deadline has passed is still logged rather than
  * surfacing as an unhandled rejection that takes the whole invocation with it.
  */
-async function withDeadline(label: string, work: Promise<unknown>): Promise<void> {
+async function withDeadline<T>(label: string, work: Promise<T>): Promise<T | null> {
   const settled = work.then(
-    () => "done" as const,
+    (value) => ({ value }),
     (error: unknown) => {
       console.error(`[launch] ${label} failed:`, error);
-      return "done" as const;
+      return { value: null };
     },
   );
 
   let timer: ReturnType<typeof setTimeout> | undefined;
-  const deadline = new Promise<"timeout">((resolve) => {
-    timer = setTimeout(() => resolve("timeout"), BOOKKEEPING_DEADLINE_MS);
+  const deadline = new Promise<null>((resolve) => {
+    timer = setTimeout(() => resolve(null), BOOKKEEPING_DEADLINE_MS);
   });
 
   try {
-    if ((await Promise.race([settled, deadline])) === "timeout") {
+    const finished = await Promise.race([settled, deadline]);
+    if (finished === null) {
       console.error(
         `[launch] ${label} was still running after ${BOOKKEEPING_DEADLINE_MS}ms — ` +
           "finishing the launch without it.",
       );
+      return null;
     }
+    return finished.value;
   } finally {
     clearTimeout(timer);
   }
@@ -467,8 +476,10 @@ export async function createProduct(
     takenSlugsNear(supabase, baseSlug),
   ]);
 
+  const isAdmin = isAdminUser(user);
+
   // Enforce the per-maker launch limit — admins are exempt.
-  if (!isAdminUser(user) && existingCount >= MAX_PRODUCTS_PER_USER) {
+  if (!isAdmin && existingCount >= MAX_PRODUCTS_PER_USER) {
     return {
       error: `You've reached the ${MAX_PRODUCTS_PER_USER}-product launch limit. Delete an existing product to launch a new one.`,
     };
@@ -579,6 +590,34 @@ export async function createProduct(
       };
     }
     return { error: error?.message ?? "Could not submit your product. Please try again." };
+  }
+
+  /*
+   * An admin's own launch does not queue for an admin's approval.
+   *
+   * The insert still writes `status = 'pending'` — the trigger in
+   * 20260825000000_launch_review_queue.sql refuses anything else from a user's
+   * session, admin or not, because Postgres has no idea what an admin is. So
+   * the publish happens here, through the service-role client, immediately
+   * after: the same code path the review queue uses, with the same concurrency
+   * guard, run by the one person whose approval it was waiting for.
+   *
+   * Moderation is unchanged (`moderateProduct` above) — this skips the queue,
+   * not the launch rules. The receipt mail is sent under the same deadline as
+   * everything else, so a slow provider cannot hold the redirect open.
+   */
+  if (isAdmin) {
+    const published = await publishProductById(product.id);
+    if (published.ok) {
+      // The caches and every affected path were revalidated by the publish
+      // itself (`revalidateAfterReview`), including /dashboard and /admin.
+      await withDeadline("launch receipt", sendLaunchReceipt(published.launch));
+      redirect(`/products/${published.launch.product.slug}`);
+    }
+    // Falls through to the ordinary queued path, which is the honest outcome:
+    // the row exists and is pending, so it belongs in the queue and the mail
+    // below is what gets it looked at.
+    console.error(`[launch] admin auto-publish failed for "${slug}": ${published.error}`);
   }
 
   /*
