@@ -1,17 +1,22 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@clerk/nextjs/server";
-import { Building2, Clock, Newspaper, Rocket, ShieldCheck, Sparkles } from "lucide-react";
+import { Building2, Clock, Newspaper, Rocket, Search, ShieldCheck, Sparkles } from "lucide-react";
 
 import { getIsAdmin } from "@/lib/admin";
-import { getAllProductsAdmin, getPendingProductsAdmin, type PendingProductRow } from "@/services/admin";
+import { adminProductsHref, asAdminProductStatus, sanitizeAdminSearch } from "@/lib/admin-filters";
+import {
+  getAdminProductCounts,
+  getAllProductsAdmin,
+  getPendingProductsAdmin,
+  type PendingProductRow,
+} from "@/services/admin";
 import { getPlatformStats } from "@/services/products";
 import { Container } from "@/components/ui/container";
 import { Numeric } from "@/components/ui/typography";
-import { DeleteProductButton } from "@/components/products/delete-product-button";
+import { AdminProductsPanel, ADMIN_ROW_LIMIT, addedAgo } from "@/components/admin/products-panel";
 import { ReviewActions } from "@/components/admin/review-actions";
 import { indiaStateName } from "@/lib/india-states";
-import { productRowHref } from "@/lib/product-links";
 
 export const metadata = {
   title: "Admin",
@@ -21,29 +26,20 @@ export const metadata = {
 // Reads the signed-in identity — never prerender.
 export const dynamic = "force-dynamic";
 
-const STATUS_BADGE: Record<string, string> = {
-  published: "bg-success/10 text-success",
-  pending: "bg-primary/10 text-primary",
-  draft: "bg-secondary-bg text-muted",
-  archived: "bg-amber-100 text-amber-700",
-};
+/** The other admin screens, so none of them is reachable only by typing a URL. */
+const TOOLS = [
+  { href: "/admin/launch-agent", label: "Launch platforms", icon: Rocket },
+  { href: "/admin/ai-news", label: "AI news", icon: Sparkles },
+  { href: "/admin/funding", label: "Funding", icon: Newspaper },
+  { href: "/admin/investors", label: "Investors", icon: Building2 },
+  { href: "/admin/seo", label: "SEO audit", icon: Search },
+] as const;
 
-/** "pending" is the database's word for it; "in review" is the human's. */
-const STATUS_LABEL: Record<string, string> = { pending: "in review" };
-
-function submittedAgo(value: string | null): string {
-  if (!value) return "just now";
-  const submitted = new Date(value).getTime();
-  if (Number.isNaN(submitted)) return "just now";
-
-  const minutes = Math.max(0, Math.round((Date.now() - submitted) / 60000));
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.round(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  return `${Math.round(hours / 24)}d ago`;
-}
-
-export default async function AdminPage() {
+export default async function AdminPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ status?: string; q?: string }>;
+}) {
   const { userId } = await auth();
   if (!userId) {
     redirect("/login");
@@ -52,16 +48,32 @@ export default async function AdminPage() {
     redirect("/");
   }
 
-  const [products, pending, stats] = await Promise.all([
-    getAllProductsAdmin(),
+  // The table's state lives in the URL, like every other list on this site, so
+  // a filtered view is a link an admin can keep or send to the other admin.
+  const params = await searchParams;
+  const status = asAdminProductStatus(params.status);
+  // Sanitised here too, not only in the query, so the term the page echoes back
+  // in the box and in the "Clear" link is the term it actually searched for.
+  const q = sanitizeAdminSearch(params.q);
+
+  const [products, pending, stats, counts] = await Promise.all([
+    getAllProductsAdmin({ status, q, limit: ADMIN_ROW_LIMIT }),
     getPendingProductsAdmin(),
     getPlatformStats(),
+    getAdminProductCounts(),
   ]);
 
+  /*
+   * "Products" counts published rows, not every row — it is the same number the
+   * public site reports, and it sits beside makers and upvotes, which are also
+   * published-only. Drafts and submissions are counted on the chips below,
+   * where they mean something an admin can act on.
+   */
   const statCards = [
-    { label: "Products", value: stats.products },
-    { label: "Makers", value: stats.makers },
-    { label: "Upvotes", value: stats.upvotes },
+    { label: "Published", value: counts.published, href: adminProductsHref("published", "") },
+    { label: "Makers", value: stats.makers, href: null },
+    { label: "Upvotes", value: stats.upvotes, href: null },
+    { label: "In review", value: counts.pending, href: adminProductsHref("pending", "") },
   ];
 
   return (
@@ -76,7 +88,7 @@ export default async function AdminPage() {
               <div>
                 <h1 className="text-2xl font-bold tracking-tight text-ink">Admin dashboard</h1>
                 <p className="text-sm text-muted">
-                  Review every launch · moderate any product · unlimited launches.
+                  Review every launch · moderate any product · your own launches publish instantly.
                 </p>
               </div>
             </div>
@@ -85,135 +97,54 @@ export default async function AdminPage() {
                 fields, or an ingestion pipeline with its own source table and
                 ingestion controls, do not belong beside a launch queue. */}
             <div className="flex flex-wrap items-center gap-2">
-              <Link
-                href="/admin/launch-agent"
-                className="inline-flex min-h-11 items-center gap-2 rounded-md border border-border bg-card px-4 text-sm font-semibold text-ink transition-colors hover:border-primary/30 hover:bg-secondary-bg"
-              >
-                <Rocket className="size-4" aria-hidden="true" />
-                Launch platforms
-              </Link>
-              <Link
-                href="/admin/ai-news"
-                className="inline-flex min-h-11 items-center gap-2 rounded-md border border-border bg-card px-4 text-sm font-semibold text-ink transition-colors hover:border-primary/30 hover:bg-secondary-bg"
-              >
-                <Sparkles className="size-4" aria-hidden="true" />
-                AI news
-              </Link>
-              <Link
-                href="/admin/funding"
-                className="inline-flex min-h-11 items-center gap-2 rounded-md border border-border bg-card px-4 text-sm font-semibold text-ink transition-colors hover:border-primary/30 hover:bg-secondary-bg"
-              >
-                <Newspaper className="size-4" aria-hidden="true" />
-                Manage funding
-              </Link>
-              <Link
-                href="/admin/investors"
-                className="inline-flex min-h-11 items-center gap-2 rounded-md border border-border bg-card px-4 text-sm font-semibold text-ink transition-colors hover:border-primary/30 hover:bg-secondary-bg"
-              >
-                <Building2 className="size-4" aria-hidden="true" />
-                Manage investors
-              </Link>
+              {TOOLS.map((tool) => (
+                <Link
+                  key={tool.href}
+                  href={tool.href}
+                  className="inline-flex min-h-11 items-center gap-2 rounded-md border border-border bg-card px-4 text-sm font-semibold text-ink transition-colors hover:border-primary/30 hover:bg-secondary-bg"
+                >
+                  <tool.icon className="size-4" aria-hidden="true" />
+                  {tool.label}
+                </Link>
+              ))}
             </div>
           </div>
 
           {/* Stats */}
           {/* Three columns on a 320px screen left ~50px per figure, which a
-              four-digit count does not fit. Two up on a phone, three from
-              `sm` — the desktop layout is the same as it was. */}
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-            {statCards.map((card) => (
-              <div key={card.label} className="rounded-xl border border-border bg-card p-4">
-                <div className="text-2xl font-bold text-ink">
-                  <Numeric>{card.value.toLocaleString()}</Numeric>
+              four-digit count does not fit. Two up on a phone, four from
+              `sm`. The two that a filter can act on are links to that filter. */}
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {statCards.map((card) => {
+              const body = (
+                <>
+                  <div className="text-2xl font-bold text-ink">
+                    <Numeric>{card.value.toLocaleString()}</Numeric>
+                  </div>
+                  <div className="text-xs text-muted">{card.label}</div>
+                </>
+              );
+              return card.href ? (
+                <Link
+                  key={card.label}
+                  href={card.href}
+                  className="rounded-xl border border-border bg-card p-4 transition-colors hover:border-primary/30 hover:bg-secondary-bg"
+                >
+                  {body}
+                </Link>
+              ) : (
+                <div key={card.label} className="rounded-xl border border-border bg-card p-4">
+                  {body}
                 </div>
-                <div className="text-xs text-muted">{card.label}</div>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           {/* Review queue */}
           <ReviewQueue pending={pending} />
 
           {/* Product table */}
-          <div className="overflow-hidden rounded-xl border border-border bg-card">
-            <div className="flex items-center justify-between border-b border-border px-4 py-3">
-              <h2 className="text-sm font-semibold text-ink">All products</h2>
-              <span className="text-xs text-muted">
-                <Numeric>{products.length}</Numeric> shown
-              </span>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[640px] text-left text-sm">
-                <thead>
-                  <tr className="border-b border-border text-xs text-muted">
-                    <th className="px-4 py-2.5 font-medium">Product</th>
-                    <th className="px-4 py-2.5 font-medium">Maker</th>
-                    <th className="px-4 py-2.5 font-medium">Status</th>
-                    <th className="px-4 py-2.5 text-right font-medium">Votes</th>
-                    <th className="px-4 py-2.5 text-right font-medium">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {products.map((product) => (
-                    <tr key={product.id} className="border-b border-border/60 last:border-0">
-                      <td className="px-4 py-2.5">
-                        {/* Only a live product has a public page. This table
-                            lists every status, so a row in review linked
-                            straight at /products/[slug] sent the reviewer to a
-                            404 instead of to the decision. */}
-                        <Link
-                          href={productRowHref(product, "admin")}
-                          className="font-medium text-ink hover:text-primary"
-                        >
-                          {product.name}
-                        </Link>
-                        <div className="text-xs text-muted">{product.category}</div>
-                      </td>
-                      <td className="px-4 py-2.5 text-muted">
-                        {product.creator?.display_name ?? "—"}
-                      </td>
-                      <td className="px-4 py-2.5">
-                        <span
-                          className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-                            STATUS_BADGE[product.status] ?? "bg-secondary-bg text-muted"
-                          }`}
-                        >
-                          {STATUS_LABEL[product.status] ?? product.status}
-                        </span>
-                      </td>
-                      <td className="px-4 py-2.5 text-right text-muted">
-                        <Numeric>{product.upvote_count ?? 0}</Numeric>
-                      </td>
-                      <td className="px-4 py-2.5">
-                        <div className="flex items-center justify-end gap-3">
-                          <Link
-                            href={`/products/${product.slug}/edit`}
-                            className="text-primary hover:underline"
-                          >
-                            Edit
-                          </Link>
-                          {/* redirectTo={null} keeps the admin on this page —
-                              the revalidated table just drops the row. */}
-                          <DeleteProductButton
-                            productId={product.id}
-                            productName={product.name}
-                            redirectTo={null}
-                          />
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                  {products.length === 0 && (
-                    <tr>
-                      <td colSpan={5} className="px-4 py-8 text-center text-muted">
-                        No products yet.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
+          <AdminProductsPanel products={products} counts={counts} status={status} q={q} />
         </div>
       </Container>
     </main>
@@ -261,7 +192,7 @@ function ReviewQueue({ pending }: { pending: PendingProductRow[] }) {
                 <span className="text-xs text-muted">
                   {product.category}
                   {state ? ` · ${state}` : ""} · by {product.creator?.display_name ?? "unknown"} ·{" "}
-                  {submittedAgo(product.created_at)}
+                  {addedAgo(product.created_at)}
                 </span>
               </div>
               <p className="text-sm text-body">{product.tagline}</p>
