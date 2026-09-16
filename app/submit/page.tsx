@@ -58,8 +58,10 @@ export default async function SubmitPage() {
             </h1>
             <p className="text-base text-body">
               Share what you&apos;ve built with the Bharat Hunt community. Fill in the details
-              below and send it in — a human reads every launch before it goes live, usually within
-              a day.
+              below and send it in
+              {isAdmin
+                ? " — you review launches, so yours goes live the moment you submit it."
+                : " — a human reads every launch before it goes live, usually within a day."}
             </p>
             <p className="text-sm text-muted">
               {isAdmin

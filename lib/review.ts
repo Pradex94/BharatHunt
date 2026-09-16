@@ -156,16 +156,26 @@ async function revalidateAfterReview(slug: string): Promise<void> {
   revalidatePath(`/products/${slug}`);
 }
 
+/** A product that just went live, plus who to send the receipt to. */
+export type PublishedLaunch = { product: ReviewSubject; creatorId: string };
+
 /**
- * Publishes a pending product. **Performs no authorisation** — the caller must
+ * Takes a pending product live. **Performs no authorisation** — the caller must
  * have proved the actor is an admin or holds a valid signed link.
+ *
+ * Everything here is state, and none of it is email: the row, the caches, and
+ * the Launch Agent queue. `sendLaunchReceipt` is the other half, kept separate
+ * so a caller on a maker's critical path can publish promptly and let the mail
+ * finish under its own deadline — a slow provider must not hold a launch open.
  *
  * The `eq("status", "pending")` in the update is the concurrency guard: two
  * approvals of the same product (the mail on a phone, the queue on a laptop)
  * leave the second matching no rows, so `published_at` is written once and the
  * maker is told once.
  */
-export async function approveProductById(productId: string): Promise<ReviewOutcome> {
+export async function publishProductById(
+  productId: string,
+): Promise<{ ok: true; launch: PublishedLaunch } | { ok: false; error: string }> {
   const supabase = createServiceClient();
 
   const { data, error } = await supabase
@@ -190,27 +200,47 @@ export async function approveProductById(productId: string): Promise<ReviewOutco
    * The analysis runs when the maker opens Launch Agent, or on the next
    * scheduled job run (app/api/launch-agent/jobs/route.ts).
    */
-  await Promise.all([revalidateAfterReview(product.slug), enqueueLaunchCampaign(data.id, data.creator_id)]);
+  await Promise.all([
+    revalidateAfterReview(product.slug),
+    enqueueLaunchCampaign(data.id, data.creator_id),
+  ]);
 
-  // The maker's "you're live" receipt, the same one a launch used to send at
-  // submission time. It belongs here now: it is only true once approved.
-  const maker = await makerContact(data.creator_id);
-  if (maker.email) {
-    const email = buildProductLaunchEmail(
-      {
-        name: product.name,
-        tagline: product.tagline,
-        slug: product.slug,
-        category: product.category,
-        launchState: product.launchState,
-      },
-      maker.name,
-    );
-    const sent = await sendEmail({ to: maker.email, ...email });
-    if (!sent.ok) logSendFailure("launch-receipt", product.slug, sent.error);
-  }
+  return { ok: true, launch: { product, creatorId: data.creator_id } };
+}
 
-  return { ok: true, slug: product.slug };
+/**
+ * The maker's "you're live" receipt, the same one a launch used to send at
+ * submission time. It belongs to the publish, not to the submission: it is only
+ * true once the product is actually live.
+ */
+export async function sendLaunchReceipt({ product, creatorId }: PublishedLaunch): Promise<void> {
+  const maker = await makerContact(creatorId);
+  if (!maker.email) return;
+
+  const email = buildProductLaunchEmail(
+    {
+      name: product.name,
+      tagline: product.tagline,
+      slug: product.slug,
+      category: product.category,
+      launchState: product.launchState,
+    },
+    maker.name,
+  );
+  const sent = await sendEmail({ to: maker.email, ...email });
+  if (!sent.ok) logSendFailure("launch-receipt", product.slug, sent.error);
+}
+
+/**
+ * Publish, then tell the maker — the whole approval, for callers who are not on
+ * anyone's critical path (the review queue, the signed link in the mail).
+ */
+export async function approveProductById(productId: string): Promise<ReviewOutcome> {
+  const published = await publishProductById(productId);
+  if (!published.ok) return published;
+
+  await sendLaunchReceipt(published.launch);
+  return { ok: true, slug: published.launch.product.slug };
 }
 
 /**
