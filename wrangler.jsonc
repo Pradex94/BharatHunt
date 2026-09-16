@@ -1,7 +1,10 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "bharathunt",
-  "main": ".open-next/worker.js",
+  // Not `.open-next/worker.js` directly: `worker-entry.js` wraps that handler so
+  // it can rewrite the ISR `Cache-Control` OpenNext writes for CloudFront, which
+  // otherwise told browsers to serve a 30-day-stale document. See that file.
+  "main": "worker-entry.js",
   "compatibility_date": "2026-09-05",
   "compatibility_flags": ["nodejs_compat"],
   "assets": {

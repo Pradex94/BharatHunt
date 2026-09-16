@@ -1,0 +1,11 @@
+# Browser caching for files the assets binding serves directly.
+#
+# Workers' default for a static asset is `public, max-age=0, must-revalidate`,
+# which is the right call for a file whose URL can change meaning. Everything
+# under /_next/static/ is content-hashed by the build — the URL changes when the
+# bytes change — so revalidating it on every navigation is pure waste: ~20 chunk
+# round-trips per page load that can only ever come back 304.
+#
+# See https://developers.cloudflare.com/workers/static-assets/headers/
+/_next/static/*
+  Cache-Control: public, max-age=31536000, immutable
