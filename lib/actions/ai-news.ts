@@ -23,6 +23,7 @@ import { runIngestion, type IngestionSummary } from "@/lib/ai-news/ingest";
 import {
   resolveSweepStart,
   STALE_SWEEP_ERROR,
+  SWEEP_AI_SOURCES_PER_BATCH,
   type SweepBatchResult,
 } from "@/lib/pipeline-sweep";
 import {
@@ -429,7 +430,14 @@ export async function runAiNewsSweepBatch(sweepStartedAt?: string): Promise<Swee
   const sweepStart = resolveSweepStart(sweepStartedAt);
   if (!sweepStart) return { ok: false, error: STALE_SWEEP_ERROR };
 
-  const summary = await runIngestion({ trigger: "admin", attemptedBefore: sweepStart });
+  const summary = await runIngestion({
+    trigger: "admin",
+    attemptedBefore: sweepStart,
+    // Smaller than the engine's default eight. A batch of eight due sources
+    // took over two minutes on 2026-09-18 — a long silence for a person
+    // watching a button. Five keeps each step short; the sweep covers the rest.
+    maxSources: SWEEP_AI_SOURCES_PER_BATCH,
+  });
 
   await invalidate();
   revalidatePath("/admin");

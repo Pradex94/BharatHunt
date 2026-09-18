@@ -42,15 +42,27 @@ export type SweepBatchResult =
 /** The refusal for a start time `resolveSweepStart` rejected. */
 export const STALE_SWEEP_ERROR = "That run went on too long to continue. Press Run now to start again.";
 
-/** A backstop. A sweep normally ends because a batch attempts nothing. */
-export const MAX_SWEEP_BATCHES = 8;
+/**
+ * AI sources per batch of an admin sweep. Smaller than a scheduled run's eight
+ * so each step of the button's progress arrives within a minute or so.
+ */
+export const SWEEP_AI_SOURCES_PER_BATCH = 5;
+
+/**
+ * A backstop. A sweep normally ends because a batch attempts nothing.
+ *
+ * Ten batches of five is fifty AI sources, comfortably above the ~26
+ * configured; raise it with the source count, or a sweep will stop short.
+ */
+export const MAX_SWEEP_BATCHES = 10;
 
 /**
  * How old a sweep's start time may be when a client hands it back.
  *
- * Long enough for eight batches at the engines' own time budgets (under a
- * minute each), short enough that a stale value from a tab left open overnight
- * cannot be replayed to mean "everything read since yesterday".
+ * Long enough for a full sweep — ten batches, and a batch can run a couple of
+ * minutes because a source already under way is allowed to finish — and short
+ * enough that a stale value from a tab left open overnight cannot be replayed
+ * to mean "everything read since yesterday".
  */
 export const SWEEP_MAX_AGE_MS = 30 * 60_000;
 

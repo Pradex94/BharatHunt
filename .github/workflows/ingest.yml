@@ -54,9 +54,9 @@ jobs:
   ingest:
     name: Poll sources
     runs-on: ubuntu-latest
-    # Up to eight batches per pipeline, each bounded by its endpoint's own
-    # budget (under a minute). This is only a backstop against a hang.
-    timeout-minutes: 25
+    # Eight batches per pipeline at up to five minutes each is the theoretical
+    # worst case; a normal day takes a few minutes. Backstop only.
+    timeout-minutes: 60
 
     env:
       SITE_URL: https://bharathunt.org
@@ -73,12 +73,20 @@ jobs:
             exit 1
           fi
           for batch in $(seq 1 "${MAX_BATCHES}"); do
-            # Comfortably exceeds the endpoint's own 45s run budget.
-            code=$(curl -sS --max-time 120 -o response.json -w '%{http_code}' \
+            # The endpoint's 45s budget only stops it *starting* sources; one
+            # source already under way can run well past it, and a batch of
+            # eight due at once took over two minutes on 2026-09-18. A call
+            # that outlasts this keeps running server-side and stamps what it
+            # read, so the next batch simply carries on from there.
+            code=$(curl -sS --max-time 300 -o response.json -w '%{http_code}' \
               -X POST "${SITE_URL}/api/ai-news/ingest" \
               -H "Authorization: Bearer ${INGEST_SECRET}" \
-              -H "X-Ingest-Trigger: scheduled")
+              -H "X-Ingest-Trigger: scheduled") || true
             echo "Batch ${batch}: HTTP ${code}"
+            if [ "${code}" = "000" ]; then
+              echo "::warning::AI news batch ${batch} did not answer in time; it continues server-side. Moving on."
+              continue
+            fi
             # The body is the run summary -- sources attempted, articles kept,
             # per-source errors. Truncated because a bad day is verbose.
             head -c 3000 response.json || true
@@ -109,11 +117,16 @@ jobs:
             exit 1
           fi
           for batch in $(seq 1 "${MAX_BATCHES}"); do
-            code=$(curl -sS --max-time 120 -o response.json -w '%{http_code}' \
+            # Same reasoning as the AI step: a slow batch is still working.
+            code=$(curl -sS --max-time 300 -o response.json -w '%{http_code}' \
               -X POST "${SITE_URL}/api/funding/ingest" \
               -H "Authorization: Bearer ${INGEST_SECRET}" \
-              -H "X-Ingest-Trigger: scheduled")
+              -H "X-Ingest-Trigger: scheduled") || true
             echo "Batch ${batch}: HTTP ${code}"
+            if [ "${code}" = "000" ]; then
+              echo "::warning::Funding batch ${batch} did not answer in time; it continues server-side. Moving on."
+              continue
+            fi
             head -c 3000 response.json || true
             echo
             if [ "${code}" != "200" ]; then

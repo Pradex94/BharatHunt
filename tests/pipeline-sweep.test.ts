@@ -6,6 +6,7 @@ import {
   MAX_SWEEP_BATCHES,
   resolveSweepStart,
   shouldRunAnotherBatch,
+  SWEEP_AI_SOURCES_PER_BATCH,
   SWEEP_MAX_AGE_MS,
 } from "../lib/pipeline-sweep.ts";
 
@@ -82,6 +83,12 @@ describe("shouldRunAnotherBatch", () => {
 
   it("stops at the cap even if sources keep coming", () => {
     assert.equal(shouldRunAnotherBatch(MAX_SWEEP_BATCHES, 8), false);
+  });
+
+  it("leaves headroom above the ~26 AI sources configured", () => {
+    // If this fails, sources were added faster than the cap was raised, and an
+    // admin sweep would stop before reading them all.
+    assert.ok(MAX_SWEEP_BATCHES * SWEEP_AI_SOURCES_PER_BATCH >= 40);
   });
 
   it("converges: a simulated sweep over 26 sources, 8 a batch, ends by itself", () => {
