@@ -14,6 +14,18 @@
   "observability": {
     "enabled": true
   },
+  // The deployed version's id, read by worker-entry.js to key its edge cache.
+  // A new deploy is therefore a new, empty cache: cached HTML from the previous
+  // build would reference `/_next/static` chunks that no longer exist.
+  "version_metadata": {
+    "binding": "CF_VERSION_METADATA"
+  },
+  // Fraction of requests worker-entry.js logs as one `edge_request` JSON line
+  // (route, status, duration, cache outcome, bytes, subrequests by kind).
+  // 5xx responses are always logged. Raise briefly when investigating.
+  "vars": {
+    "EDGE_TELEMETRY_SAMPLE_RATE": "0.05"
+  },
   // Production traffic is attached as *routes*, not Custom Domains — deliberately.
   //
   // A Custom Domain requires the Worker to own the DNS record, so Cloudflare refuses to

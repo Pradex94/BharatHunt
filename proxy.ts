@@ -1,6 +1,7 @@
 import { clerkMiddleware } from "@clerk/nextjs/server";
 import type { NextRequest } from "next/server";
 
+import { isProbePath } from "@/lib/edge-policy";
 import { anonymizeIp, checkRateLimit, clientIpFrom } from "@/lib/rate-limit";
 
 /**
@@ -62,6 +63,17 @@ async function enforceGlobalIpLimit(request: NextRequest): Promise<Response | nu
 }
 
 export default clerkMiddleware(async (_auth, request) => {
+  // Exploit probes (`/.env`, `/wp-admin`, `*.php`, ...) are answered before
+  // they cost a rate-limit round trip or a rendered not-found page. On Workers,
+  // worker-entry.js already answers these before this file is loaded; this is
+  // the same rule for every other host (Vercel, `next start`).
+  if (isProbePath(request.nextUrl.pathname)) {
+    return new Response("Not found", {
+      status: 404,
+      headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "public, max-age=86400" },
+    });
+  }
+
   // Returning a Response from the handler short-circuits the chain, so nothing
   // downstream runs for a rejected request.
   const limited = await enforceGlobalIpLimit(request);
