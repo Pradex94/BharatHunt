@@ -9,13 +9,14 @@
   // and one more thing to have to reason about.
   "workers_dev": false,
 
-  // Every ten minutes. Not because the feeds change that fast — they do not —
-  // but because each app invocation stops inside the Workers subrequest ceiling
-  // and therefore handles only a few new articles. Frequent, small, idempotent
-  // passes are how the backlog drains; a source that is not due yet is skipped
-  // by `poll_interval_minutes` and costs one query.
+  // Disabled. Ingestion runs once a day from .github/workflows/ingest.yml, in
+  // batches, plus "Run now" on the admin dashboard. This ran every ten minutes
+  // until 2026-09-18, alongside that workflow — two schedulers for one job.
+  // An empty list is what makes `wrangler deploy` remove the live trigger;
+  // deleting the key would leave it in place. Add a cron back only after
+  // removing the workflow's `schedule`, or both will run.
   "triggers": {
-    "crons": ["*/10 * * * *"]
+    "crons": []
   },
 
   // Direct binding to the app Worker: no DNS, no TLS, no trip out to the

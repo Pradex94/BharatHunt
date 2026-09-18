@@ -54,7 +54,11 @@ function buildRequest(target, secret) {
 }
 
 async function runOne(env, target) {
-  const secret = env[target.secret];
+  // Trimmed because these secrets were once uploaded with a UTF-8 byte-order
+  // mark in front. The app trims before comparing, so auth still passed, but
+  // the runtime warns about a non-ASCII header value and prints the whole
+  // header — the secret — into the Worker's logs. `trim()` removes U+FEFF.
+  const secret = env[target.secret]?.trim();
   if (!secret) {
     return { target: target.name, skipped: "no secret configured" };
   }

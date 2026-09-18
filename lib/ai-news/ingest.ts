@@ -2,6 +2,7 @@ import "server-only";
 
 import type { Json, TablesInsert, TablesUpdate } from "@/types/database";
 import { createServiceClient } from "@/lib/supabase/service";
+import { isUnreadInSweep } from "@/lib/pipeline-sweep";
 import {
   AUTO_PUBLISH_RELEVANCE,
   RESCORE_WINDOW_HOURS,
@@ -116,6 +117,12 @@ export type RunOptions = {
   sourceIds?: string[];
   /** Ignore `poll_interval_minutes`. Admin-only; a cron must never set this. */
   force?: boolean;
+  /**
+   * Sweep mode: take every enabled source not attempted since this moment,
+   * whether or not it is due. See lib/pipeline-sweep.ts. Admin-only, like
+   * `force`, which it supersedes when both are set.
+   */
+  attemptedBefore?: Date;
   maxSources?: number;
   now?: Date;
 };
@@ -255,7 +262,12 @@ async function loadDueSources(
   if (error) throw new Error(`Failed to load sources: ${error.message}`);
 
   const rows = (data ?? []) as SourceRow[];
-  const due = options.force ? rows : rows.filter((source) => isSourceDue(source, now));
+  const { attemptedBefore } = options;
+  const due = attemptedBefore
+    ? rows.filter((source) => isUnreadInSweep(source.last_attempt_at, attemptedBefore))
+    : options.force
+      ? rows
+      : rows.filter((source) => isSourceDue(source, now));
   return due.slice(0, options.maxSources ?? MAX_SOURCES_PER_RUN);
 }
 

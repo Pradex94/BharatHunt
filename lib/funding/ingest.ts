@@ -2,6 +2,7 @@ import "server-only";
 
 import type { TablesInsert } from "@/types/database";
 import { createServiceClient } from "@/lib/supabase/service";
+import { isUnreadInSweep } from "@/lib/pipeline-sweep";
 import { toInr } from "@/lib/funding/format";
 import {
   buildSummary,
@@ -141,6 +142,11 @@ export type RunIngestionOptions = {
   sourceId?: string;
   /** Ignore poll intervals and backoff. Only ever set by an explicit admin run. */
   force?: boolean;
+  /**
+   * Sweep mode: take every enabled source not attempted since this moment,
+   * whether or not it is due. See lib/pipeline-sweep.ts. Admin-only.
+   */
+  attemptedBefore?: Date;
   budgetMs?: number;
 };
 
@@ -148,7 +154,13 @@ type SupabaseServiceClient = ReturnType<typeof createServiceClient>;
 
 /** Run the pipeline. Never throws — a failed source is data, not an exception. */
 export async function runIngestion(options: RunIngestionOptions = {}): Promise<IngestionResult> {
-  const { trigger = "cron", sourceId, force = false, budgetMs = DEFAULT_BUDGET_MS } = options;
+  const {
+    trigger = "cron",
+    sourceId,
+    force = false,
+    attemptedBefore,
+    budgetMs = DEFAULT_BUDGET_MS,
+  } = options;
 
   const supabase = createServiceClient();
   const runId = crypto.randomUUID();
@@ -173,7 +185,7 @@ export async function runIngestion(options: RunIngestionOptions = {}): Promise<I
   );
 
   budget.spend();
-  const sources = await selectSources(supabase, { sourceId, force });
+  const sources = await selectSources(supabase, { sourceId, force, attemptedBefore });
 
   for (const source of sources) {
     if (Date.now() > deadline) {
@@ -319,7 +331,11 @@ export async function runIngestion(options: RunIngestionOptions = {}): Promise<I
  */
 async function selectSources(
   supabase: SupabaseServiceClient,
-  { sourceId, force }: { sourceId?: string; force: boolean },
+  {
+    sourceId,
+    force,
+    attemptedBefore,
+  }: { sourceId?: string; force: boolean; attemptedBefore?: Date },
 ): Promise<SourceRow[]> {
   let query = supabase
     .from("funding_sources")
@@ -342,7 +358,9 @@ async function selectSources(
   const now = Date.now();
   return (data ?? [])
     .filter((source) => {
-      if (force || sourceId) return true;
+      if (sourceId) return true;
+      if (attemptedBefore) return isUnreadInSweep(source.last_attempt_at, attemptedBefore);
+      if (force) return true;
       if (!source.last_attempt_at) return true;
 
       const backoff = Math.min(
