@@ -16,8 +16,11 @@ import { PRODUCT_CATEGORIES } from "@/lib/constants";
 import { getPlatformStats } from "@/services/products";
 import { AdvertiseInquiryForm } from "@/components/advertise/advertise-inquiry-form";
 
-// Reads live Supabase stats via the Clerk-scoped client → dynamic, not prebuilt.
-export const dynamic = "force-dynamic";
+// Live platform stats, refreshed every ten minutes. `getPlatformStats` reads
+// through the anon client, so nothing here depends on who is asking; the
+// inquiry form is a client component that resolves the visitor itself.
+export const dynamic = "force-static";
+export const revalidate = 600;
 
 export const metadata: Metadata = {
   title: "Advertise",

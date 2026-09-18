@@ -16,7 +16,10 @@ import { Display, Lead, Numeric } from "@/components/ui/typography";
 import { COLLECTIONS, MIN_PRODUCTS_TO_INDEX } from "@/lib/collections";
 import { getCollectionCounts } from "@/services/products";
 
-export const dynamic = "force-dynamic";
+// Collection sizes from the anon client: identical for every visitor, so
+// prerendered and refreshed every ten minutes rather than rendered per request.
+export const dynamic = "force-static";
+export const revalidate = 600;
 
 export const metadata: Metadata = {
   title: "Collections",

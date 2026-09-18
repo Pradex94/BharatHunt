@@ -125,6 +125,33 @@ export const getPublishedProductBySlug = cache(async (slug: string) => {
 export type PublishedProduct = NonNullable<Awaited<ReturnType<typeof getPublishedProductBySlug>>>;
 
 /**
+ * The four fields a product's share card draws, through the anon client.
+ *
+ * Not `getPublishedProductBySlug`: that one goes through the Clerk-scoped
+ * client, and `auth()` is a request-time API, so every share card was rendered
+ * from scratch on every unfurl — `wrangler tail` measured 593-950 ms of Worker
+ * CPU per image, which alone exceeded the Free plan's per-request budget and
+ * returned 503s to Facebook's crawler. Published products are public by RLS, so
+ * the anon client sees exactly the same row, and the route can be cached.
+ * Returns null for an unknown or unpublished slug; the card has a fallback.
+ */
+export async function getProductShareCard(slug: string): Promise<{
+  name: string;
+  tagline: string | null;
+  category: string | null;
+  upvote_count: number | null;
+} | null> {
+  const supabase = createPublicClient();
+  const { data, error } = await supabase
+    .from("products")
+    .select("name, tagline, category, upvote_count")
+    .eq("slug", slug)
+    .eq("status", "published")
+    .maybeSingle();
+  return error ? null : data;
+}
+
+/**
  * Every published product's slug + last-modified timestamp, for the sitemap.
  * Fails soft (empty list) so a transient DB error never 500s the sitemap route.
  */
@@ -696,7 +723,9 @@ export async function getUserProductCount(userId: string): Promise<number> {
 /** Total published-product count per category, for the marketplace sidebar. */
 export async function getCategoryCounts(): Promise<Record<string, number>> {
   return cacheRemember(`${PRODUCTS_CACHE_PREFIX}category-counts`, AGGREGATE_TTL, async () => {
-    const supabase = createClient();
+    // Anon client: a count of published rows is the same for everyone, and the
+    // Clerk-scoped one forced /categories into per-request rendering.
+    const supabase = createPublicClient();
     const { data, error } = await supabase
       .from("products")
       .select("category")

@@ -245,11 +245,26 @@ export const FUNDING_CACHE_PREFIX = "bh:funding:";
 /**
  * How often the client re-asks the server whether there is anything new.
  *
- * Five minutes, and it is a `router.refresh()` rather than a subscription.
+ * Thirty minutes, and it is a `router.refresh()` rather than a subscription.
  * Supabase Realtime is not enabled on this project — nothing in the codebase
  * opens a channel — and turning it on to push rows that arrive when an
- * ingestion run happens to land would be infrastructure for an event that fires
- * a few times an hour. The wording on the page matches what this actually is:
- * "Last updated N minutes ago", never "live".
+ * ingestion run happens to land would be infrastructure for an event that
+ * fires once a day (.github/workflows/ingest.yml) plus an admin's "Run now".
+ * The wording on the page matches what this actually is: "Last updated N
+ * minutes ago", never "live".
+ *
+ * It was five minutes. A refresh is not a cheap count: it re-renders the whole
+ * dynamic /funding page on the server, which `wrangler tail` measured at
+ * 65-165 ms of Worker CPU — against a 10 ms Free-plan budget — every five
+ * minutes for every open tab, for data that changes daily.
  */
-export const FUNDING_REFRESH_INTERVAL_MS = 5 * 60 * 1000;
+export const FUNDING_REFRESH_INTERVAL_MS = 30 * 60 * 1000;
+
+/**
+ * The least time between two refreshes triggered by returning to the tab.
+ *
+ * Refreshing on return is right — that is when someone wants the current
+ * state — but it fired on *every* return, so a reader switching between tabs
+ * re-rendered the page each time they glanced back.
+ */
+export const FUNDING_REFOCUS_MIN_INTERVAL_MS = 5 * 60 * 1000;

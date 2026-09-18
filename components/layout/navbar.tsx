@@ -168,13 +168,18 @@ export function Navbar() {
               </div>
             ) : (
               <div className="flex items-center gap-3">
+                {/* No prefetch on the signed-out pair. This navbar is on every page, so
+                    a viewport prefetch of each was two extra Worker requests per page
+                    view — and for a signed-out visitor /submit only redirects to
+                    /login, so the prefetched payload is never the page they reach. */}
                 <Link
                   href="/login"
+                  prefetch={false}
                   className="rounded-xl border border-white/20 px-4 py-2 text-sm font-semibold text-white transition-colors duration-200 hover:bg-white/10"
                 >
                   Log in
                 </Link>
-                <Link href="/submit" className={buttonVariants({ size: "sm" })}>
+                <Link href="/submit" prefetch={false} className={buttonVariants({ size: "sm" })}>
                   Launch Product
                 </Link>
               </div>

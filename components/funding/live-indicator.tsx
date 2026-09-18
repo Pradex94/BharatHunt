@@ -5,7 +5,10 @@ import { useRouter } from "next/navigation";
 
 import { usePrefersReducedMotion } from "@/hooks/use-prefers-reduced-motion";
 import { cn } from "@/lib/utils";
-import { FUNDING_REFRESH_INTERVAL_MS } from "@/lib/funding/constants";
+import {
+  FUNDING_REFOCUS_MIN_INTERVAL_MS,
+  FUNDING_REFRESH_INTERVAL_MS,
+} from "@/lib/funding/constants";
 import { relativeTime } from "@/lib/funding/format";
 
 /**
@@ -13,7 +16,7 @@ import { relativeTime } from "@/lib/funding/format";
  *
  * What it claims, and why the wording is what it is
  * -------------------------------------------------
- * "Live feed" describes the *page* — it re-checks the server every five minutes
+ * "Live feed" describes the *page* — it re-checks the server every half hour
  * and new rounds appear without a reload. The timestamp beside it describes the
  * *data*, and it is computed from the newest article's own publication time,
  * not from when we last ran an ingestion. Those are different facts and the
@@ -29,8 +32,10 @@ import { relativeTime } from "@/lib/funding/format";
  * Realtime is not enabled on this project — nothing in the codebase opens a
  * channel — and enabling it to push rows that arrive a few times an hour would
  * be a subscription per visitor for an event that is rarer than the polling
- * interval. A refresh re-runs the server component, which reads through a
- * two-minute cache, so the cost of a tick is usually a cache hit.
+ * interval. A refresh re-runs the whole server component: the data comes from a
+ * two-minute Redis cache, but the render does not, and it is the render that
+ * costs Worker CPU. Hence a long interval, and a return to the tab refreshing
+ * only a page that is some minutes old (FUNDING_REFOCUS_MIN_INTERVAL_MS).
  *
  * The interval is paused while the tab is hidden. A background tab polling a
  * news feed forever is the version of this that shows up in someone's battery
@@ -67,10 +72,16 @@ export function FundingLiveIndicator({
 
   useEffect(() => {
     let timer: ReturnType<typeof setInterval> | null = null;
+    // The server render this component arrived in counts as a refresh.
+    let lastRefreshAt = Date.now();
 
+    const refresh = () => {
+      lastRefreshAt = Date.now();
+      router.refresh();
+    };
     const start = () => {
       if (timer) return;
-      timer = setInterval(() => router.refresh(), FUNDING_REFRESH_INTERVAL_MS);
+      timer = setInterval(refresh, FUNDING_REFRESH_INTERVAL_MS);
     };
     const stop = () => {
       if (!timer) return;
@@ -81,8 +92,9 @@ export function FundingLiveIndicator({
     const onVisibilityChange = () => {
       if (document.visibilityState === "visible") {
         // Coming back to the tab is exactly when someone wants the current
-        // state, so refresh immediately rather than waiting out the interval.
-        router.refresh();
+        // state, so refresh then rather than waiting out the interval — unless
+        // the page is only minutes old, which a quick tab switch usually is.
+        if (Date.now() - lastRefreshAt >= FUNDING_REFOCUS_MIN_INTERVAL_MS) refresh();
         start();
       } else {
         stop();
@@ -109,7 +121,7 @@ export function FundingLiveIndicator({
           : "border-border bg-card text-body",
         className,
       )}
-      title="This page checks for newly published rounds every few minutes. The time shown is when the most recent story was published by its source."
+      title="This page checks for newly published rounds periodically. The time shown is when the most recent story was published by its source."
     >
       <span className="relative flex size-2 shrink-0">
         {/* The pulse is decorative and honest: it marks a page that polls, not

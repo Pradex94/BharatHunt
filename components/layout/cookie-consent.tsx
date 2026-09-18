@@ -80,6 +80,9 @@ export function CookieConsent() {
                 to understand how Bharat Hunt is used. See our{" "}
                 <Link
                   href="/cookies"
+                  // Shown on every first visit; a legal page is not worth a background
+                  // Worker request per page view on the chance it is opened.
+                  prefetch={false}
                   className="font-medium text-primary transition-colors hover:underline"
                 >
                   Cookie Policy

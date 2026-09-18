@@ -1,6 +1,6 @@
 import { ImageResponse } from "next/og";
 
-import { getPublishedProductBySlug } from "@/services/products";
+import { getProductShareCard } from "@/services/products";
 import { SITE_NAME } from "@/lib/constants";
 
 // Per-product social-share card (Twitter/LinkedIn/WhatsApp/Facebook unfurls).
@@ -10,13 +10,28 @@ export const alt = "Product on Bharat Hunt";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
+/*
+ * Rendered once per product per day, not once per unfurl. Drawing a PNG is the
+ * most CPU-expensive thing this app does (593-950 ms measured on Workers), and
+ * the only live number on the card is the upvote count, which a share preview
+ * can carry a day late. `force-static` is what makes that hold: without it the
+ * route stays dynamic whatever the data layer does (see app/page.tsx for the
+ * two ways that has gone wrong before). Unknown slugs are generated on demand.
+ */
+export const dynamic = "force-static";
+export const revalidate = 86400;
+
+export function generateStaticParams() {
+  return [];
+}
+
 export default async function OpengraphImage({
   params,
 }: {
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const product = await getPublishedProductBySlug(slug);
+  const product = await getProductShareCard(slug);
 
   const name = product?.name ?? SITE_NAME;
   const tagline = product?.tagline ?? "Discover premium software before everyone else.";

@@ -10,24 +10,34 @@ import { countNewAiStories } from "@/lib/actions/ai-news";
  * "5 new AI stories · Refresh" (section 25).
  *
  * The requirement worth restating, because it is the part that is easy to get
- * wrong: **the page must not rearrange itself under a reader.** Ingestion runs
- * every ten minutes and can reorder the entire feed, so the tempting version of
+ * wrong: **the page must not rearrange itself under a reader.** An ingestion
+ * run can land while someone is reading and reorder the entire feed, so the tempting version of
  * this feature — quietly swapping in fresh data — is precisely the version that
  * loses somebody's place mid-sentence. So this only ever *offers*, and the
  * reader decides.
  *
  * Why polling rather than Supabase Realtime: Realtime is not enabled on this
  * project, and turning it on for this would mean a websocket per visitor and a
- * publication for every row an ingestion run writes — hundreds of messages
- * every ten minutes, to tell each reader a number that changes at most six times
- * an hour. One cheap count on an interval is the proportionate mechanism. If
- * Realtime is ever configured, this component is the only thing that has to
- * change.
+ * publication for every row an ingestion run writes, to tell each reader a
+ * number that changes when an ingestion run lands — once a day
+ * (.github/workflows/ingest.yml), plus an admin's "Run now". One cheap count on
+ * an interval is the proportionate mechanism. If Realtime is ever configured,
+ * this component is the only thing that has to change.
  *
- * The poll costs one HEAD count against an indexed predicate, is rate-limited
- * per IP on the server, and stops entirely while the tab is hidden.
+ * The count itself is one HEAD query, but it arrives as a Server Action: a POST
+ * that runs the middleware, the global rate limiter and the action — a full
+ * Worker invocation each time. At the old 90 seconds that was 40 invocations an
+ * hour per open tab to watch a number that moves daily. Fifteen minutes still
+ * catches a manual run while someone is reading, and the poll stops entirely
+ * while the tab is hidden.
  */
-const POLL_INTERVAL_MS = 90_000;
+const POLL_INTERVAL_MS = 15 * 60 * 1000;
+
+/**
+ * The least time between two checks triggered by returning to the tab, so that
+ * flicking between tabs does not send a Server Action per glance.
+ */
+const REFOCUS_MIN_INTERVAL_MS = 5 * 60 * 1000;
 
 export function NewStoriesBanner({ since }: { since: string }) {
   const router = useRouter();
@@ -35,12 +45,15 @@ export function NewStoriesBanner({ since }: { since: string }) {
 
   useEffect(() => {
     let cancelled = false;
+    // The render this arrived in is as fresh as a check.
+    let lastCheckAt = Date.now();
 
     const check = async () => {
       // A background tab is not reading, so it does not need to be told about
       // new stories — and a hundred idle tabs polling is exactly how a cheap
       // count becomes an expensive one.
       if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
+      lastCheckAt = Date.now();
 
       try {
         const next = await countNewAiStories(since);
@@ -52,14 +65,18 @@ export function NewStoriesBanner({ since }: { since: string }) {
     };
 
     const timer = setInterval(check, POLL_INTERVAL_MS);
-    // Checks immediately when a reader comes back to the tab, which is the
-    // moment the answer is most likely to have changed and most likely to matter.
-    document.addEventListener("visibilitychange", check);
+    // Checks when a reader comes back to the tab, which is the moment the
+    // answer is most likely to have changed and most likely to matter — unless
+    // the last answer is only minutes old.
+    const onVisibilityChange = () => {
+      if (Date.now() - lastCheckAt >= REFOCUS_MIN_INTERVAL_MS) void check();
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
 
     return () => {
       cancelled = true;
       clearInterval(timer);
-      document.removeEventListener("visibilitychange", check);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
     };
   }, [since]);
 

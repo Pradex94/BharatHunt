@@ -90,7 +90,9 @@ export function Hero({ topProduct, topProductDay, stats }: HeroProps) {
           </p>
 
           <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row">
-            <Link href="/submit" className={buttonVariants({ size: "lg" })}>
+            {/* Not prefetched: most homepage visitors are signed out, and for them
+                /submit is a redirect to /login — a full render thrown away. */}
+            <Link href="/submit" prefetch={false} className={buttonVariants({ size: "lg" })}>
               Launch Your Product
             </Link>
             <Link href="/marketplace" className={buttonVariants({ variant: "outline", size: "lg" })}>

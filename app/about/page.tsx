@@ -35,8 +35,12 @@ import { Caption, Display, H2, H3, Lead, Numeric } from "@/components/ui/typogra
 import { MAX_PRODUCTS_PER_USER, PRODUCT_CATEGORIES } from "@/lib/constants";
 import { getPlatformStats } from "@/services/products";
 
-// Reads live platform counts, so the numbers on the page are the real ones.
-export const dynamic = "force-dynamic";
+// Reads live platform counts, so the numbers on the page are the real ones —
+// as of the last ten minutes. It was `force-dynamic`, which re-rendered an
+// otherwise static page for every visitor and crawler; the counts come from
+// the anon client, so it prerenders and revalidates like app/page.tsx does.
+export const dynamic = "force-static";
+export const revalidate = 600;
 
 export const metadata: Metadata = {
   title: "About Us",

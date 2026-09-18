@@ -65,7 +65,14 @@ function getLimiter(name: RateLimitName): Ratelimit | null {
     prefix: `ratelimit:${name}`,
     // Surfaces per-endpoint reject counts in the Upstash console — the "which
     // endpoint is being attacked" view, without building a dashboard.
-    analytics: true,
+    //
+    // Except for `globalIp`. Analytics costs a second Redis write per `limit()`,
+    // and `globalIp` runs on every request that reaches proxy.ts: a second
+    // Upstash command, and a second subrequest on Workers, for every page view,
+    // prefetch and Server Action — including each of the 21k scanner requests
+    // on 2026-09-18. Its rejections are logged as `rate_limit_exceeded` in
+    // proxy.ts instead. The endpoint limiters fire only on real actions.
+    analytics: name !== "globalIp",
     ephemeralCache,
   });
   limiters.set(name, limiter);
