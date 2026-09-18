@@ -29,6 +29,11 @@ import { asFundingStage } from "@/lib/funding/extract";
 import { toInr } from "@/lib/funding/format";
 import { fundingEventKey, normalizeEntityName, slugify } from "@/lib/funding/normalize";
 import { runIngestion } from "@/lib/funding/ingest";
+import {
+  resolveSweepStart,
+  STALE_SWEEP_ERROR,
+  type SweepBatchResult,
+} from "@/lib/pipeline-sweep";
 
 export type FundingAdminResult = { ok: true; message?: string } | { ok: false; error: string };
 
@@ -659,6 +664,51 @@ export async function runFundingIngestionNow(sourceId?: string): Promise<ManualI
     return {
       ok: false,
       error: error instanceof Error ? error.message : "Ingestion failed.",
+    };
+  }
+}
+
+/**
+ * One batch of the admin dashboard's "Run now" for Funding.
+ *
+ * Same contract as `runAiNewsSweepBatch`: the button calls this until a batch
+ * attempts nothing, so one press reads every enabled source once even though a
+ * single invocation stops at the Workers subrequest ceiling. The time budget is
+ * the manual path's shorter one, for the reason given on
+ * `runFundingIngestionNow` — a person is watching.
+ */
+export async function runFundingSweepBatch(sweepStartedAt?: string): Promise<SweepBatchResult> {
+  const gate = await requireAdmin();
+  if (!gate.ok) return gate;
+
+  const sweepStart = resolveSweepStart(sweepStartedAt);
+  if (!sweepStart) return { ok: false, error: STALE_SWEEP_ERROR };
+
+  try {
+    const detail = await runIngestion({
+      trigger: "admin",
+      attemptedBefore: sweepStart,
+      budgetMs: 25_000,
+    });
+
+    await invalidateFunding();
+    revalidatePath("/admin");
+    revalidatePath("/admin/funding");
+
+    return {
+      ok: true,
+      sweepStartedAt: sweepStart.toISOString(),
+      sourcesAttempted: detail.sourcesAttempted,
+      sourcesFailed: detail.failures.length,
+      fetched: detail.articlesFetched,
+      created: detail.roundsCreated,
+      updated: detail.duplicates,
+      rejected: detail.rejected,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Funding ingestion failed.",
     };
   }
 }

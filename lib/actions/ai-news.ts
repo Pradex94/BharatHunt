@@ -21,6 +21,11 @@ import { classifyArticle } from "@/lib/ai-news/classify";
 import { composeSummary } from "@/lib/ai-news/summarize";
 import { runIngestion, type IngestionSummary } from "@/lib/ai-news/ingest";
 import {
+  resolveSweepStart,
+  STALE_SWEEP_ERROR,
+  type SweepBatchResult,
+} from "@/lib/pipeline-sweep";
+import {
   AI_NEWS_CACHE_PREFIX,
   countAiStoriesSince,
   searchAiStories,
@@ -407,6 +412,39 @@ export async function runAiNewsIngestion(sourceIds?: string[]): Promise<RunInges
   await invalidate();
   revalidatePath("/admin/ai-news");
   return { ok: true, summary };
+}
+
+/**
+ * One batch of the admin dashboard's "Run now" for AI Trends.
+ *
+ * The button keeps calling this, handing back `sweepStartedAt`, until a batch
+ * attempts nothing — so a press reads every enabled source once, even though a
+ * single run stops at eight. See lib/pipeline-sweep.ts. Each call is its own
+ * invocation with its own time and subrequest budget, which is the point.
+ */
+export async function runAiNewsSweepBatch(sweepStartedAt?: string): Promise<SweepBatchResult> {
+  const gate = await requireAdmin();
+  if (!gate.ok) return gate;
+
+  const sweepStart = resolveSweepStart(sweepStartedAt);
+  if (!sweepStart) return { ok: false, error: STALE_SWEEP_ERROR };
+
+  const summary = await runIngestion({ trigger: "admin", attemptedBefore: sweepStart });
+
+  await invalidate();
+  revalidatePath("/admin");
+  revalidatePath("/admin/ai-news");
+
+  return {
+    ok: true,
+    sweepStartedAt: sweepStart.toISOString(),
+    sourcesAttempted: summary.sourcesAttempted,
+    sourcesFailed: summary.sourcesFailed,
+    fetched: summary.articlesFetched,
+    created: summary.storiesCreated,
+    updated: summary.storiesUpdated,
+    rejected: summary.articlesRejected,
+  };
 }
 
 /**

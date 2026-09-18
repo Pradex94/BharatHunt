@@ -12,6 +12,9 @@ import {
   type PendingProductRow,
 } from "@/services/admin";
 import { getPlatformStats } from "@/services/products";
+import { getPipelineStatuses, type PipelineStatus } from "@/services/pipelines";
+import { DAILY_RUN_LABEL } from "@/lib/pipeline-sweep";
+import { PipelineRunner, type PipelineCard } from "@/components/admin/pipeline-runner";
 import { Container } from "@/components/ui/container";
 import { Numeric } from "@/components/ui/typography";
 import { AdminProductsPanel, ADMIN_ROW_LIMIT, addedAgo } from "@/components/admin/products-panel";
@@ -56,12 +59,27 @@ export default async function AdminPage({
   // in the box and in the "Clear" link is the term it actually searched for.
   const q = sanitizeAdminSearch(params.q);
 
-  const [products, pending, stats, counts] = await Promise.all([
+  const [products, pending, stats, counts, pipelines] = await Promise.all([
     getAllProductsAdmin({ status, q, limit: ADMIN_ROW_LIMIT }),
     getPendingProductsAdmin(),
     getPlatformStats(),
     getAdminProductCounts(),
+    getPipelineStatuses(),
   ]);
+
+  const pipelineCard = (
+    key: PipelineCard["key"],
+    label: string,
+    manageHref: string,
+    status: PipelineStatus,
+  ): PipelineCard => ({
+    key,
+    label,
+    manageHref,
+    lastFetchLabel: status.lastFetchAt ? addedAgo(status.lastFetchAt) : null,
+    enabledSources: status.enabledSources,
+    failingSources: status.failingSources,
+  });
 
   /*
    * "Products" counts published rows, not every row — it is the same number the
@@ -142,6 +160,17 @@ export default async function AdminPage({
 
           {/* Review queue */}
           <ReviewQueue pending={pending} />
+
+          {/* Ingestion runs once a day on its own; this is the manual trigger
+              for the rest of the day. Below the queue, which has a person
+              waiting on it; above the table, which is reference. */}
+          <PipelineRunner
+            scheduleLabel={DAILY_RUN_LABEL}
+            pipelines={[
+              pipelineCard("ai", "AI Trends", "/admin/ai-news", pipelines.ai),
+              pipelineCard("funding", "Funding", "/admin/funding", pipelines.funding),
+            ]}
+          />
 
           {/* Product table */}
           <AdminProductsPanel products={products} counts={counts} status={status} q={q} />
