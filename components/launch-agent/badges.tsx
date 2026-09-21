@@ -19,8 +19,12 @@ const LEVEL_DOT: Record<AutomationLevel, string> = {
 };
 
 export function AutomationBadge({ level, className }: { level: AutomationLevel; className?: string }) {
-  const meta = AUTOMATION_META[level];
-  const Icon = LEVEL_ICON[level];
+  /* Both lookups fall back rather than index blindly. These values arrive from
+     `launch_platforms` rows, so a level or status added by a later migration —
+     or an older deploy reading a newer row — would otherwise read `undefined`
+     and throw inside render, blanking the whole campaign page over a badge. */
+  const meta = AUTOMATION_META[level] ?? AUTOMATION_META.AI_PREPARED;
+  const Icon = LEVEL_ICON[level] ?? LEVEL_ICON.AI_PREPARED;
   return (
     <span
       title={meta.description}
@@ -29,7 +33,10 @@ export function AutomationBadge({ level, className }: { level: AutomationLevel; 
         className,
       )}
     >
-      <span className={cn("size-2 rounded-full", LEVEL_DOT[level])} aria-hidden="true" />
+      <span
+        className={cn("size-2 rounded-full", LEVEL_DOT[level] ?? LEVEL_DOT.AI_PREPARED)}
+        aria-hidden="true"
+      />
       <Icon className="size-3.5 text-muted" aria-hidden="true" />
       {meta.label}
     </span>
@@ -46,7 +53,9 @@ const TONE_CLASS = {
 } as const;
 
 export function StatusPill({ status, className }: { status: PlatformCampaignStatus; className?: string }) {
-  const meta = STATUS_META[status];
+  // Unknown status: show the raw value in neutral rather than throw. See the
+  // note in AutomationBadge.
+  const meta = STATUS_META[status] ?? { label: String(status), tone: "neutral" as const };
   return (
     <span className={cn("inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap", TONE_CLASS[meta.tone], className)}>
       {meta.label}

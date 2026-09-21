@@ -37,7 +37,13 @@ export function PlatformCard({
   const label = platform.slug === "product-hunt" && !prepared ? "Prepare Launch" : primary.label;
 
   return (
-    <article className="group flex h-full flex-col gap-4 rounded-3xl border border-border bg-card p-5 shadow-soft transition duration-200 ease-out hover:-translate-y-1 hover:shadow-hover motion-reduce:transform-none">
+    /* `@container`, because what decides the layout inside this card is the
+       card's own width, not the window's. These sit in a grid that goes to
+       three columns at xl, where a card is ~350px wide — narrower than at the
+       `sm` breakpoint the buttons below used to consult, so a viewport-based
+       row put two buttons that need ~360px into ~310px of space and they
+       spilled over the card's edge into the next column. */
+    <article className="group @container flex h-full flex-col gap-4 rounded-3xl border border-border bg-card p-5 shadow-soft transition duration-200 ease-out hover:-translate-y-1 hover:shadow-hover motion-reduce:transform-none">
       <header className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
           <span
@@ -83,18 +89,21 @@ export function PlatformCard({
         </div>
       )}
 
-      <div className="mt-auto flex flex-col gap-2 pt-1 sm:flex-row">
+      {/* Side by side once the card has room for both labels (24rem of
+          content — a container query measures the content box, so the card padding
+          is already excluded). Below that they stack, as on a phone. */}
+      <div className="mt-auto flex flex-col gap-2 pt-1 @sm:flex-row">
         {prepared ? (
-          <Button className="w-full sm:flex-1" onClick={onOpen}>
+          <Button className="w-full @sm:flex-1" onClick={onOpen}>
             <ClipboardList className="size-4" aria-hidden="true" /> Open launch kit
           </Button>
         ) : (
-          <Button className={cn("w-full sm:flex-1")} onClick={onPrepare} disabled={disabled}>
+          <Button className={cn("w-full @sm:flex-1")} onClick={onPrepare} disabled={disabled}>
             {preparing ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : <primary.Icon className="size-4" aria-hidden="true" />}
             {preparing ? "Preparing…" : label}
           </Button>
         )}
-        <Button variant="outline" className="w-full sm:w-auto" onClick={onOpen}>
+        <Button variant="outline" className="w-full @sm:w-auto" onClick={onOpen}>
           View requirements
         </Button>
       </div>
