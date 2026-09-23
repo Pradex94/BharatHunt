@@ -31,6 +31,14 @@ name: Scheduled ingestion
 #   gh secret set AI_NEWS_INGEST_SECRET
 #   gh secret set FUNDING_INGEST_SECRET
 #   gh secret set LAUNCH_AGENT_JOB_SECRET   (optional)
+#
+# VERCEL_PROTECTION_BYPASS (Settings -> Deployment Protection -> Protection
+# Bypass for Automation on the Vercel project): since the 2026-09-19 rollback
+# to Vercel ([[workers-free-cpu-limit]]), Vercel Attack Mode challenges this
+# workflow's plain `curl` requests to bharathunt.org with a 429 "Security
+# Checkpoint" page, same as it would any scripted visitor. Every scheduled run
+# failed this way from 2026-09-19 to 2026-09-23. The bypass header exempts
+# known automation from that challenge without weakening it for anyone else.
 
 on:
   schedule:
@@ -61,6 +69,7 @@ jobs:
     env:
       SITE_URL: https://bharathunt.org
       MAX_BATCHES: 8
+      VERCEL_BYPASS: ${{ secrets.VERCEL_PROTECTION_BYPASS }}
 
     steps:
       - name: AI Trending
@@ -81,7 +90,8 @@ jobs:
             code=$(curl -sS --max-time 300 -o response.json -w '%{http_code}' \
               -X POST "${SITE_URL}/api/ai-news/ingest" \
               -H "Authorization: Bearer ${INGEST_SECRET}" \
-              -H "X-Ingest-Trigger: scheduled") || true
+              -H "X-Ingest-Trigger: scheduled" \
+              -H "x-vercel-protection-bypass: ${VERCEL_BYPASS}") || true
             echo "Batch ${batch}: HTTP ${code}"
             if [ "${code}" = "000" ]; then
               echo "::warning::AI news batch ${batch} did not answer in time; it continues server-side. Moving on."
@@ -121,7 +131,8 @@ jobs:
             code=$(curl -sS --max-time 300 -o response.json -w '%{http_code}' \
               -X POST "${SITE_URL}/api/funding/ingest" \
               -H "Authorization: Bearer ${INGEST_SECRET}" \
-              -H "X-Ingest-Trigger: scheduled") || true
+              -H "X-Ingest-Trigger: scheduled" \
+              -H "x-vercel-protection-bypass: ${VERCEL_BYPASS}") || true
             echo "Batch ${batch}: HTTP ${code}"
             if [ "${code}" = "000" ]; then
               echo "::warning::Funding batch ${batch} did not answer in time; it continues server-side. Moving on."
@@ -159,7 +170,8 @@ jobs:
           for batch in $(seq 1 "${MAX_BATCHES}"); do
             code=$(curl -sS --max-time 60 -o response.json -w '%{http_code}' \
               -X POST "${SITE_URL}/api/launch-agent/jobs" \
-              -H "Authorization: Bearer ${JOB_SECRET}")
+              -H "Authorization: Bearer ${JOB_SECRET}" \
+              -H "x-vercel-protection-bypass: ${VERCEL_BYPASS}")
             echo "Batch ${batch}: HTTP ${code}"
             head -c 2000 response.json || true
             echo
