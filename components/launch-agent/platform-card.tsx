@@ -4,10 +4,11 @@
  * White 24px card, soft shadow, hover lift. One primary action whose verb
  * follows the automation level, and "View requirements" as the quiet second. */
 
-import { Bot, ClipboardList, Hand, Loader2, Sparkles } from "lucide-react";
+import { AlertTriangle, Bot, ClipboardList, Eye, Hand, Loader2, RefreshCw, Send, Sparkles } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Numeric } from "@/components/ui/typography";
+import type { PlatformCampaignStatus } from "@/lib/launch-agent/types";
 import type { PlatformView } from "@/lib/launch-agent/view";
 import { cn } from "@/lib/utils";
 import { AutomationBadge, ProgressBar, StatusPill } from "./badges";
@@ -17,6 +18,21 @@ const PRIMARY = {
   ASSISTED: { label: "Prepare Submission", Icon: Hand },
   AI_PREPARED: { label: "Generate Launch Kit", Icon: Sparkles },
 } as const;
+
+/**
+ * The primary button once a platform has been prepared, by status — "Open
+ * launch kit" for everything was the old behaviour, and it hid whether a
+ * platform still needed review, was already handed off, or failed. The verb
+ * now names what the maker actually does next.
+ */
+const PREPARED_ACTION: Partial<Record<PlatformCampaignStatus, { label: string; Icon: typeof Bot }>> = {
+  MISSING_INFORMATION: { label: "Complete requirements", Icon: AlertTriangle },
+  READY_TO_SUBMIT: { label: "Review & submit", Icon: Send },
+  USER_ACTION_REQUIRED: { label: "Connect account", Icon: Bot },
+  SUBMITTED: { label: "View launch", Icon: Eye },
+  PUBLISHED: { label: "View launch", Icon: Eye },
+  FAILED: { label: "Retry", Icon: RefreshCw },
+};
 
 export function PlatformCard({
   platform,
@@ -94,9 +110,16 @@ export function PlatformCard({
           is already excluded). Below that they stack, as on a phone. */}
       <div className="mt-auto flex flex-col gap-2 pt-1 @sm:flex-row">
         {prepared ? (
-          <Button className="w-full @sm:flex-1" onClick={onOpen}>
-            <ClipboardList className="size-4" aria-hidden="true" /> Open launch kit
-          </Button>
+          (() => {
+            const action = row ? PREPARED_ACTION[row.status] : undefined;
+            const Icon = action?.Icon ?? ClipboardList;
+            const done = row?.status === "SUBMITTED" || row?.status === "PUBLISHED";
+            return (
+              <Button className="w-full @sm:flex-1" variant={done ? "outline" : "default"} onClick={onOpen}>
+                <Icon className="size-4" aria-hidden="true" /> {action?.label ?? "Open launch kit"}
+              </Button>
+            );
+          })()
         ) : (
           <Button className={cn("w-full @sm:flex-1")} onClick={onPrepare} disabled={disabled}>
             {preparing ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : <primary.Icon className="size-4" aria-hidden="true" />}

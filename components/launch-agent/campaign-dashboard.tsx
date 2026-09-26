@@ -20,6 +20,7 @@ import { launchStats, type CampaignView } from "@/lib/launch-agent/view";
 import { cn } from "@/lib/utils";
 import { ProgressBar, ScoreRing, StatusPill } from "./badges";
 import { LaunchCopilot } from "./launch-copilot";
+import { LaunchMission } from "./launch-mission";
 import { LaunchTimeline } from "./launch-timeline";
 import { PlatformCard } from "./platform-card";
 import { PlatformSheet } from "./platform-sheet";
@@ -33,6 +34,7 @@ export function CampaignDashboard({ view }: { view: CampaignView }) {
   const runner = useLaunchAction();
   const [openSlug, setOpenSlug] = useState<string | null>(null);
   const [showOthers, setShowOthers] = useState(false);
+  const [reviewQueue, setReviewQueue] = useState<string[] | null>(null);
 
   const { product, campaign } = view;
   const stats = launchStats(view.platforms);
@@ -40,6 +42,32 @@ export function CampaignDashboard({ view }: { view: CampaignView }) {
   const others = view.platforms.filter((platform) => !platform.campaign?.recommended);
   const openPlatform = view.platforms.find((platform) => platform.slug === openSlug) ?? null;
   const analysis = campaign.analysis;
+
+  const launchedCount = recommended.filter((p) => p.campaign?.status === "SUBMITTED" || p.campaign?.status === "PUBLISHED").length;
+  const ready = recommended.filter((p) => p.campaign?.preparedAt && (p.campaign.status === "READY" || p.campaign.status === "READY_TO_SUBMIT"));
+  // Next step, in the order a maker would want it: finish what's blocked, then
+  // hand off what's ready, then prepare what hasn't been started.
+  const nextPlatform =
+    recommended.find((p) => p.campaign?.status === "MISSING_INFORMATION" || p.campaign?.status === "FAILED") ??
+    ready[0] ??
+    recommended.find((p) => !p.campaign?.preparedAt) ??
+    null;
+  const nextLabel = !nextPlatform
+    ? null
+    : !nextPlatform.campaign?.preparedAt
+      ? `Prepare ${nextPlatform.name}`
+      : nextPlatform.campaign.status === "MISSING_INFORMATION"
+        ? `Finish ${nextPlatform.name} requirements`
+        : nextPlatform.campaign.status === "FAILED"
+          ? `Retry ${nextPlatform.name}`
+          : `Continue: ${nextPlatform.name}`;
+  const queueIndex = reviewQueue && openSlug ? reviewQueue.indexOf(openSlug) : -1;
+
+  function closeSheet() {
+    setOpenSlug(null);
+    setReviewQueue(null);
+    runner.setNotice(null);
+  }
 
   if (campaign.status === "FAILED" || (campaign.status !== "READY" && !analysis)) {
     const analyzing = campaign.status === "ANALYZING" || campaign.status === "NOT_STARTED";
@@ -102,6 +130,22 @@ export function CampaignDashboard({ view }: { view: CampaignView }) {
           </Link>
         </header>
       </FadeIn>
+
+      {recommended.length > 0 && (
+        <LaunchMission
+          productName={product.name}
+          totalRecommended={recommended.length}
+          launchedCount={launchedCount}
+          readyCount={ready.length}
+          nextActionLabel={nextLabel}
+          onContinue={() => nextPlatform && setOpenSlug(nextPlatform.slug)}
+          onLaunchAll={() => {
+            const queue = ready.map((p) => p.slug);
+            setReviewQueue(queue);
+            setOpenSlug(queue[0] ?? null);
+          }}
+        />
+      )}
 
       {campaign.productChanged && (
         <div className="flex flex-col gap-3 rounded-2xl border border-primary/30 bg-primary/5 p-4 sm:flex-row sm:items-center sm:justify-between">
@@ -287,15 +331,26 @@ export function CampaignDashboard({ view }: { view: CampaignView }) {
       <PlatformSheet
         open={Boolean(openPlatform)}
         onOpenChange={(open) => {
-          if (!open) {
-            setOpenSlug(null);
-            runner.setNotice(null);
-          }
+          if (!open) closeSheet();
         }}
         platform={openPlatform}
         productId={product.id}
         productSlug={product.slug}
         runner={runner}
+        queue={
+          reviewQueue && queueIndex >= 0
+            ? {
+                index: queueIndex,
+                total: reviewQueue.length,
+                onNext: () => {
+                  const next = reviewQueue[queueIndex + 1];
+                  runner.setNotice(null);
+                  if (next) setOpenSlug(next);
+                  else closeSheet();
+                },
+              }
+            : null
+        }
       />
     </div>
   );

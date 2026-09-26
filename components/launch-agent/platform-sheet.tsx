@@ -62,6 +62,7 @@ export function PlatformSheet({
   productId,
   productSlug,
   runner,
+  queue = null,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -69,6 +70,8 @@ export function PlatformSheet({
   productId: string;
   productSlug: string;
   runner: Runner;
+  /** Set while walking through "Launch all ready", one platform at a time. */
+  queue?: { index: number; total: number; onNext: () => void } | null;
 }) {
   const [publishedUrl, setPublishedUrl] = useState("");
   const [askUrl, setAskUrl] = useState(false);
@@ -98,6 +101,38 @@ export function PlatformSheet({
             </SheetHeader>
 
             <div className="flex flex-col gap-6 px-5 py-5">
+              {queue && (
+                <div className="flex items-center justify-between gap-3 rounded-xl border border-primary/25 bg-primary/5 px-3.5 py-2.5">
+                  <p className="text-sm text-ink">
+                    Reviewing <span className="font-semibold">{queue.index + 1} of {queue.total}</span> ready platforms
+                  </p>
+                  <Button size="sm" variant="outline" onClick={queue.onNext}>
+                    {queue.index + 1 < queue.total ? "Next platform →" : "Finish review"}
+                  </Button>
+                </div>
+              )}
+
+              {(row?.status === "SUBMITTED" || row?.status === "PUBLISHED") && (
+                <div className="flex items-start gap-2.5 rounded-xl border border-success/30 bg-success/5 px-3.5 py-3 text-sm text-ink">
+                  <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-success" aria-hidden="true" />
+                  <div>
+                    <p className="font-semibold">
+                      {row.status === "PUBLISHED" ? `Live on ${platform.name}` : `Already submitted to ${platform.name}`}
+                    </p>
+                    <p className="mt-0.5 text-body">
+                      You marked this {row.status === "PUBLISHED" ? "published" : "submitted"}
+                      {(row.publishedAt ?? row.submittedAt) ? ` on ${new Date((row.publishedAt ?? row.submittedAt) as string).toLocaleDateString()}` : ""}.
+                      No need to submit again.
+                    </p>
+                    {row.publishedUrl && (
+                      <a href={row.publishedUrl} target="_blank" rel="noopener noreferrer" className="mt-1 inline-flex items-center gap-1 font-semibold text-primary hover:underline">
+                        View launch <ExternalLink className="size-3.5" aria-hidden="true" />
+                      </a>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {runner.notice && (
                 <div
                   role={runner.notice.kind === "error" ? "alert" : "status"}
