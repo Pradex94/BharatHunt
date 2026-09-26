@@ -4,7 +4,7 @@
  * Every draft with Copy / Edit, and a kit-wide Regenerate. Edits are saved per
  * field and survive Regenerate; "Use generated" drops an edit. */
 
-import { useState } from "react";
+import { useState, type ReactElement, type ReactNode } from "react";
 import { Pencil, RefreshCw, RotateCcw } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -30,6 +30,60 @@ function editText(value: LaunchKit[keyof LaunchKit], field: keyof LaunchKit): st
   return value.join(field === "xThread" ? "\n\n" : "\n");
 }
 
+/**
+ * `**bold**` within one line, as React nodes. The templates in
+ * lib/launch-agent/content.ts are the only source of this markup (Product
+ * Hunt's maker comment, e.g. "**Why I built it**"), so this only ever has to
+ * handle one construct, not general Markdown.
+ */
+function renderInline(line: string): ReactNode[] {
+  return line.split(/(\*\*[^*]+\*\*)/g).map((part, index) => {
+    if (part.startsWith("**") && part.endsWith("**") && part.length > 4) {
+      return <strong key={index}>{part.slice(2, -2)}</strong>;
+    }
+    return part;
+  });
+}
+
+/**
+ * The preview for a multiline field: `## Heading` lines (launchStory's
+ * section breaks) become their own bold line instead of showing the literal
+ * `##`; everything else keeps the original whitespace-pre-line paragraph
+ * behaviour, including the blank lines between sections. The Copy button and
+ * the edit textarea read the untouched source text — only this preview
+ * renders it, because a maker pasting into Indie Hackers or Product Hunt
+ * needs the real Markdown, not what this turns it into.
+ */
+function renderKitBlocks(text: string): ReactElement[] {
+  const lines = text.split("\n");
+  const blocks: ReactElement[] = [];
+  let paragraph: string[] = [];
+  const flush = () => {
+    if (paragraph.length === 0) return;
+    blocks.push(
+      <p key={blocks.length} className="whitespace-pre-line">
+        {renderInline(paragraph.join("\n"))}
+      </p>,
+    );
+    paragraph = [];
+  };
+  for (const line of lines) {
+    const heading = /^##\s+(.+)$/.exec(line);
+    if (heading) {
+      flush();
+      blocks.push(
+        <p key={blocks.length} className="font-bold text-ink">
+          {heading[1]}
+        </p>,
+      );
+    } else {
+      paragraph.push(line);
+    }
+  }
+  flush();
+  return blocks;
+}
+
 export function LaunchKitView({
   productId,
   platformSlug,
@@ -48,6 +102,12 @@ export function LaunchKitView({
   const [editing, setEditing] = useState<keyof LaunchKit | null>(null);
   const [draft, setDraft] = useState("");
   const edited = new Set(editedFields);
+  const allText = KIT_FIELD_LABELS.map(({ field, label }) => {
+    const text = asText(kit[field], field);
+    return text ? `${label.toUpperCase()}\n${text}` : null;
+  })
+    .filter(Boolean)
+    .join("\n\n---\n\n");
 
   function startEdit(field: keyof LaunchKit) {
     setEditing(field);
@@ -65,15 +125,18 @@ export function LaunchKitView({
             Drafted from your BharatHunt listing. Review, fill in any [bracketed prompts], then post.
           </p>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          disabled={runner.pending}
-          onClick={() => runner.run(`regen-${platformSlug}`, () => regenerateLaunchKit(productId, platformSlug))}
-        >
-          <RefreshCw className={cn("size-3.5", runner.pendingKey === `regen-${platformSlug}` && "animate-spin")} aria-hidden="true" />
-          Regenerate
-        </Button>
+        <div className="flex items-center gap-2">
+          <CopyButton text={allText} label="Copy all" />
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={runner.pending}
+            onClick={() => runner.run(`regen-${platformSlug}`, () => regenerateLaunchKit(productId, platformSlug))}
+          >
+            <RefreshCw className={cn("size-3.5", runner.pendingKey === `regen-${platformSlug}` && "animate-spin")} aria-hidden="true" />
+            Regenerate
+          </Button>
+        </div>
       </div>
 
       <ul className="flex flex-col gap-2.5">
@@ -145,8 +208,12 @@ export function LaunchKitView({
                     )}
                   </div>
                 </div>
+              ) : multiline ? (
+                <div className="mt-1.5 flex flex-col gap-1.5 text-sm break-words text-ink leading-relaxed">
+                  {renderKitBlocks(text)}
+                </div>
               ) : (
-                <p className={cn("mt-1.5 text-sm break-words text-ink", multiline && "whitespace-pre-line leading-relaxed")}>{text}</p>
+                <p className="mt-1.5 text-sm break-words text-ink">{renderInline(text)}</p>
               )}
             </li>
           );
