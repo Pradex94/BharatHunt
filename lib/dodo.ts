@@ -136,8 +136,21 @@ function credentialsAgree(key: string, env: "live_mode" | "test_mode"): boolean 
   return true;
 }
 
+/**
+ * Manual kill switch, independent of credentials.
+ *
+ * Set `DODO_PAYMENTS_DISABLED=true` to take checkout offline without touching
+ * API keys -- e.g. while Dodo itself is down or misbehaving. Every caller
+ * already treats "not configured" as "payments are temporarily unavailable",
+ * so this reuses that exact fail-closed path rather than adding a new one.
+ */
+function manuallyDisabled(): boolean {
+  return process.env.DODO_PAYMENTS_DISABLED === "true";
+}
+
 /** Whether Dodo credentials are configured, and consistent, in this environment. */
 export function isDodoConfigured(): boolean {
+  if (manuallyDisabled()) return false;
   const key = apiKey();
   return key !== null && credentialsAgree(key, environment());
 }
