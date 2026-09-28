@@ -16,9 +16,8 @@ import { freshness } from "@/lib/ai-news/format";
  * hydration and then ticks on its own.
  *
  * It never says "Live", and that is a product decision, not an oversight. This
- * pipeline is a scheduled poll of RSS feeds and public APIs; the fastest source
- * is checked every fifteen minutes, and the publishers themselves are minutes
- * to hours behind the events. "Live" would be a claim about the *world* that
+ * pipeline is a scheduled poll of RSS feeds and public APIs that runs once a
+ * day, and the publishers themselves are minutes to hours behind the events. "Live" would be a claim about the *world* that
  * nothing here can support. "Updated N ago" is a claim about our own pipeline,
  * and it is one we can prove.
  *
@@ -31,6 +30,8 @@ export function UpdatedAgo({
   initialLabel,
   initialStale,
   storiesToday,
+  tone = "dark",
+  labelPrefix,
   className,
 }: {
   lastSuccessAt: string | null;
@@ -38,8 +39,16 @@ export function UpdatedAgo({
   initialLabel: string | null;
   initialStale: boolean;
   storiesToday: number;
+  /** `dark` on the hero band, `light` beside the feed. */
+  tone?: "dark" | "light";
+  /** Replaces the leading "Updated", e.g. "Last updated" beside the feed. */
+  labelPrefix?: string;
   className?: string;
 }) {
+  const muted = tone === "dark" ? "text-white/60" : "text-muted";
+  const body = tone === "dark" ? "text-white/70" : "text-muted";
+  const separator = tone === "dark" ? "text-white/30" : "text-muted-soft";
+
   const [state, setState] = useState({ label: initialLabel, stale: initialStale });
 
   useEffect(() => {
@@ -59,7 +68,7 @@ export function UpdatedAgo({
 
   if (!state.label) {
     return (
-      <p className={cn("text-sm text-white/60", className)}>
+      <p className={cn("text-sm", muted, className)}>
         News ingestion has not run yet.
       </p>
     );
@@ -67,7 +76,7 @@ export function UpdatedAgo({
 
   if (state.stale) {
     return (
-      <p className={cn("flex items-center gap-2 text-sm text-white/60", className)}>
+      <p className={cn("flex items-center gap-2 text-sm", muted, className)}>
         <span aria-hidden="true" className="size-1.5 rounded-full bg-warning" />
         Ingestion is behind — last completed run was {state.label.replace(/^Updated /, "")}.
       </p>
@@ -75,14 +84,14 @@ export function UpdatedAgo({
   }
 
   return (
-    <p className={cn("flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-white/70", className)}>
+    <p className={cn("flex flex-wrap items-center gap-x-2 gap-y-1 text-sm", body, className)}>
       {/* A quiet dot, not a pulsing "LIVE" chip. It marks that the pipeline is
           current; it does not imply a stream. */}
       <span aria-hidden="true" className="size-1.5 rounded-full bg-primary" />
-      <span>{state.label}</span>
+      <span>{labelPrefix ? state.label.replace(/^Updated/, labelPrefix) : state.label}</span>
       {storiesToday > 0 ? (
         <>
-          <span aria-hidden="true" className="text-white/30">
+          <span aria-hidden="true" className={separator}>
             ·
           </span>
           <span>

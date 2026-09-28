@@ -2495,6 +2495,9 @@ export type Database = {
           sort_mode?: string | null
           page_limit?: number | null
           page_offset?: number | null
+          since_hours?: number | null
+          entity_filter?: string | null
+          source_filter?: string | null
         }
         Returns: {
           id: string
@@ -2560,6 +2563,28 @@ export type Database = {
           last_story_at: string | null
           stories_24h: number
           published_total: number
+        }[]
+      }
+      ai_hub_pulse: {
+        Args: never
+        Returns: {
+          stories_24h: number
+          multi_source_24h: number
+          sources_24h: number
+          topics_24h: number
+          companies_7d: number
+          models_7d: number
+          tools_7d: number
+        }[]
+      }
+      ai_active_sources: {
+        Args: {
+          window_hours?: number | null
+          row_limit?: number | null
+        }
+        Returns: {
+          source_name: string
+          story_count: number
         }[]
       }
       ai_apply_trend_scores: {

@@ -10,10 +10,13 @@ import { buttonVariants } from "@/components/ui/button";
 import { Breadcrumbs } from "@/components/seo/breadcrumbs";
 import { JsonLd } from "@/components/seo/json-ld";
 import { absoluteUrl } from "@/lib/seo";
-import { StoryCard, TrendScoreBadge } from "@/components/ai/story-card";
+import { StoryCard, TrendScoreBadge, WhyItMattersNote } from "@/components/ai/story-card";
 import { StoryImage } from "@/components/ai/story-image";
+import { IndiaFlag } from "@/components/ui/india-flag";
 import { coverageLabel, relativeTime } from "@/lib/ai-news/format";
+import { formatDate } from "@/lib/format-date";
 import { slugFromCategory } from "@/lib/ai-news/constants";
+import { cardSummary, whyItMatters } from "@/lib/ai-news/signals";
 import { trendDirection } from "@/lib/ai-news/trend";
 import { recordAiStoryView } from "@/lib/actions/ai-news";
 import {
@@ -111,6 +114,39 @@ export default async function AiStoryPage({ params }: { params: StoryParams }) {
   const when = relativeTime(story.last_seen_at, now);
   const firstSeen = relativeTime(story.first_seen_at, now);
   const categorySlug = slugFromCategory(story.category);
+  const why = whyItMatters(story);
+  // The composed summary opens by restating the headline (the h1 directly
+  // above it) and closes with how it was filed (a key point below) — so this
+  // page shows only the sentences in between.
+  const summary = cardSummary(story.summary, story.title);
+  const companies = entities.filter((entity) => entity.entity_type === "company");
+
+  // Key points are facts the pipeline holds about the coverage — who reported it
+  // first, how widely, and what it names — never claims about the article body.
+  const earliest = [...coverage]
+    .filter((article) => article.published_at)
+    .sort((a, b) => (a.published_at ?? "").localeCompare(b.published_at ?? ""))[0];
+  const keyPoints: string[] = [
+    earliest?.published_at
+      ? `First reported by ${earliest.source_name} on ${formatDate(earliest.published_at)}.`
+      : null,
+    story.source_count > 1
+      ? `Covered by ${story.source_count} independent publications${
+          firstSeen ? `, starting ${firstSeen.toLowerCase()}` : ""
+        }.`
+      : story.top_source_name
+        ? `Reported so far by ${story.top_source_name} alone — worth checking the original before relying on it.`
+        : null,
+    entities.length > 0
+      ? `Names ${entities
+          .slice(0, 4)
+          .map((entity) => entity.name)
+          .join(", ")}${entities.length > 4 ? ` and ${entities.length - 4} more` : ""}.`
+      : null,
+    `Filed under ${story.category}${story.sub_category ? ` and ${story.sub_category}` : ""}${
+      story.region === "india" ? ", as India coverage" : ""
+    }.`,
+  ].filter((point): point is string => Boolean(point));
 
   const crumbs = [
     { name: "Home", path: "/" },
@@ -122,7 +158,8 @@ export default async function AiStoryPage({ params }: { params: StoryParams }) {
   return (
     <main className="min-h-dvh bg-background py-8 md:py-10">
       {/*
-       * An `ItemList` of the coverage, not a `NewsArticle`.
+       * A `WebPage` whose main entity is an `ItemList` of the coverage — not a
+       * `NewsArticle`.
        *
        * `NewsArticle` would claim Bharat Hunt published this news. It did not —
        * it grouped other people's reporting and wrote a summary of the
@@ -132,16 +169,33 @@ export default async function AiStoryPage({ params }: { params: StoryParams }) {
       <JsonLd
         data={{
           "@context": "https://schema.org",
-          "@type": "ItemList",
-          name: `Coverage of: ${story.title}`,
+          "@type": "WebPage",
+          name: story.title,
           url: absoluteUrl(`/ai/${story.slug}`),
-          numberOfItems: coverage.length,
-          itemListElement: coverage.map((article, index) => ({
-            "@type": "ListItem",
-            position: index + 1,
-            name: article.title,
-            url: article.source_url,
-          })),
+          ...(story.summary ? { description: story.summary } : {}),
+          ...(story.first_seen_at ? { datePublished: story.first_seen_at } : {}),
+          ...(story.last_seen_at ? { dateModified: story.last_seen_at } : {}),
+          ...(story.image_url ? { primaryImageOfPage: story.image_url } : {}),
+          ...(companies.length > 0
+            ? {
+                about: companies.map((entity) => ({
+                  "@type": "Organization",
+                  name: entity.name,
+                  ...(entity.website ? { url: entity.website } : {}),
+                })),
+              }
+            : {}),
+          mainEntity: {
+            "@type": "ItemList",
+            name: `Coverage of: ${story.title}`,
+            numberOfItems: coverage.length,
+            itemListElement: coverage.map((article, index) => ({
+              "@type": "ListItem",
+              position: index + 1,
+              name: article.title,
+              url: article.source_url,
+            })),
+          },
         }}
       />
 
@@ -173,9 +227,10 @@ export default async function AiStoryPage({ params }: { params: StoryParams }) {
               {story.region === "india" ? (
                 <Link
                   href="/ai?region=india"
-                  className="inline-flex items-center rounded-full bg-secondary-bg px-3 py-1 text-xs font-medium text-body"
+                  className="inline-flex items-center gap-1.5 rounded-full bg-secondary-bg px-3 py-1 text-xs font-medium text-body"
                 >
-                  🇮🇳 India
+                  <IndiaFlag className="h-2.5 w-[15px] rounded-[1px]" />
+                  India
                 </Link>
               ) : null}
             </div>
@@ -230,37 +285,73 @@ export default async function AiStoryPage({ params }: { params: StoryParams }) {
             </div>
           </header>
 
+          {/* The publisher, stated first and one tap away — before anything of ours. */}
+          {story.top_source_name ? (
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border bg-card px-4 py-3 sm:px-5">
+              <p className="text-sm text-body">
+                <span className="text-muted">Source: </span>
+                <span className="font-semibold text-ink">{story.top_source_name}</span>
+                {story.source_count > 1 ? (
+                  <span className="text-muted">
+                    {" "}
+                    · and {story.source_count - 1} more{" "}
+                    <a href="#coverage" className="font-medium text-primary hover:underline">
+                      below
+                    </a>
+                  </span>
+                ) : null}
+              </p>
+              {story.top_source_url ? (
+                <a
+                  href={story.top_source_url}
+                  target="_blank"
+                  // `nofollow`: aggregated outbound linking at volume, not an
+                  // editorial endorsement of each destination.
+                  rel="noopener noreferrer nofollow"
+                  className={buttonVariants({ size: "sm", className: "gap-1.5" })}
+                >
+                  Read original article
+                  <ArrowUpRight aria-hidden="true" className="size-4" />
+                </a>
+              ) : null}
+            </div>
+          ) : null}
+
           {story.image_url ? (
-            <div className="relative aspect-[16/8] overflow-hidden rounded-2xl border border-border bg-secondary-bg">
+            <div className="relative aspect-[16/9] overflow-hidden rounded-2xl border border-border bg-secondary-bg sm:aspect-[2/1]">
               <StoryImage src={story.image_url} alt="" eager />
             </div>
           ) : null}
 
-          {story.summary ? (
-            <div className="rounded-2xl border border-border bg-card p-5 sm:p-6">
-              <p className="text-base leading-relaxed text-body sm:text-lg">{story.summary}</p>
-              <p className="mt-3 text-xs text-muted-soft">
-                Written by Bharat Hunt from the headline and the coverage below. The
+          {summary || keyPoints.length > 0 ? (
+            <div className="flex flex-col gap-5 rounded-2xl border border-border bg-card p-5 sm:p-6">
+              {summary ? (
+                <div>
+                  <h2 className="text-xs font-bold tracking-wide text-muted uppercase">Summary</h2>
+                  <p className="mt-2 text-base leading-relaxed text-body sm:text-lg">{summary}</p>
+                </div>
+              ) : null}
+
+              {keyPoints.length > 0 ? (
+                <div>
+                  <h2 className="text-xs font-bold tracking-wide text-muted uppercase">Key points</h2>
+                  <ul className="mt-2 flex list-disc flex-col gap-1.5 pl-5 text-sm leading-relaxed text-body marker:text-primary">
+                    {keyPoints.map((point) => (
+                      <li key={point}>{point}</li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+
+              <p className="text-xs text-muted-soft">
+                Summary assembled automatically by BharatHunt from the headline and the coverage
+                listed below — not AI-generated, and not a reproduction of the article. The
                 original reporting is the source of truth.
               </p>
             </div>
           ) : null}
 
-          {story.top_source_url ? (
-            <div>
-              <a
-                href={story.top_source_url}
-                target="_blank"
-                // `nofollow` because this is aggregated outbound linking at
-                // volume, not an editorial endorsement of each destination.
-                rel="noopener noreferrer nofollow"
-                className={buttonVariants({ className: "gap-2" })}
-              >
-                Read original coverage
-                <ArrowUpRight aria-hidden="true" className="size-4" />
-              </a>
-            </div>
-          ) : null}
+          {why ? <WhyItMattersNote why={why} /> : null}
         </article>
 
         {/* ── Entities ───────────────────────────────────────────────── */}
@@ -367,6 +458,51 @@ export default async function AiStoryPage({ params }: { params: StoryParams }) {
             </div>
           </section>
         ) : null}
+
+        {/* ── Into the rest of BharatHunt ─────────────────────────────── */}
+        <section aria-labelledby="more-on-bharathunt" className="flex flex-col gap-3">
+          <h2 id="more-on-bharathunt" className="text-sm font-bold text-ink">
+            More on BharatHunt
+          </h2>
+          <ul className="flex flex-wrap gap-2">
+            {companies.slice(0, 2).map((entity) => (
+              <li key={entity.slug}>
+                <Link
+                  href={`/funding?q=${encodeURIComponent(entity.name)}`}
+                  className="inline-flex items-center rounded-full border border-border bg-card px-3.5 py-2 text-sm font-medium text-body transition-colors hover:border-primary/40 hover:text-ink"
+                >
+                  {entity.name} funding rounds
+                </Link>
+              </li>
+            ))}
+            {categorySlug ? (
+              <li>
+                <Link
+                  href={`/ai?category=${categorySlug}#latest-news`}
+                  className="inline-flex items-center rounded-full border border-border bg-card px-3.5 py-2 text-sm font-medium text-body transition-colors hover:border-primary/40 hover:text-ink"
+                >
+                  More {story.category} stories
+                </Link>
+              </li>
+            ) : null}
+            <li>
+              <Link
+                href="/funding?industry=ai"
+                className="inline-flex items-center rounded-full border border-border bg-card px-3.5 py-2 text-sm font-medium text-body transition-colors hover:border-primary/40 hover:text-ink"
+              >
+                AI startup funding
+              </Link>
+            </li>
+            <li>
+              <Link
+                href="/submit"
+                className="inline-flex items-center rounded-full border border-primary/30 bg-primary/5 px-3.5 py-2 text-sm font-semibold text-primary transition-colors hover:bg-primary/10"
+              >
+                Launch your AI product
+              </Link>
+            </li>
+          </ul>
+        </section>
 
         <Link href="/ai" className="text-sm font-semibold text-primary hover:underline">
           ← All AI stories

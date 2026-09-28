@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { StoryCard } from "@/components/ai/story-card";
 import { loadMoreAiStories } from "@/lib/actions/ai-news";
 import type { AiStoryCard, AiStoryQuery } from "@/services/ai-news";
@@ -67,24 +68,38 @@ export function StoryFeed({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-2 lg:gap-4">
         {stories.map((story) => (
           <StoryCard key={story.id} story={story} now={now} />
         ))}
       </div>
 
       {failed ? (
-        <p className="text-center text-sm text-muted">
-          Could not load more stories. Check your connection and try again.
+        <p role="alert" className="text-center text-sm text-muted">
+          We couldn&rsquo;t load the latest AI stories. Check your connection and try again.
         </p>
+      ) : null}
+
+      {isPending ? (
+        // Two placeholder rows the shape of a card, so the button does not jump
+        // and the reader can see where the next stories will land.
+        <div aria-hidden="true" className="grid grid-cols-1 gap-3 lg:grid-cols-2 lg:gap-4">
+          {Array.from({ length: 2 }).map((_, index) => (
+            <Skeleton key={index} className="h-36 w-full rounded-2xl" />
+          ))}
+        </div>
       ) : null}
 
       {hasMore ? (
         <div className="flex justify-center pt-2">
           <Button type="button" variant="outline" onClick={loadMore} disabled={isPending}>
-            {isPending ? "Loading…" : "Load more stories"}
+            {isPending ? "Loading…" : failed ? "Try again" : "Load more stories"}
           </Button>
         </div>
+      ) : stories.length > 0 ? (
+        <p className="pt-2 text-center text-xs text-muted-soft">
+          That&rsquo;s every story for this view.
+        </p>
       ) : null}
     </div>
   );

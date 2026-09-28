@@ -139,6 +139,146 @@ export function slugFromCategory(value: string | null | undefined): string | und
   return AI_CATEGORIES.find((category) => category.value === value)?.slug;
 }
 
+/**
+ * The order the Topic Explorer shows categories in — what a reader looks for
+ * first, rather than the classifier's order.
+ *
+ * A separate list, not a reordering of `AI_CATEGORIES`: `classify.ts` walks that
+ * array and its order breaks scoring ties, so reordering the pills there would
+ * quietly re-file stories.
+ */
+export const AI_TOPIC_EXPLORER_ORDER: string[] = [
+  "AI Models",
+  "AI Agents",
+  "Generative AI",
+  "AI Coding",
+  "AI Tools",
+  "AI Startups",
+  "AI Funding",
+  "Open Source AI",
+  "AI Research",
+  "Enterprise AI",
+  "Robotics",
+  "AI Regulation",
+  "AI Hardware",
+  "Computer Vision",
+  "AI in India",
+];
+
+export const AI_TOPIC_EXPLORER: AiCategoryDef[] = AI_TOPIC_EXPLORER_ORDER.map(
+  (value) => AI_CATEGORIES.find((category) => category.value === value),
+).filter((category): category is AiCategoryDef => Boolean(category));
+
+// ── Story type ───────────────────────────────────────────────────────────
+
+/**
+ * The "Type" filter: coarse groups of categories.
+ *
+ * The pipeline stores one category per story and nothing else that says what
+ * *kind* of story it is, so a type is honestly just a set of categories. It is
+ * offered because "show me funding and deals" or "show me launches" is how
+ * people scan, and one type is quicker than picking three topics. Combined with
+ * a topic, the two intersect.
+ */
+export type AiStoryTypeDef = { slug: string; label: string; categories: string[] };
+
+export const AI_STORY_TYPES: AiStoryTypeDef[] = [
+  { slug: "models", label: "Models", categories: ["AI Models", "Open Source AI"] },
+  {
+    slug: "launches",
+    label: "Tools & launches",
+    categories: ["AI Tools", "AI Coding", "Generative AI", "AI Agents"],
+  },
+  { slug: "funding", label: "Funding & deals", categories: ["AI Funding"] },
+  { slug: "companies", label: "Companies", categories: ["AI Startups", "Enterprise AI"] },
+  { slug: "research", label: "Research", categories: ["AI Research"] },
+  { slug: "policy", label: "Policy", categories: ["AI Regulation"] },
+];
+
+export function storyTypeFromSlug(slug: string | null | undefined): AiStoryTypeDef | undefined {
+  if (!slug) return undefined;
+  return AI_STORY_TYPES.find((type) => type.slug === slug);
+}
+
+/**
+ * The category set a topic and a type select together.
+ *
+ * `undefined` means "no category constraint"; an empty array means the two
+ * contradict each other (a Research type with the AI Funding topic) and the
+ * answer is no stories — callers skip the query rather than send it.
+ */
+export function resolveCategoryFilter(
+  topic: string | undefined,
+  type: AiStoryTypeDef | undefined,
+): string[] | undefined {
+  if (topic && type) return type.categories.includes(topic) ? [topic] : [];
+  if (topic) return [topic];
+  if (type) return [...type.categories];
+  return undefined;
+}
+
+// ── Date window ──────────────────────────────────────────────────────────
+
+export const AI_DATE_RANGES = ["today", "24h", "7d", "30d"] as const;
+export type AiDateRange = (typeof AI_DATE_RANGES)[number];
+
+export const AI_DATE_RANGE_LABELS: Record<AiDateRange, string> = {
+  today: "Today",
+  "24h": "Last 24 hours",
+  "7d": "Last 7 days",
+  "30d": "Last 30 days",
+};
+
+export function dateRangeFromParam(raw: string | null | undefined): AiDateRange | undefined {
+  return (AI_DATE_RANGES as readonly string[]).includes(raw ?? "") ? (raw as AiDateRange) : undefined;
+}
+
+/** India Standard Time, which is what "today" means to this site's readers. */
+const IST_OFFSET_MINUTES = 330;
+
+/**
+ * The date window as whole hours back from `now`.
+ *
+ * Hours rather than a timestamp because the value is part of a cache key: a
+ * timestamp would make every request a miss. "Today" is the hours since IST
+ * midnight, rounded up so the first story of the day is never cut off.
+ */
+export function sinceHoursFor(range: AiDateRange | undefined, now: Date = new Date()): number | undefined {
+  switch (range) {
+    case "24h":
+      return 24;
+    case "7d":
+      return 24 * 7;
+    case "30d":
+      return 24 * 30;
+    case "today": {
+      const istMinutes =
+        (now.getUTCHours() * 60 + now.getUTCMinutes() + IST_OFFSET_MINUTES) % (24 * 60);
+      return Math.max(1, Math.ceil(istMinutes / 60));
+    }
+    default:
+      return undefined;
+  }
+}
+
+// ── Filter-param hygiene ─────────────────────────────────────────────────
+
+/**
+ * A company filter is an entity slug. Anything else is dropped rather than
+ * forwarded: the value becomes part of a cache key and an RPC argument, and it
+ * arrives from a URL or a public Server Action.
+ */
+export function companyFromParam(raw: string | null | undefined): string | undefined {
+  const value = (raw ?? "").trim().toLowerCase();
+  return /^[a-z0-9]+(-[a-z0-9]+)*$/.test(value) && value.length <= 80 ? value : undefined;
+}
+
+/** A publication name, trimmed and length-capped for the same reason. */
+export function sourceFromParam(raw: string | null | undefined): string | undefined {
+  const value = (raw ?? "").trim();
+  return value.length > 0 && value.length <= 120 ? value : undefined;
+}
+
 // ── Region ───────────────────────────────────────────────────────────────
 
 export const AI_REGIONS = ["india", "global"] as const;
@@ -161,9 +301,14 @@ export function regionFromParam(raw: string | null | undefined): AiRegion | unde
 export const AI_SORTS = ["trending", "latest", "relevance"] as const;
 export type AiSort = (typeof AI_SORTS)[number];
 
+/** Best match while searching, otherwise newest first. */
+export function defaultAiSort(searching: boolean): AiSort {
+  return searching ? "relevance" : "latest";
+}
+
 export const AI_SORT_LABELS: Record<AiSort, string> = {
   trending: "Trending",
-  latest: "Latest",
+  latest: "Newest",
   relevance: "Best match",
 };
 
@@ -228,11 +373,14 @@ export const STORY_WINDOW_HOURS = 72;
  * How old the last successful ingestion may be before the page stops claiming
  * to be up to date and shows the "ingestion temporarily unavailable" state.
  *
- * Three hours covers the slowest configured poll interval plus a missed run.
- * Past that, something is wrong and saying "Updated 4 hours ago" would be
- * technically true and practically misleading.
+ * Thirty hours, because ingestion runs once a day (07:47 IST, from
+ * .github/workflows/ingest.yml) plus an admin's "Run now". This was three hours
+ * while the pipeline polled every few hours; after the move to a daily run it
+ * put the page into its "ingestion is behind" state for about twenty-one hours
+ * of every day. One day plus six hours of slack for a late or retried scheduled
+ * run — past that, a run genuinely was missed and the page should say so.
  */
-export const FRESHNESS_STALE_MINUTES = 180;
+export const FRESHNESS_STALE_MINUTES = 30 * 60;
 
 /**
  * Stories older than this are not rescored at the end of an ingestion run.

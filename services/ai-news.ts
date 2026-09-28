@@ -6,8 +6,16 @@ import { cacheRemember } from "@/lib/cache";
 import { createPublicClient } from "@/lib/supabase/server";
 import { isMissingColumnError } from "@/lib/supabase/errors";
 import {
+  AI_CATEGORY_VALUES,
+  AI_SORTS,
   AI_STORIES_PAGE_SIZE,
   AI_TRENDING_LIMIT,
+  companyFromParam,
+  dateRangeFromParam,
+  regionFromParam,
+  sinceHoursFor,
+  sourceFromParam,
+  type AiDateRange,
   type AiRegion,
   type AiSort,
 } from "@/lib/ai-news/constants";
@@ -77,11 +85,21 @@ export type AiStoryCard = {
 
 export type AiStoryQuery = {
   q?: string;
-  /** Stored category values, not slugs — the page maps the URL token first. */
+  /**
+   * Stored category values, not slugs — the page maps the URL token first. An
+   * empty array means a topic and a type that contradict each other, and the
+   * answer is no stories without a query.
+   */
   categories?: string[];
   region?: AiRegion;
   sort?: AiSort;
   page?: number;
+  /** Date window; resolved to whole hours so it can sit in a cache key. */
+  since?: AiDateRange;
+  /** An `ai_entities` slug (a company). */
+  company?: string;
+  /** A publication name, matched against every article in the story. */
+  source?: string;
 };
 
 export type AiStoryPage = {
@@ -90,7 +108,56 @@ export type AiStoryPage = {
   page: number;
   pageSize: number;
   hasMore: boolean;
+  /**
+   * True when a date/company/source filter was asked for but the database has
+   * not been migrated to support it (20260929010000). The page says so instead
+   * of showing unfiltered stories under a filtered heading.
+   */
+  filtersUnavailable?: boolean;
 };
+
+/**
+ * PostgREST's answer when no function matches the named arguments — i.e. the
+ * three-filter `ai_story_search` migration has not been applied yet.
+ */
+function isMissingFunctionSignature(error: { code?: string | null; message?: string | null }): boolean {
+  return (
+    error.code === "PGRST202" ||
+    (error.message ?? "").toLowerCase().includes("could not find the function")
+  );
+}
+
+/**
+ * Every field of a query, validated.
+ *
+ * `searchAiStories` is reachable from a public Server Action (`loadMoreAiStories`),
+ * so its input is whatever a browser sent. Unknown values are dropped rather
+ * than forwarded — they would otherwise become cache keys and RPC arguments.
+ */
+function normalizeQuery(query: AiStoryQuery) {
+  const q = typeof query.q === "string" ? query.q.trim().slice(0, 120) || undefined : undefined;
+  const categories = Array.isArray(query.categories)
+    ? query.categories.filter((value) => AI_CATEGORY_VALUES.includes(value))
+    : undefined;
+  const sort = (AI_SORTS as readonly string[]).includes(query.sort ?? "")
+    ? (query.sort as AiSort)
+    : "trending";
+
+  return {
+    q,
+    categories,
+    // An array that arrived empty is the contradiction case; one that became
+    // empty because every value was unknown asked for a category that does not
+    // exist, and gets the same answer.
+    contradictory: Array.isArray(query.categories) && categories?.length === 0,
+    region: regionFromParam(query.region),
+    sort,
+    page: Math.max(1, Math.trunc(Number(query.page) || 1)),
+    since: dateRangeFromParam(query.since),
+    company: companyFromParam(query.company),
+    source: sourceFromParam(query.source),
+  };
+}
 
 /**
  * The windowed `total_count` off a feed row.
@@ -120,31 +187,52 @@ function stripTotal(row: AiStoryCard & { total_count?: number }): AiStoryCard {
  * `services/products.ts` keeps for unmigrated columns.
  */
 export async function searchAiStories(query: AiStoryQuery = {}): Promise<AiStoryPage> {
-  const page = Math.max(1, Math.trunc(query.page ?? 1));
+  const normalized = normalizeQuery(query);
+  const { page } = normalized;
   const pageSize = AI_STORIES_PAGE_SIZE;
+  const empty: AiStoryPage = { stories: [], totalCount: 0, page, pageSize, hasMore: false };
+
+  if (normalized.contradictory) return empty;
+
+  const sinceHours = sinceHoursFor(normalized.since);
   const key = `${AI_NEWS_CACHE_PREFIX}feed:${JSON.stringify({
-    q: query.q ?? "",
-    categories: [...(query.categories ?? [])].sort(),
-    region: query.region ?? "",
-    sort: query.sort ?? "trending",
+    q: normalized.q ?? "",
+    categories: [...(normalized.categories ?? [])].sort(),
+    region: normalized.region ?? "",
+    sort: normalized.sort,
     page,
+    since: sinceHours ?? "",
+    company: normalized.company ?? "",
+    source: normalized.source ?? "",
   })}`;
 
   return cacheRemember(key, LIST_TTL, async () => {
     const supabase = createPublicClient();
+
+    // The three newer arguments are only sent when set, so the plain feed keeps
+    // calling the six-argument signature and works whether or not
+    // 20260929010000 has been applied.
+    const hubFilters = {
+      ...(sinceHours !== undefined ? { since_hours: sinceHours } : {}),
+      ...(normalized.company ? { entity_filter: normalized.company } : {}),
+      ...(normalized.source ? { source_filter: normalized.source } : {}),
+    };
+
     const { data, error } = await supabase.rpc("ai_story_search", {
-      search_query: query.q ?? null,
-      category_filter: query.categories?.length ? query.categories : null,
-      region_filter: query.region ?? null,
-      sort_mode: query.sort ?? "trending",
+      search_query: normalized.q ?? null,
+      category_filter: normalized.categories?.length ? normalized.categories : null,
+      region_filter: normalized.region ?? null,
+      sort_mode: normalized.sort,
       page_limit: pageSize,
       page_offset: (page - 1) * pageSize,
+      ...hubFilters,
     });
 
     if (error) {
-      if (isMissingColumnError(error)) {
-        return { stories: [], totalCount: 0, page, pageSize, hasMore: false };
+      if (Object.keys(hubFilters).length > 0 && isMissingFunctionSignature(error)) {
+        return { ...empty, filtersUnavailable: true };
       }
+      if (isMissingColumnError(error)) return empty;
       throw new Error(`Failed to load AI stories: ${error.message}`);
     }
 
@@ -158,6 +246,38 @@ export async function searchAiStories(query: AiStoryQuery = {}): Promise<AiStory
       pageSize,
       hasMore: page * pageSize < Number(totalCount),
     };
+  });
+}
+
+/**
+ * The week's stories in trend order — one query that the hub's brief, side
+ * stories, highlights and India rail are all cut from.
+ *
+ * Forty-eight is the RPC's own page ceiling and comfortably more than every
+ * section together shows. It never reaches the browser: the sections are server
+ * components and only what they render is sent.
+ *
+ * Falls back to the unwindowed trending order before 20260929010000 is applied;
+ * the trend score already decays with age, so that is nearly the same list.
+ */
+export async function getAiWeekPool(): Promise<AiStoryCard[]> {
+  return cacheRemember(`${AI_NEWS_CACHE_PREFIX}week-pool`, LIST_TTL, async () => {
+    const supabase = createPublicClient();
+    const base = {
+      search_query: null,
+      category_filter: null,
+      region_filter: null,
+      sort_mode: "trending",
+      page_limit: 48,
+      page_offset: 0,
+    };
+
+    let { data, error } = await supabase.rpc("ai_story_search", { ...base, since_hours: 24 * 7 });
+    if (error && isMissingFunctionSignature(error)) {
+      ({ data, error } = await supabase.rpc("ai_story_search", base));
+    }
+    if (error) return [];
+    return ((data ?? []) as (AiStoryCard & { total_count: number })[]).map(stripTotal);
   });
 }
 
@@ -535,6 +655,64 @@ export async function getAllAiStorySlugs(): Promise<{ slug: string; last_seen_at
 
   if (error) return [];
   return data ?? [];
+}
+
+// ── AI Pulse ─────────────────────────────────────────────────────────────
+
+export type AiPulse = {
+  stories_24h: number;
+  multi_source_24h: number | null;
+  sources_24h: number | null;
+  topics_24h: number | null;
+  companies_7d: number | null;
+  models_7d: number | null;
+  tools_7d: number | null;
+};
+
+/**
+ * The headline counts for the AI Pulse strip, or null before 20260929010000.
+ *
+ * Every field is a count of published rows over a stated window. The page
+ * prints the window with the number and hides a tile whose count is null, so
+ * nothing here is ever estimated.
+ */
+export async function getAiPulse(): Promise<AiPulse | null> {
+  return cacheRemember(`${AI_NEWS_CACHE_PREFIX}pulse`, AGGREGATE_TTL, async () => {
+    const supabase = createPublicClient();
+    const { data, error } = await supabase.rpc("ai_hub_pulse");
+    if (error || !data?.length) return null;
+    const row = data[0];
+    // `bigint` counts: PostgREST sends them as JSON numbers, but Number() keeps
+    // this correct if a driver ever hands one back as a string.
+    const num = (value: number | null) => (value === null ? null : Number(value));
+    return {
+      stories_24h: Number(row.stories_24h ?? 0),
+      multi_source_24h: num(row.multi_source_24h),
+      sources_24h: num(row.sources_24h),
+      topics_24h: num(row.topics_24h),
+      companies_7d: num(row.companies_7d),
+      models_7d: num(row.models_7d),
+      tools_7d: num(row.tools_7d),
+    };
+  });
+}
+
+export type AiActiveSource = { source_name: string; story_count: number };
+
+/** Publications with published stories in the last 30 days — the Source filter. */
+export async function getAiActiveSources(): Promise<AiActiveSource[]> {
+  return cacheRemember(`${AI_NEWS_CACHE_PREFIX}sources:720`, AGGREGATE_TTL, async () => {
+    const supabase = createPublicClient();
+    const { data, error } = await supabase.rpc("ai_active_sources", {
+      window_hours: 720,
+      row_limit: 40,
+    });
+    if (error) return [];
+    return (data ?? []).map((row) => ({
+      source_name: row.source_name,
+      story_count: Number(row.story_count),
+    }));
+  });
 }
 
 // ── The funding tie-in (section 21) ──────────────────────────────────────

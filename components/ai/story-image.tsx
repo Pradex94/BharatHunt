@@ -31,11 +31,17 @@ export function StoryImage({
   alt,
   className,
   eager = false,
+  fallback = null,
 }: {
   src: string | null | undefined;
   alt: string;
   className?: string;
   eager?: boolean;
+  /**
+   * Rendered instead when there is no image or it fails to load — for layouts
+   * that reserve a fixed image slot and would otherwise show an empty box.
+   */
+  fallback?: React.ReactNode;
 }) {
   const [failed, setFailed] = useState(false);
 
@@ -47,7 +53,7 @@ export function StoryImage({
     setFailed(false);
   }
 
-  if (!src || failed) return null;
+  if (!src || failed) return <>{fallback}</>;
 
   return (
     // eslint-disable-next-line @next/next/no-img-element
