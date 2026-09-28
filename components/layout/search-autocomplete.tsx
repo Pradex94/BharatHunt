@@ -7,14 +7,26 @@ import { Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useDebounce } from "@/hooks/use-debounce";
 import { fetchSearchSuggestions } from "@/lib/actions/search";
-import { countSuggestions, isSuggestable, type SearchSuggestions } from "@/lib/search";
+import {
+  EMPTY_SUGGESTIONS as EMPTY,
+  countSuggestions,
+  isSuggestable,
+  type SearchSuggestions,
+} from "@/lib/search";
 
-const EMPTY: SearchSuggestions = { products: [], categories: [], makers: [] };
+const AI_TYPE_LABEL: Record<string, string> = { company: "Company", model: "Model", tool: "Tool" };
 
 /** Long enough to skip most intermediate keystrokes, short enough to feel live. */
 const DEBOUNCE_MS = 250;
 
 type Option = { key: string; href: string; label: string };
+
+/** Where each non-product suggestion leads. One definition, used by keys and clicks. */
+const hrefFor = {
+  ai: (name: string) => `/ai?q=${encodeURIComponent(name)}`,
+  startup: (slug: string) => `/funding/${slug}`,
+  investor: (name: string) => `/funding?investor=${encodeURIComponent(name)}`,
+};
 
 /**
  * Navbar search with suggestions.
@@ -30,17 +42,21 @@ type Option = { key: string; href: string; label: string };
 export function SearchAutocomplete({
   className,
   tone = "dark",
+  placeholder = "Search products...",
   onNavigate,
 }: {
   className?: string;
   /** "dark" is the navbar over the near-black bar; "light" is inside the
-   * mobile menu sheet, which is a normal light popover surface. */
-  tone?: "dark" | "light";
+   * mobile menu sheet, which is a normal light popover surface; "hero" is the
+   * large search on the homepage, with a visible submit button. */
+  tone?: "dark" | "light" | "hero";
+  placeholder?: string;
   /** Fired once a destination is chosen, so a host sheet can close itself. */
   onNavigate?: () => void;
 }) {
   const router = useRouter();
   const isDark = tone === "dark";
+  const isHero = tone === "hero";
   const listboxId = useId();
 
   const [query, setQuery] = useState("");
@@ -79,6 +95,17 @@ export function SearchAutocomplete({
       key: `m:${m.username}`,
       href: `/marketplace?q=${encodeURIComponent(m.display_name)}`,
       label: m.display_name,
+    })),
+    ...suggestions.ai.map((a) => ({ key: `a:${a.slug}`, href: hrefFor.ai(a.name), label: a.name })),
+    ...suggestions.startups.map((s) => ({
+      key: `s:${s.slug}`,
+      href: hrefFor.startup(s.slug),
+      label: s.name,
+    })),
+    ...suggestions.investors.map((i) => ({
+      key: `i:${i.slug}`,
+      href: hrefFor.investor(i.name),
+      label: i.name,
     })),
   ];
 
@@ -186,7 +213,8 @@ export function SearchAutocomplete({
         <Search
           aria-hidden="true"
           className={cn(
-            "pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2",
+            "pointer-events-none absolute top-1/2 -translate-y-1/2",
+            isHero ? "left-4 size-5 text-muted" : "left-3 size-4",
             isDark ? "text-white/40" : "text-muted",
           )}
         />
@@ -199,8 +227,8 @@ export function SearchAutocomplete({
           }}
           onFocus={() => setOpen(true)}
           onKeyDown={onKeyDown}
-          placeholder="Search products..."
-          aria-label="Search products"
+          placeholder={placeholder}
+          aria-label={isHero ? "Search startups, products, AI and investors" : "Search products"}
           role="combobox"
           aria-expanded={showPanel}
           aria-controls={showPanel ? listboxId : undefined}
@@ -208,12 +236,24 @@ export function SearchAutocomplete({
           aria-autocomplete="list"
           autoComplete="off"
           className={cn(
-            "h-11 rounded-xl border pl-9 text-base outline-none transition-colors md:h-10 md:text-sm",
-            isDark
-              ? "w-56 border-white/15 bg-white/10 pr-9 text-white placeholder:text-white/40 focus-visible:border-primary/60"
-              : "w-full border-border bg-background pr-3 text-ink placeholder:text-muted focus-visible:border-primary",
+            "rounded-xl border text-base outline-none transition-colors",
+            isHero
+              ? "h-14 w-full rounded-2xl border-border bg-card pr-28 pl-12 text-ink shadow-[0_12px_32px_-18px_rgba(23,20,15,0.35)] placeholder:text-muted focus-visible:border-primary focus-visible:ring-4 focus-visible:ring-primary/10 sm:pr-32"
+              : "h-11 pl-9 md:h-10 md:text-sm",
+            isDark &&
+              "w-56 border-white/15 bg-white/10 pr-9 text-white placeholder:text-white/40 focus-visible:border-primary/60",
+            tone === "light" &&
+              "w-full border-border bg-background pr-3 text-ink placeholder:text-muted focus-visible:border-primary",
           )}
         />
+        {isHero && (
+          <button
+            type="submit"
+            className="btn-gradient absolute top-1/2 right-2 flex h-10 -translate-y-1/2 items-center rounded-xl px-4 text-sm font-semibold sm:px-5"
+          >
+            Search
+          </button>
+        )}
         {/* The "/" hint is desktop-only — there's no physical key to press
             on the phone where the light variant renders. */}
         {isDark && (
@@ -231,6 +271,7 @@ export function SearchAutocomplete({
           className={cn(
             "absolute top-full z-50 mt-2 max-h-[50dvh] overflow-y-auto overflow-x-hidden rounded-xl border border-border bg-card py-1.5 shadow-[0_20px_50px_-20px_rgba(23,20,15,0.45)]",
             isDark ? "right-0 w-80" : "inset-x-0",
+            isHero && "text-left",
           )}
         >
           <Section title="Products">
@@ -273,6 +314,54 @@ export function SearchAutocomplete({
               >
                 <span className="truncate font-medium text-ink">{maker.display_name}</span>
                 <span className="truncate text-xs text-muted">@{maker.username}</span>
+              </Row>
+            ))}
+          </Section>
+
+          <Section title="AI">
+            {suggestions.ai.map((entity) => (
+              <Row
+                key={entity.slug}
+                id={`${listboxId}-a:${entity.slug}`}
+                active={activeKey === `a:${entity.slug}`}
+                onSelect={() => goTo(hrefFor.ai(entity.name))}
+              >
+                <span className="truncate font-medium text-ink">{entity.name}</span>
+                <span className="truncate text-xs text-muted">
+                  {AI_TYPE_LABEL[entity.type] ?? "AI"} · AI news
+                </span>
+              </Row>
+            ))}
+          </Section>
+
+          <Section title="Startups">
+            {suggestions.startups.map((startup) => (
+              <Row
+                key={startup.slug}
+                id={`${listboxId}-s:${startup.slug}`}
+                active={activeKey === `s:${startup.slug}`}
+                onSelect={() => goTo(hrefFor.startup(startup.slug))}
+              >
+                <span className="truncate font-medium text-ink">{startup.name}</span>
+                <span className="truncate text-xs text-muted">
+                  {startup.industry ? `${startup.industry} · ` : ""}Funding profile
+                </span>
+              </Row>
+            ))}
+          </Section>
+
+          <Section title="Investors">
+            {suggestions.investors.map((investor) => (
+              <Row
+                key={investor.slug}
+                id={`${listboxId}-i:${investor.slug}`}
+                active={activeKey === `i:${investor.slug}`}
+                onSelect={() => goTo(hrefFor.investor(investor.name))}
+              >
+                <span className="truncate font-medium text-ink">{investor.name}</span>
+                <span className="truncate text-xs text-muted">
+                  {investor.deal_count} {investor.deal_count === 1 ? "deal" : "deals"} tracked
+                </span>
               </Row>
             ))}
           </Section>

@@ -1,7 +1,7 @@
 import { ImageResponse } from "next/og";
 
 // Default social-share card, used when a page doesn't declare its own.
-export const alt = "Bharat Hunt — Discover premium software before everyone else";
+export const alt = "Bharat Hunt — Discover what's being built in India";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
@@ -50,11 +50,11 @@ export default function OpengraphImage() {
             lineHeight: 1.25,
           }}
         >
-          Discover premium software before everyone else.
+          Discover what&apos;s being built in India.
         </div>
 
         <div style={{ marginTop: "24px", fontSize: "28px", color: "#8a7f70" }}>
-          Launch your product · Get a dofollow backlink · Reach the community
+          Startups · AI products · Software · Funding intelligence
         </div>
       </div>
     ),

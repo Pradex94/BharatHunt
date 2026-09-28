@@ -1,63 +1,77 @@
-import { LayoutDashboard, Link2, MessageSquare, Users, type LucideIcon } from "lucide-react";
+import {
+  Eye,
+  Link2,
+  MessageSquare,
+  Trophy,
+  UserRound,
+  type LucideIcon,
+} from "lucide-react";
 
 /**
  * Presentation constants for the landing page.
  *
  * Everything a visitor can read as a *claim* — products, upvote counts, maker
- * and community numbers — is queried live in `app/page.tsx`. Only styling
- * tokens and our own feature copy live here.
+ * and community numbers — is queried live in `app/page.tsx`. Only our own copy
+ * about how launching works lives here, and every line of it describes
+ * something the product actually does today (lib/faqs.ts is the reference):
+ * the link import, the human review, the daily board, the followed backlink,
+ * Launch Agent. Nothing here promises traffic, users or investment.
  */
 
-export type IconTone = "orange" | "violet" | "rose" | "amber" | "dark";
+export type FounderBenefit = { title: string; description: string; icon: LucideIcon };
 
-/** Gradient tile classes per tone (white glyph on top). No blue, no green. */
-export const ICON_TONE: Record<IconTone, string> = {
-  orange: "bg-gradient-to-br from-[#ff6b1a] to-[#ff8a3d]",
-  violet: "bg-gradient-to-br from-[#8b5cf6] to-[#a78bfa]",
-  rose: "bg-gradient-to-br from-[#f43f5e] to-[#fb7185]",
-  amber: "bg-gradient-to-br from-[#f59e0b] to-[#ff8a3d]",
-  dark: "bg-gradient-to-br from-[#2b2620] to-[#4b4238]",
-};
-
-export type Feature = {
-  title: string;
-  description: string;
-  icon: LucideIcon;
-  tone: IconTone;
-};
-
-/**
- * Each of these describes something the product actually does — the import
- * flow, the comment thread, the maker dashboard. Vague benefit copy ("build
- * your audience", "fast & easy") tells a maker nothing they can check.
- */
-export const FEATURES: Feature[] = [
+export const FOUNDER_BENEFITS: FounderBenefit[] = [
   {
-    title: "Launch from a link",
+    title: "Product visibility",
     description:
-      "Paste your URL and we pull in your logo, description and screenshots. Change anything you like before it goes live.",
-    icon: Link2,
-    tone: "orange",
+      "A permanent product page, listed in search, its category and every collection it fits — with a followed link to your site.",
+    icon: Eye,
   },
   {
-    title: "Feedback you can use",
-    description:
-      "Comments and questions from people who opened your product — not a vanity counter.",
+    title: "Founder discovery",
+    description: "Your name on the launch, so people find the maker as well as the product.",
+    icon: UserRound,
+  },
+  {
+    title: "Community exposure",
+    description: "Upvotes, comments and questions from people who actually opened your product.",
     icon: MessageSquare,
-    tone: "rose",
   },
   {
-    title: "Made for Indian makers",
+    title: "Launch ranking",
     description:
-      "Categories that match what India actually ships, and a community that already has the context.",
-    icon: Users,
-    tone: "violet",
+      "Compete on the daily board. The day’s leading launch is featured as Hunt of the Day.",
+    icon: Trophy,
   },
   {
-    title: "Yours to edit, always",
+    title: "Investor visibility",
     description:
-      "Track views and upvotes from your dashboard, and update your launch whenever the product moves on.",
-    icon: LayoutDashboard,
-    tone: "amber",
+      "A public launch page beside Bharat Hunt’s funding and investor intelligence — a link worth sending.",
+    icon: Link2,
+  },
+];
+
+export type LaunchStep = { title: string; description: string };
+
+export const LAUNCH_STEPS: LaunchStep[] = [
+  {
+    title: "Submit your product",
+    description: "Paste your URL — we pull in your logo, description and screenshots. Free.",
+  },
+  {
+    title: "Launch",
+    description: "A person reviews every submission, usually within a day, then it goes live.",
+  },
+  {
+    title: "Get discovered",
+    description: "On the daily board, in search, and in your category and collections.",
+  },
+  {
+    title: "Grow visibility",
+    description: "Launch Agent plans where to launch next and prepares the copy for each platform.",
+  },
+  {
+    title: "Connect with the ecosystem",
+    description: "Answer comments, meet other makers, and keep your listing current as you ship.",
   },
 ];

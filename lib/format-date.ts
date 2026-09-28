@@ -80,6 +80,21 @@ const DAY_FORMAT = new Intl.DateTimeFormat("en-IN", {
 });
 
 /**
+ * "23 Aug", in IST, for any instant.
+ *
+ * Absolute on purpose. A card rendered into a prerendered page (or hydrated in
+ * a client list) must print the same string on the server and in the browser
+ * however long the HTML sat in a cache; "today" is only safe where a stale page
+ * can at worst be minutes wrong, and never across hydration.
+ */
+export function formatDayMonth(value: string | Date | null | undefined): string | null {
+  if (value === null || value === undefined) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  return DAY_FORMAT.format(date);
+}
+
+/**
  * An IST day key as a badge reads it: "today", "yesterday", or "23 Aug".
  *
  * The relative words matter more than the date. A visitor who sees "Leading

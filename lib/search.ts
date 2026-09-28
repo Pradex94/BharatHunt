@@ -100,9 +100,53 @@ export type SearchSuggestions = {
   products: { slug: string; name: string; tagline: string; hero_image_url: string | null }[];
   categories: { name: string; slug: string }[];
   makers: { username: string; display_name: string }[];
+  /** AI companies, models and tools the AI hub tracks (`ai_entities`). */
+  ai: { name: string; slug: string; type: string }[];
+  /** Funded companies (`funding_startups`), each with a public profile page. */
+  startups: { name: string; slug: string; industry: string | null }[];
+  /** Investors named on published rounds (`funding_investors`). */
+  investors: { name: string; slug: string; deal_count: number }[];
+};
+
+export const EMPTY_SUGGESTIONS: SearchSuggestions = {
+  products: [],
+  categories: [],
+  makers: [],
+  ai: [],
+  startups: [],
+  investors: [],
 };
 
 /** Total number of suggestions across all sections. */
 export function countSuggestions(suggestions: SearchSuggestions): number {
-  return suggestions.products.length + suggestions.categories.length + suggestions.makers.length;
+  return (
+    suggestions.products.length +
+    suggestions.categories.length +
+    suggestions.makers.length +
+    suggestions.ai.length +
+    suggestions.startups.length +
+    suggestions.investors.length
+  );
+}
+
+/**
+ * An `ilike` pattern for the `normalized_name` columns of the funding and AI
+ * entity tables.
+ *
+ * Those columns are *not* `search_normalize()` output: ingestion folds names
+ * with `normalizeTitle`, which keeps word breaks as single spaces ("grow easy
+ * technologies"). So the query is split into the same lowercase alphanumeric
+ * words and joined with wildcards — "Grow Easy" and "grow-easy" both become
+ * `%grow%easy%`. Only [a-z0-9] survives, so no `%`, `_` or `,` from the user
+ * ever reaches the pattern. Empty when nothing searchable is left.
+ */
+export function entityNamePattern(query: string): string {
+  const words = query
+    .normalize("NFKD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean)
+    .slice(0, 6);
+  return words.length > 0 ? `%${words.join("%")}%` : "";
 }

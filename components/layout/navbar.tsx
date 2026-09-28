@@ -8,7 +8,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useClerk, useUser } from "@clerk/nextjs";
-import { MenuIcon } from "lucide-react";
+import { MenuIcon, Search } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { ADMIN_EMAILS, NAV_LINKS } from "@/lib/constants";
@@ -119,6 +119,15 @@ export function Navbar() {
 
           <div className="hidden items-center gap-3 lg:flex">
             <SearchAutocomplete className="hidden xl:block" />
+            {/* Between lg and xl the input does not fit beside the menu; the
+                icon keeps search one click away at every desktop width. */}
+            <Link
+              href="/marketplace"
+              aria-label="Search products"
+              className="flex size-9 items-center justify-center rounded-xl text-white/70 transition-colors hover:bg-white/10 hover:text-white xl:hidden"
+            >
+              <Search className="size-4" aria-hidden="true" />
+            </Link>
 
             {showAuthSkeleton ? (
               <div className="flex items-center gap-2">
@@ -186,7 +195,17 @@ export function Navbar() {
             )}
           </div>
 
-          <div className="flex items-center lg:hidden">
+          <div className="flex items-center gap-1 lg:hidden">
+            {/* Search is inside the menu sheet; the icon opens it straight there. */}
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="Search"
+              onClick={() => setMobileOpen(true)}
+              className="size-11 text-white hover:bg-white/10 hover:text-white"
+            >
+              <Search aria-hidden="true" />
+            </Button>
             <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
               <SheetTrigger
                 render={

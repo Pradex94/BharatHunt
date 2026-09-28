@@ -86,9 +86,13 @@ those through the PowerShell tool instead.
   `Numeric` = JetBrains Mono tabular figures for counts/prices).
 - Motion: `components/ui/motion.tsx` (`FadeIn`/`FadeInStagger`/`FadeInItem`);
   `prefers-reduced-motion` is honored globally.
-- **The landing page (`app/page.tsx` + `components/landing/`) uses STATIC demo
-  data** (`components/landing/data.ts`) — ZenTask/Payflow/etc. and the community
-  stats are presentation-only, not live Supabase rows. Inner pages use real data.
+- **The homepage (`app/(home)/page.tsx` + `components/landing/`) is live data,
+  `force-static` with 10-min ISR.** Every count, rank, round and investor is
+  real; sections with no data hide themselves. Only founder copy is static
+  (`components/landing/data.ts`). Today's Hunt / the daily board / Recently
+  launched are views of one query (`getRecentLaunchPool` → `lib/home-feed.ts`).
+  Grids there need an explicit `grid-cols-1` base or truncated text overflows
+  mobile.
 
 ## Conventions
 

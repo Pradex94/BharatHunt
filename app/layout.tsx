@@ -49,11 +49,11 @@ export const metadata: Metadata = {
   // Absolute-URL base for canonical links, OG/Twitter images, and JSON-LD.
   metadataBase: new URL(SITE_URL),
   title: {
-    default: "Bharat Hunt — Discover premium software before everyone else",
+    default: "Bharat Hunt — Discover India's Next Great Startups & Software",
     template: `%s · ${SITE_NAME}`,
   },
   description:
-    "A curated marketplace of lifetime deals and premium tools, built by founders for founders. Discover, upvote, and launch the products worth your attention.",
+    "Discover startups, AI products, software and emerging companies being built in India. Launch your product, explore funding and discover the next generation of builders.",
   keywords: [
     "marketplace",
     "software deals",
@@ -76,9 +76,9 @@ export const metadata: Metadata = {
   // with a 429. Static files carry an extension the matcher skips.
   // Default share card: app/opengraph-image.tsx.
   openGraph: {
-    title: "Bharat Hunt — Discover premium software before everyone else",
+    title: "Bharat Hunt — Discover India's Next Great Startups & Software",
     description:
-      "A curated marketplace of lifetime deals and premium tools, built by founders for founders.",
+      "Discover startups, AI products, software and emerging companies being built in India.",
     siteName: SITE_NAME,
     url: SITE_URL,
     locale: "en_IN",
@@ -87,7 +87,7 @@ export const metadata: Metadata = {
   twitter: {
     card: "summary_large_image",
     title: "Bharat Hunt",
-    description: "Discover premium software before everyone else.",
+    description: "Discover what's being built in India.",
   },
 };
 

@@ -245,6 +245,76 @@ export async function getTopUpvotedProducts(limit = 6): Promise<LandingProduct[]
   });
 }
 
+/** A homepage launch: the card columns plus what the feeds sort and label by. */
+export type PoolLaunch = LandingProduct & {
+  published_at: string | null;
+  trend_score: number | null;
+  /** ISO 3166-2:IN code the maker confirmed, or null. */
+  launch_state?: string | null;
+};
+
+const POOL_COLUMNS = `${LANDING_PRODUCT_COLUMNS}, published_at, trend_score, launch_state`;
+
+/** How many recent launches the homepage reads — every feed on it is a view of these. */
+export const RECENT_LAUNCH_POOL_SIZE = 30;
+
+/**
+ * The newest published launches, once, for every feed on the homepage.
+ *
+ * "Today's Hunt", the daily board and "Recently launched" are three views of
+ * this one list (lib/home-feed.ts), so the homepage pays one round trip for
+ * all three instead of one each. Thirty rows is a week or more on this site
+ * and still a small payload — nothing here reads hundreds of products.
+ *
+ * Retries without `launch_state` on a database that predates the
+ * launch-location migration, and fails soft to an empty list: the homepage
+ * must render its copy and CTAs even when this query breaks.
+ */
+export async function getRecentLaunchPool(): Promise<PoolLaunch[]> {
+  return cacheRemember(`${PRODUCTS_CACHE_PREFIX}recent-pool:${RECENT_LAUNCH_POOL_SIZE}`, AGGREGATE_TTL, async () => {
+    const supabase = createPublicClient();
+    const query = (columns: string) =>
+      supabase
+        .from("products")
+        .select(columns)
+        .eq("status", "published")
+        .order("published_at", { ascending: false, nullsFirst: false })
+        .limit(RECENT_LAUNCH_POOL_SIZE);
+
+    let { data, error } = await query(POOL_COLUMNS);
+    if (error && isMissingColumnError(error)) {
+      ({ data, error } = await query(withoutColumns(POOL_COLUMNS, LAUNCH_LOCATION_COLUMNS)));
+    }
+    if (error) return [];
+    return (data ?? []) as unknown as PoolLaunch[];
+  });
+}
+
+/**
+ * One page of launches, newest first, from `offset` — the homepage's
+ * "Load more" under "Recently launched". Same order and columns as the pool, so
+ * pages continue it exactly. Small pages by design; fails soft to empty.
+ */
+export async function getLaunchesPage(offset: number, limit: number): Promise<PoolLaunch[]> {
+  return cacheRemember(`${PRODUCTS_CACHE_PREFIX}launches:${offset}:${limit}`, LIST_TTL, async () => {
+    const supabase = createPublicClient();
+    const query = (columns: string) =>
+      supabase
+        .from("products")
+        .select(columns)
+        .eq("status", "published")
+        .order("published_at", { ascending: false, nullsFirst: false })
+        .range(offset, offset + limit - 1);
+
+    let { data, error } = await query(POOL_COLUMNS);
+    if (error && isMissingColumnError(error)) {
+      ({ data, error } = await query(withoutColumns(POOL_COLUMNS, LAUNCH_LOCATION_COLUMNS)));
+    }
+    if (error) return [];
+    return (data ?? []) as unknown as PoolLaunch[];
+  });
+}
+
 /** The featured launch, plus the IST day whose board it actually topped. */
 export type LeadingLaunch = {
   product: LandingProduct;

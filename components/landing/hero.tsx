@@ -1,47 +1,82 @@
 import Link from "next/link";
-import { ArrowRight, ChevronUp, Eye, MessageSquare } from "lucide-react";
+import {
+  ArrowRight,
+  Banknote,
+  Code2,
+  Layers,
+  Rocket,
+  Sparkles,
+  Wallet,
+  Zap,
+  type LucideIcon,
+} from "lucide-react";
 
 import { buttonVariants } from "@/components/ui/button";
-import { ProductLogo } from "@/components/products/product-logo";
-import { Display, Numeric } from "@/components/ui/typography";
-import { formatLaunchDay } from "@/lib/format-date";
+import { Display } from "@/components/ui/typography";
 import { IndiaFlag } from "@/components/ui/india-flag";
-import type { ProductCardProduct } from "@/components/products/product-card";
+import { SearchAutocomplete } from "@/components/layout/search-autocomplete";
 
 /** Grid fade: solid through the headline, gone before the section ends. */
 const GRID_FADE = "linear-gradient(to bottom, #000 0%, #000 30%, transparent 88%)";
 
-export type HeroProps = {
-  /** The launch leading its day's board. Null before anything is published. */
-  topProduct: (ProductCardProduct & { view_count?: number | null }) | null;
-  /**
-   * The IST day that launch led, `YYYY-MM-DD`. The badge names it, so a hero
-   * showing an older day says so instead of claiming to be today's board.
-   */
-  topProductDay: string | null;
-  stats: { products: number; makers: number };
+/** One node of the ecosystem visual — a real destination with a real count. */
+export type EcosystemNode = {
+  label: string;
+  href: string;
+  /** "12 products", "34 stories today" … omitted when there is no true number. */
+  meta: string | null;
+  icon: "ai" | "saas" | "fintech" | "dev" | "startups" | "productivity";
 };
 
-export function Hero({ topProduct, topProductDay, stats }: HeroProps) {
+const NODE_ICON: Record<EcosystemNode["icon"], LucideIcon> = {
+  ai: Sparkles,
+  saas: Layers,
+  fintech: Wallet,
+  dev: Code2,
+  startups: Banknote,
+  productivity: Zap,
+};
+
+/** Where the six nodes sit, as % of the square — a hexagon around the centre. */
+const NODE_POSITIONS = [
+  { x: 50, y: 9 },
+  { x: 84, y: 29 },
+  { x: 84, y: 71 },
+  { x: 50, y: 91 },
+  { x: 16, y: 71 },
+  { x: 16, y: 29 },
+];
+
+export type HeroProps = {
+  nodes: EcosystemNode[];
+  /** Quick-search shortcuts under the input. Real destinations only. */
+  shortcuts: { label: string; href: string }[];
+};
+
+/*
+ * No entrance animation anywhere in here — this is the LCP region.
+ * components/ui/motion.tsx explains what wrapping the first viewport in
+ * `FadeIn` cost this site (field LCP 4.3s). The hero paints at full opacity.
+ *
+ * Shorter than the old hero on purpose: the headline, the search and both
+ * CTAs sit in the first viewport, and the first row of "Today's Hunt" starts
+ * right under it on a laptop, so the product feed is never a scroll away.
+ */
+export function Hero({ nodes, shortcuts }: HeroProps) {
   return (
     <section className="relative isolate overflow-hidden">
-      {/* Warm canvas wash, resolving to the page floor. design.md: the canvas is
-          off-white #FFF9F5 and orange is the only chromatic brand colour. */}
+      {/* Warm canvas wash → page floor. Orange is the only chromatic colour. */}
       <div
         aria-hidden
         className="absolute inset-0 -z-20 bg-[linear-gradient(180deg,#fff3ec_0%,#fff9f5_55%,#ffffff_100%)]"
       />
-      {/* Fine grid over the wash, masked so it dissolves before the hero ends
-          and never collides with the section below. Ink at 9% — enough to give
-          the space structure, quiet enough not to read as texture. Inline
-          styles because the mask + dual gradient is past what utility classes
-          express legibly (same call as the India map in community-section). */}
+      {/* Fine grid, masked so it dissolves before the section ends. */}
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0 -z-20"
         style={{
           backgroundImage:
-            "linear-gradient(rgba(23,20,15,0.09) 1px, transparent 0), linear-gradient(90deg, rgba(23,20,15,0.09) 1px, transparent 0)",
+            "linear-gradient(rgba(23,20,15,0.07) 1px, transparent 0), linear-gradient(90deg, rgba(23,20,15,0.07) 1px, transparent 0)",
           backgroundSize: "28px 28px",
           backgroundPosition: "top center",
           WebkitMaskImage: GRID_FADE,
@@ -49,142 +84,136 @@ export function Hero({ topProduct, topProductDay, stats }: HeroProps) {
         }}
       />
 
-      {/* A single soft glow anchoring the card — the whole decorative budget. */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute top-[60%] left-1/2 -z-10 size-[560px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-[radial-gradient(circle,rgba(255,138,61,0.18),transparent_65%)] blur-2xl"
-      />
-
-      {/*
-        No entrance animation above the fold — this is the LCP element.
-
-        Both blocks below used to be wrapped in <FadeIn>, which renders
-        `initial="hidden"` into the server HTML as
-        `style="opacity:0;transform:translateY(16px)"` and only reveals the
-        content once framer-motion has hydrated and its IntersectionObserver has
-        fired. The whole hero — headline, subcopy, both CTAs and the leading
-        launch — was therefore invisible in the delivered document. Chrome does
-        not count an element at opacity 0, so LCP could not be recorded until
-        the client bundle had downloaded, parsed and run: field LCP was 4.3s
-        against an FCP of 3.2s, and that ~1.1s gap is this.
-
-        Entrance animations still run further down the page, where nothing they
-        hide is in the first viewport. Above the fold the content is simply
-        painted. The card keeps `animate-bh-float`, which is CSS and animates
-        `transform` only — it never drops opacity, so it costs LCP nothing.
-      */}
-      <div className="relative mx-auto flex w-full max-w-[1100px] flex-col items-center gap-8 px-4 py-20 text-center sm:px-6 md:py-28 lg:py-32">
-        <div className="flex flex-col items-center gap-7">
-          <span className="flex items-center gap-2 rounded-full border border-border bg-card px-3.5 py-1.5 text-sm font-medium text-body shadow-sm">
+      <div className="mx-auto grid grid-cols-1 w-full max-w-7xl items-center gap-10 px-4 pt-12 pb-10 sm:px-6 md:pt-16 lg:grid-cols-[minmax(0,1fr)_minmax(0,460px)] lg:gap-14 lg:px-8 lg:pt-20 lg:pb-16">
+        <div className="flex min-w-0 flex-col items-start gap-6">
+          <span className="flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1.5 text-sm font-medium text-body shadow-sm">
             <IndiaFlag className="h-3.5 w-auto shrink-0 rounded-[3px]" />
-            Built in India
+            Startups · AI · Software · Funding
           </span>
 
-          <Display className="max-w-[15ch] md:text-7xl lg:text-[80px]">
-            Discover India&rsquo;s next <span className="text-primary">big</span> thing.
+          <Display className="max-w-[16ch] text-[2.5rem] leading-[1.05] sm:text-6xl lg:text-[64px]">
+            Discover what&rsquo;s being built in <span className="text-primary">India</span>.
           </Display>
 
           <p className="max-w-xl text-lg leading-relaxed text-body">
-            Bharat Hunt is where makers launch their products and the community discovers,
-            supports and helps them grow.
+            Find the startups, AI products and software worth knowing before everyone else &mdash;
+            and the funding and investors behind them.
           </p>
 
+          <div className="w-full max-w-xl">
+            <SearchAutocomplete
+              tone="hero"
+              placeholder="Search startups, products, AI tools, companies…"
+            />
+            {shortcuts.length > 0 && (
+              <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
+                <span className="text-muted">Popular:</span>
+                {shortcuts.map((shortcut) => (
+                  <Link
+                    key={shortcut.href}
+                    href={shortcut.href}
+                    className="rounded-full border border-border bg-card px-3 py-1 font-medium text-body transition-colors hover:border-primary/40 hover:text-primary"
+                  >
+                    {shortcut.label}
+                  </Link>
+                ))}
+              </div>
+            )}
+          </div>
+
           <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row">
+            <Link href="/marketplace" className={buttonVariants({ size: "lg" })}>
+              Explore Products
+              <ArrowRight aria-hidden="true" />
+            </Link>
             {/* Not prefetched: most homepage visitors are signed out, and for them
                 /submit is a redirect to /login — a full render thrown away. */}
-            <Link href="/submit" prefetch={false} className={buttonVariants({ size: "lg" })}>
+            <Link
+              href="/submit"
+              prefetch={false}
+              className={buttonVariants({ variant: "outline", size: "lg" })}
+            >
+              <Rocket aria-hidden="true" />
               Launch Your Product
             </Link>
-            <Link href="/marketplace" className={buttonVariants({ variant: "outline", size: "lg" })}>
-              Explore Products
-            </Link>
           </div>
-
-          {/* Real counts, stated quietly. Anything a visitor can check has to
-              be true — invented social proof is the fastest way to lose them. */}
-          {stats.products > 0 && (
-            <p className="text-sm text-muted">
-              <Numeric className="font-semibold text-ink">{stats.products}</Numeric> products
-              launched by{" "}
-              <Numeric className="font-semibold text-ink">{stats.makers}</Numeric> makers
-            </p>
-          )}
         </div>
 
-        {topProduct && (
-          <div className="w-full max-w-2xl">
-            <TopLaunchCard product={topProduct} day={topProductDay} />
-          </div>
-        )}
+        {nodes.length > 0 && <EcosystemMap nodes={nodes.slice(0, NODE_POSITIONS.length)} />}
       </div>
     </section>
   );
 }
 
-/** The showpiece: whichever real launch is leading the day named on the badge. */
-function TopLaunchCard({
-  product,
-  day,
-}: {
-  product: HeroProps["topProduct"] & {};
-  day: string | null;
-}) {
-  // "today" / "yesterday" / "23 Aug". Null only for a malformed or missing day,
-  // where a neutral label beats a claim we cannot stand behind.
-  const dayLabel = day ? formatLaunchDay(day) : null;
-
-  const metrics = [
-    { icon: ChevronUp, value: product.upvote_count ?? 0, label: "Upvotes" },
-    { icon: MessageSquare, value: product.comment_count ?? 0, label: "Comments" },
-    { icon: Eye, value: product.view_count ?? 0, label: "Views" },
-  ];
-
+/**
+ * The ecosystem, drawn as a constellation: Bharat Hunt in the middle, the
+ * things you can discover around it, each one a link with a live count.
+ *
+ * Plain SVG lines under absolutely positioned HTML chips — no canvas, no
+ * WebGL, no animation library, no client JavaScript and no animation at all —
+ * a still diagram costs nothing to paint and never competes with the headline.
+ * Desktop only: on a phone the same destinations are the "Popular" chips under
+ * the search, which is where a thumb is anyway.
+ */
+function EcosystemMap({ nodes }: { nodes: EcosystemNode[] }) {
   return (
-    <div className="animate-bh-float rounded-[2rem] border border-border bg-card p-5 text-left shadow-[0_30px_70px_-28px_rgba(23,20,15,0.28)] sm:p-10">
-      <div className="flex items-center justify-between gap-4">
-        <span className="rounded-full bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary">
-          {dayLabel ? `Leading ${dayLabel}` : "Top launch"}
+    <nav aria-label="Explore the ecosystem" className="relative mx-auto hidden aspect-square w-full max-w-[460px] lg:block">
+      <div
+        aria-hidden
+        className="absolute inset-[18%] rounded-full bg-[radial-gradient(circle,rgba(255,138,61,0.20),transparent_70%)] blur-2xl"
+      />
+      <svg aria-hidden viewBox="0 0 100 100" className="absolute inset-0 size-full">
+        <circle cx="50" cy="50" r="41" fill="none" stroke="rgba(23,20,15,0.08)" strokeWidth="0.25" />
+        <circle cx="50" cy="50" r="24" fill="none" stroke="rgba(255,107,26,0.18)" strokeWidth="0.25" />
+        {nodes.map((node, index) => {
+          const { x, y } = NODE_POSITIONS[index];
+          return (
+            <line
+              key={node.href}
+              x1="50"
+              y1="50"
+              x2={x}
+              y2={y}
+              stroke="rgba(255,107,26,0.45)"
+              strokeWidth="0.3"
+              strokeDasharray="1 1.4"
+            />
+          );
+        })}
+      </svg>
+
+      {/* The hub */}
+      <div className="absolute top-1/2 left-1/2 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-2">
+        <span className="flex size-20 items-center justify-center rounded-3xl bg-[linear-gradient(135deg,#ff6b1a,#ff8a3d)] text-3xl font-bold text-white shadow-[0_18px_40px_-12px_rgba(255,107,26,0.65)]">
+          B
         </span>
-        <span className="rounded-full bg-secondary-bg px-2.5 py-1 text-xs font-medium text-body">
-          {product.category}
+        <span className="rounded-full bg-card/90 px-2.5 py-0.5 text-xs font-semibold text-ink shadow-sm">
+          Bharat Hunt
         </span>
       </div>
 
-      <div className="mt-6 flex items-center gap-4">
-        <ProductLogo
-          src={product.hero_image_url}
-          name={product.name}
-          size="lg"
-          className="shadow-sm"
-        />
-        <h2 className="min-w-0 truncate text-2xl font-bold tracking-tight text-ink sm:text-4xl">
-          {product.name}
-        </h2>
-      </div>
-
-      <p className="mt-4 line-clamp-2 text-lg leading-relaxed text-body">{product.tagline}</p>
-
-      <dl className="mt-8 grid grid-cols-3 gap-2 sm:gap-4">
-        {metrics.map(({ icon: Icon, value, label }) => (
-          <div key={label} className="rounded-2xl bg-secondary-bg p-2.5 text-center sm:p-4">
-            <dd className="flex items-center justify-center gap-1 text-ink">
-              <Icon className="size-4 shrink-0 text-primary sm:size-5" aria-hidden="true" />
-              <Numeric className="text-lg font-bold sm:text-3xl">
-                {value.toLocaleString("en-IN")}
-              </Numeric>
-            </dd>
-            <dt className="mt-1 text-xs text-muted sm:text-sm">{label}</dt>
-          </div>
-        ))}
-      </dl>
-
-      <Link
-        href={`/products/${product.slug}`}
-        className="btn-gradient mt-8 flex h-14 w-full items-center justify-center gap-2 rounded-2xl px-4 text-base font-semibold"
-      >
-        <span className="min-w-0 truncate">View {product.name}</span>
-        <ArrowRight className="size-5 shrink-0" aria-hidden="true" />
-      </Link>
-    </div>
+      {nodes.map((node, index) => {
+        const { x, y } = NODE_POSITIONS[index];
+        const Icon = NODE_ICON[node.icon];
+        return (
+          <Link
+            key={node.href}
+            href={node.href}
+            style={{ left: `${x}%`, top: `${y}%` }}
+            className="group absolute flex -translate-x-1/2 -translate-y-1/2 items-center gap-2.5 rounded-2xl border border-border bg-card py-2 pr-3.5 pl-2 whitespace-nowrap shadow-sm transition-all duration-200 hover:border-primary/40 hover:shadow-hover"
+          >
+            <span className="flex size-8 items-center justify-center rounded-xl bg-primary/10 text-primary">
+              <Icon className="size-4" aria-hidden="true" />
+            </span>
+            <span className="flex flex-col leading-tight">
+              <span className="text-sm font-semibold text-ink group-hover:text-primary">
+                {node.label}
+              </span>
+              {node.meta && <span className="text-[11px] text-muted">{node.meta}</span>}
+            </span>
+          </Link>
+        );
+      })}
+    </nav>
   );
 }

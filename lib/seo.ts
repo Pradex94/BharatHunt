@@ -32,7 +32,7 @@ export function organizationSchema() {
     url: SITE_URL,
     logo: absoluteUrl("/icon"),
     description:
-      "A curated marketplace where founders launch products and the community discovers, upvotes, and shares the tools worth their attention.",
+      "Where India's startups, AI products and software launch — with the funding and investor intelligence around them. Founders launch, the community discovers and upvotes.",
     ...(SOCIAL_PROFILE_URLS.length > 0 ? { sameAs: SOCIAL_PROFILE_URLS } : {}),
   };
 }

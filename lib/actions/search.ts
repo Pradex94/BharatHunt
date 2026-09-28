@@ -1,9 +1,11 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createPublicClient } from "@/lib/supabase/server";
 import { checkRateLimitByIp } from "@/lib/rate-limit";
 import { PRODUCT_CATEGORIES, slugForCategory } from "@/lib/constants";
 import {
+  EMPTY_SUGGESTIONS,
+  entityNamePattern,
   isSuggestable,
   matchesNormalized,
   normalizeSearchText,
@@ -18,11 +20,17 @@ import {
  * request time — so `SearchSuggestions` lives in lib/search.ts.
  *
  * Cost per keystroke is capped deliberately: the client debounces, this refuses
- * queries too short to be meaningful, and both queries are `limit`ed. Categories
+ * queries too short to be meaningful, and every query is `limit`ed. Categories
  * are matched in memory against the static taxonomy, so they cost nothing.
+ *
+ * One request per settled query covers every group — products, makers, AI
+ * entities, funded startups and investors. The browser never fans out to five
+ * sources; this action does, in parallel, against indexed columns
+ * (`normalized_name` carries a trigram index on the AI and investor tables, and
+ * the startup table is small). Each group fails soft to empty on its own.
  */
 export async function fetchSearchSuggestions(query: string): Promise<SearchSuggestions> {
-  const empty: SearchSuggestions = { products: [], categories: [], makers: [] };
+  const empty: SearchSuggestions = EMPTY_SUGGESTIONS;
 
   const term = query.trim();
   if (!isSuggestable(term)) {
@@ -44,9 +52,13 @@ export async function fetchSearchSuggestions(query: string): Promise<SearchSugge
   }
 
   const supabase = createClient();
+  // The funding and AI tables are public-by-policy and identical for every
+  // visitor, so they are read without the Clerk token.
+  const publicClient = createPublicClient();
   const normalized = normalizeSearchText(term);
+  const entityPattern = entityNamePattern(term);
 
-  const [productResult, makerResult] = await Promise.all([
+  const [productResult, makerResult, aiResult, startupResult, investorResult] = await Promise.all([
     // Same ranked function the marketplace uses, so the dropdown can never
     // disagree with the results page it leads to.
     supabase.rpc("search_products", {
@@ -62,6 +74,31 @@ export async function fetchSearchSuggestions(query: string): Promise<SearchSugge
       .select("display_name, username")
       .ilike("search_name", `%${normalized}%`)
       .limit(3),
+    entityPattern
+      ? publicClient
+          .from("ai_entities")
+          .select("name, slug, entity_type")
+          .in("entity_type", ["company", "model", "tool"])
+          .ilike("normalized_name", entityPattern)
+          .order("last_seen_at", { ascending: false })
+          .limit(3)
+      : null,
+    entityPattern
+      ? publicClient
+          .from("funding_startups")
+          .select("name, slug, industry")
+          .ilike("normalized_name", entityPattern)
+          .order("last_round_at", { ascending: false, nullsFirst: false })
+          .limit(3)
+      : null,
+    entityPattern
+      ? publicClient
+          .from("funding_investors")
+          .select("name, slug, published_deal_count")
+          .ilike("normalized_name", entityPattern)
+          .order("published_deal_count", { ascending: false })
+          .limit(3)
+      : null,
   ]);
 
   // Suggestions are a convenience; a failure should quietly show fewer
@@ -83,5 +120,23 @@ export async function fetchSearchSuggestions(query: string): Promise<SearchSugge
     .map((category) => ({ name: category, slug: slugForCategory(category) ?? "" }))
     .filter((category) => category.slug);
 
-  return { products, categories, makers };
+  const ai = (aiResult?.data ?? []).map((row) => ({
+    name: row.name,
+    slug: row.slug,
+    type: row.entity_type,
+  }));
+
+  const startups = (startupResult?.data ?? []).map((row) => ({
+    name: row.name,
+    slug: row.slug,
+    industry: row.industry,
+  }));
+
+  const investors = (investorResult?.data ?? []).map((row) => ({
+    name: row.name,
+    slug: row.slug,
+    deal_count: Number(row.published_deal_count ?? 0),
+  }));
+
+  return { products, categories, makers, ai, startups, investors };
 }

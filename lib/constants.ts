@@ -37,26 +37,27 @@ export type NavLink = {
  */
 export const PROMOTE_ENABLED = process.env.NEXT_PUBLIC_PROMOTE_ENABLED === "true";
 
+/*
+ * The platform in five words: Discover, Launches, AI, Funding, Investors.
+ *
+ * Mirrors the homepage's story — product discovery first, then the
+ * intelligence around it. "Home" is gone (the logo is home), and Resources and
+ * Advertise moved to the footer, where both already had links, so the row
+ * stays on one line beside the search and the launch CTA.
+ *
+ * Discover and Launches share a path, and `activeNavIndex` in the navbar
+ * matches on path only (reading the query string would force every page into
+ * dynamic rendering), so on /marketplace the first match — Discover — lights.
+ */
 export const NAV_LINKS: NavLink[] = [
-  { label: "Home", href: "/" },
-  { label: "Products", href: "/marketplace" },
-  // "AI Trends", not "AI Trending" — the page's own h1 is the long form, and
-  // this row is already tight enough that one extra character per label pushes
-  // the desktop menu into the search box a breakpoint earlier. Placed second
-  // because it is the most-changing thing on the site: it has new content every
-  // ten minutes, and Investors and Resources do not.
+  { label: "Discover", href: "/marketplace" },
+  { label: "Launches", href: "/marketplace?sort=newest" },
+  // "AI Trends", not "AI" — the page's own h1 is the long form, and a bare
+  // "AI" reads as a product category rather than the news hub it is.
   { label: "AI Trends", href: "/ai" },
-  // "Funding", not "Funding Intelligence" — same reasoning as the label below.
-  // It sits next to Products because the two are the discovery half of the
-  // platform: what launched, and who is being funded.
   { label: "Funding", href: "/funding" },
-  // "Investors", not "Investor Directory". The nav row is already crowded and
-  // the two-word label would be the widest thing in it, forcing the menu to
-  // wrap a breakpoint earlier. The page's own h1 does the explaining.
   { label: "Investors", href: "/investors" },
-  { label: "Resources", href: "/blog" },
   ...(PROMOTE_ENABLED ? [{ label: "Promote", href: "/promote" }] : []),
-  { label: "Advertise", href: "/advertise" },
 ];
 
 /** A single maker may launch at most this many products. */
