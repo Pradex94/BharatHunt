@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 
 import { FundingRoundCard } from "@/components/funding/round-card";
 import { loadMoreFundingRounds } from "@/lib/actions/funding";
+import { groupFundingEvents } from "@/lib/funding/grouping";
 import type { FundingSearchParams } from "@/lib/funding/filters";
 import type { FundingRoundRow } from "@/services/funding";
 
@@ -62,6 +63,10 @@ export function FundingRoundList({
     setError(null);
   }
 
+  // Records of one event that ingestion did not merge are folded here, across
+  // every page loaded so far — a duplicate on page 2 joins its card on page 1.
+  const events = useMemo(() => groupFundingEvents(rounds), [rounds]);
+
   function handleLoadMore() {
     setError(null);
     startTransition(async () => {
@@ -85,8 +90,8 @@ export function FundingRoundList({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-4">
-        {rounds.map((round) => (
+      <div className="flex flex-col gap-3">
+        {events.map((round) => (
           <FundingRoundCard key={round.id} round={round} />
         ))}
       </div>

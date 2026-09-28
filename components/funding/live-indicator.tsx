@@ -3,72 +3,65 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { usePrefersReducedMotion } from "@/hooks/use-prefers-reduced-motion";
 import { cn } from "@/lib/utils";
 import {
   FUNDING_REFOCUS_MIN_INTERVAL_MS,
   FUNDING_REFRESH_INTERVAL_MS,
 } from "@/lib/funding/constants";
-import { relativeTime } from "@/lib/funding/format";
+import { formatIstDateTime, relativeTime } from "@/lib/funding/format";
 
 /**
- * The freshness indicator, and the thing that keeps the feed fresh.
+ * The freshness line, and the thing that keeps the page fresh.
  *
  * What it claims, and why the wording is what it is
  * -------------------------------------------------
- * "Live feed" describes the *page* — it re-checks the server every half hour
- * and new rounds appear without a reload. The timestamp beside it describes the
- * *data*, and it is computed from the newest article's own publication time,
- * not from when we last ran an ingestion. Those are different facts and the
- * component says both, because the tempting single claim — "updated 2 minutes
- * ago" meaning "we checked 2 minutes ago" — would read as "there is news from 2
- * minutes ago", which is exactly the fake liveness this feature is not allowed
- * to manufacture. On a quiet Sunday this correctly reads "Last updated 2 days
- * ago", and that is the honest answer.
+ * Two facts, never merged into one:
+ *
+ *   - "Last synced 3 hours ago" — when ingestion last completed a run
+ *     (`funding_last_sync`). This is when we last *checked*.
+ *   - "Newest round 2 days ago" — the newest published round's source time.
+ *     This is how fresh the *data* is.
+ *
+ * On a quiet day the first is recent and the second is old, and saying only
+ * the first would read as "there is news from 3 hours ago". Ingestion runs
+ * once a day plus manual runs (.github/workflows/ingest.yml), so the word
+ * "live" and a pulsing dot — which this used to have — overstated it; the dot
+ * is now static and the label says "synced". When the sync time is unknown the
+ * line falls back to the newest-round time alone.
  *
  * How the refresh works
  * ---------------------
- * `router.refresh()` on an interval, not a Supabase Realtime subscription.
- * Realtime is not enabled on this project — nothing in the codebase opens a
- * channel — and enabling it to push rows that arrive a few times an hour would
- * be a subscription per visitor for an event that is rarer than the polling
- * interval. A refresh re-runs the whole server component: the data comes from a
- * two-minute Redis cache, but the render does not, and it is the render that
- * costs Worker CPU. Hence a long interval, and a return to the tab refreshing
- * only a page that is some minutes old (FUNDING_REFOCUS_MIN_INTERVAL_MS).
- *
- * The interval is paused while the tab is hidden. A background tab polling a
- * news feed forever is the version of this that shows up in someone's battery
- * report.
+ * `router.refresh()` on a long interval, paused while the tab is hidden, plus
+ * one on return to a tab that is some minutes old. Not Realtime: nothing on
+ * this project opens a channel, and a refresh re-renders the page on the
+ * server, which costs Worker CPU — see FUNDING_REFRESH_INTERVAL_MS.
  */
 export function FundingLiveIndicator({
-  /** ISO timestamp of the newest published round's source article. */
-  lastUpdatedAt,
-  /** Server-rendered label, so the first paint matches and hydration is clean. */
-  initialLabel,
+  lastSyncedAt,
+  latestRoundAt,
+  renderedAt,
   className,
-  tone = "light",
 }: {
-  lastUpdatedAt: string | null;
-  initialLabel: string | null;
+  /** ISO timestamp of the last completed ingestion run, if known. */
+  lastSyncedAt: string | null;
+  /** ISO timestamp of the newest published round's source article. */
+  latestRoundAt: string | null;
+  /** The server's clock at render, so the first client paint computes identical labels. */
+  renderedAt: string;
   className?: string;
-  tone?: "light" | "dark";
 }) {
   const router = useRouter();
-  const reducedMotion = usePrefersReducedMotion();
-  const [label, setLabel] = useState(initialLabel);
 
-  // Recompute the relative label on the client so "2 minutes ago" does not
-  // stay frozen at whatever it was when the page was rendered. Runs after
-  // mount, so the server and client agree on the first paint.
+  // Relative labels are recomputed after mount so "2 minutes ago" does not
+  // freeze at render time. The server renders the same function, so the first
+  // paint matches and hydration is clean.
+  const [now, setNow] = useState<Date | null>(null);
   useEffect(() => {
-    if (!lastUpdatedAt) return;
-
-    const tick = () => setLabel(relativeTime(lastUpdatedAt));
+    const tick = () => setNow(new Date());
     tick();
-    const timer = setInterval(tick, 30_000);
+    const timer = setInterval(tick, 60_000);
     return () => clearInterval(timer);
-  }, [lastUpdatedAt]);
+  }, []);
 
   useEffect(() => {
     let timer: ReturnType<typeof setInterval> | null = null;
@@ -91,9 +84,6 @@ export function FundingLiveIndicator({
 
     const onVisibilityChange = () => {
       if (document.visibilityState === "visible") {
-        // Coming back to the tab is exactly when someone wants the current
-        // state, so refresh then rather than waiting out the interval — unless
-        // the page is only minutes old, which a quick tab switch usually is.
         if (Date.now() - lastRefreshAt >= FUNDING_REFOCUS_MIN_INTERVAL_MS) refresh();
         start();
       } else {
@@ -110,37 +100,41 @@ export function FundingLiveIndicator({
     };
   }, [router]);
 
-  const onDark = tone === "dark";
+  const clock = now ?? new Date(renderedAt);
+  const synced = relativeTime(lastSyncedAt, clock);
+  const latest = relativeTime(latestRoundAt, clock);
+  if (!synced && !latest) return null;
+
+  const title = [
+    lastSyncedAt && `Last sync completed ${formatIstDateTime(lastSyncedAt)}.`,
+    latestRoundAt && `Newest round published by its source ${formatIstDateTime(latestRoundAt)}.`,
+    "Sources are checked daily; this page re-checks for new rounds periodically.",
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   return (
-    <span
+    <p
       className={cn(
-        "inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium",
-        onDark
-          ? "border-white/15 bg-white/5 text-white/80"
-          : "border-border bg-card text-body",
+        "inline-flex flex-wrap items-center gap-x-2 gap-y-1 rounded-full border border-border bg-card px-3 py-1.5 text-xs font-medium text-body",
         className,
       )}
-      title="This page checks for newly published rounds periodically. The time shown is when the most recent story was published by its source."
+      title={title}
     >
-      <span className="relative flex size-2 shrink-0">
-        {/* The pulse is decorative and honest: it marks a page that polls, not
-            data that just arrived. Suppressed under reduced-motion, where a
-            steady dot carries the same meaning. */}
-        {!reducedMotion && (
-          <span className="absolute inline-flex size-full animate-ping rounded-full bg-success opacity-60" />
-        )}
-        <span className="relative inline-flex size-2 rounded-full bg-success" />
-      </span>
-      Live feed
-      {label && (
+      <span aria-hidden="true" className="size-2 shrink-0 rounded-full bg-success" />
+      {synced ? (
+        <span>Last synced {synced}</span>
+      ) : (
+        <span>Updated daily</span>
+      )}
+      {latest && (
         <>
-          <span aria-hidden="true" className={onDark ? "text-white/25" : "text-border"}>
+          <span aria-hidden="true" className="text-border">
             ·
           </span>
-          <span className={onDark ? "text-white/60" : "text-muted"}>Last updated {label}</span>
+          <span className="text-muted">Newest round {latest}</span>
         </>
       )}
-    </span>
+    </p>
   );
 }

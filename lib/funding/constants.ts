@@ -161,13 +161,19 @@ export const FUNDING_DATE_FILTERS: { value: string; label: string; days: number 
 
 // ── Sorting and paging ───────────────────────────────────────────────────
 
-export const FUNDING_SORTS = ["recent", "amount", "oldest"] as const;
+/**
+ * `smallest` needs 20260929000000. Against a database without it the SQL's
+ * `case` simply matches nothing and the feed falls back to newest-first, so
+ * shipping the UI ahead of the migration degrades rather than breaks.
+ */
+export const FUNDING_SORTS = ["recent", "oldest", "amount", "smallest"] as const;
 export type FundingSort = (typeof FUNDING_SORTS)[number];
 
 export const FUNDING_SORT_LABELS: Record<FundingSort, string> = {
-  recent: "Latest",
-  amount: "Largest",
+  recent: "Newest",
   oldest: "Oldest",
+  amount: "Largest round",
+  smallest: "Smallest round",
 };
 
 /**

@@ -205,3 +205,105 @@ export function hostOf(url: string | null | undefined): string | null {
     return null;
   }
 }
+
+/**
+ * The rupee equivalent of a non-rupee round, for a secondary "≈ ₹X Cr" line.
+ *
+ * Only ever shown *next to* the reported figure and labelled as a conversion —
+ * never instead of it. Uses `amount_inr`, which was converted at the rate
+ * stamped on the row (`fx_rate_to_inr`) when the round was extracted, so this
+ * does not re-convert with today's table. Null for rupee rounds (nothing to
+ * convert) and for rounds with no rupee figure (nothing honest to show).
+ */
+export function convertedInrEstimate(round: {
+  currency?: string | null;
+  amount_inr?: number | null;
+}): string | null {
+  const currency = (round.currency ?? "INR").toUpperCase();
+  if (currency === "INR") return null;
+  if (round.amount_inr === null || round.amount_inr === undefined) return null;
+  return formatInr(round.amount_inr);
+}
+
+export type ConfidenceBand = "high" | "medium" | "low";
+
+/**
+ * The extractor's 0..1 score as a word.
+ *
+ * A band rather than a percentage, deliberately: "87% confidence" invites a
+ * precision the heuristic does not have, while "high / medium / low" says what
+ * a reader can actually use — how much to lean on the record before opening the
+ * source. Null when there is no score, which callers render as nothing.
+ */
+export function confidenceBand(score: number | string | null | undefined): ConfidenceBand | null {
+  if (score === null || score === undefined || score === "") return null;
+  const value = typeof score === "string" ? Number(score) : score;
+  if (!Number.isFinite(value) || value < 0 || value > 1) return null;
+  if (value >= 0.8) return "high";
+  if (value >= 0.55) return "medium";
+  return "low";
+}
+
+/** "29 Sep 2026, 12:42 am IST" — an absolute time for a title or a footnote. */
+export function formatIstDateTime(value: string | Date | null | undefined): string | null {
+  if (!value) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+
+  const formatted = date.toLocaleString("en-IN", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+    timeZone: "Asia/Kolkata",
+  });
+  return `${formatted} IST`;
+}
+
+/** Up to two initials for a logo placeholder: "Byte Ask" → "BA", "zepto" → "Z". */
+export function initialsOf(name: string | null | undefined): string {
+  const words = (name ?? "").trim().split(/[\s\-_.]+/).filter(Boolean);
+  if (words.length === 0) return "?";
+  const letters = words.length === 1 ? words[0].slice(0, 1) : words[0][0] + words[1][0];
+  return letters.toUpperCase();
+}
+
+/**
+ * A round's amount in one house style: "₹12.5 Cr", "₹1,455 Cr", "₹50 L",
+ * "$6.7 Mn", "$1.2 Bn".
+ *
+ * The same *figure* as the source reported, in the source's currency — only
+ * the typography is normalised, so "Rs 12.5 Crore", "₹12.5 crore" and
+ * "INR 125 million" stop reading as three different numbers in one feed.
+ * Built from `amount_numeric` + `currency` (what extraction parsed); when
+ * there is no parsed number it falls back to the verbatim string, and callers
+ * keep that verbatim string available as "as reported". Nothing is converted.
+ */
+export function formatReportedAmount(round: {
+  amount?: string | null;
+  amount_numeric?: number | null;
+  currency?: string | null;
+}): string | null {
+  const value = round.amount_numeric;
+  if (value === null || value === undefined || !Number.isFinite(value) || value <= 0) {
+    return round.amount?.trim() || null;
+  }
+
+  const currency = (round.currency ?? "INR").toUpperCase();
+  if (currency === "INR") {
+    if (value >= CRORE) {
+      const crore = Math.round((value / CRORE) * 10) / 10;
+      return `₹${crore >= 1000 ? Math.round(crore).toLocaleString("en-IN") : trimZero(crore)} Cr`;
+    }
+    if (value >= LAKH) return `₹${trimZero(value / LAKH)} L`;
+    return `₹${Math.round(value).toLocaleString("en-IN")}`;
+  }
+
+  const symbol = CURRENCY_SYMBOL[currency] ?? `${currency} `;
+  if (value >= 1_000_000_000) return `${symbol}${trimZero(value / 1_000_000_000)} Bn`;
+  if (value >= 1_000_000) return `${symbol}${trimZero(value / 1_000_000)} Mn`;
+  if (value >= 1_000) return `${symbol}${trimZero(value / 1_000)}K`;
+  return `${symbol}${Math.round(value).toLocaleString("en-US")}`;
+}

@@ -2,8 +2,12 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import {
+  confidenceBand,
+  convertedInrEstimate,
   displayAmount,
   formatDay,
+  formatIstDateTime,
+  initialsOf,
   formatInr,
   formatInrCompact,
   formatMonthKey,
@@ -166,5 +170,61 @@ describe("sourceFaviconUrl and hostOf", () => {
   it("strips www from a display host", () => {
     assert.equal(hostOf("https://www.inc42.com/buzz/x"), "inc42.com");
     assert.equal(hostOf("nope"), null);
+  });
+});
+
+describe("convertedInrEstimate — a labelled conversion, never a replacement", () => {
+  it("shows the stored rupee figure for a foreign-currency round", () => {
+    assert.equal(convertedInrEstimate({ currency: "USD", amount_inr: 880_000_000 }), "₹88 Cr");
+  });
+
+  it("returns nothing for a rupee round — there is nothing to convert", () => {
+    assert.equal(convertedInrEstimate({ currency: "INR", amount_inr: 250_000_000 }), null);
+    assert.equal(convertedInrEstimate({ currency: null, amount_inr: 250_000_000 }), null);
+  });
+
+  it("returns nothing when no rupee figure was stored", () => {
+    assert.equal(convertedInrEstimate({ currency: "USD", amount_inr: null }), null);
+  });
+});
+
+describe("confidenceBand — a word, not a false-precision percentage", () => {
+  it("bands the score", () => {
+    assert.equal(confidenceBand(0.92), "high");
+    assert.equal(confidenceBand(0.6), "medium");
+    assert.equal(confidenceBand(0.3), "low");
+  });
+
+  it("accepts Postgres numerics, which arrive as strings", () => {
+    assert.equal(confidenceBand("0.850"), "high");
+  });
+
+  it("returns null for missing or out-of-range scores", () => {
+    assert.equal(confidenceBand(null), null);
+    assert.equal(confidenceBand(undefined), null);
+    assert.equal(confidenceBand(1.4), null);
+    assert.equal(confidenceBand("nope"), null);
+  });
+});
+
+describe("formatIstDateTime", () => {
+  it("renders in India time whatever the server's zone", () => {
+    // 19:12 UTC is 00:42 the next day in IST.
+    const label = formatIstDateTime("2026-09-28T19:12:00Z");
+    assert.ok(label?.startsWith("29 Sept 2026") || label?.startsWith("29 Sep 2026"), label ?? "");
+    assert.ok(label?.endsWith("IST"));
+  });
+
+  it("returns null for unusable input", () => {
+    assert.equal(formatIstDateTime(null), null);
+    assert.equal(formatIstDateTime("garbage"), null);
+  });
+});
+
+describe("initialsOf", () => {
+  it("takes up to two initials", () => {
+    assert.equal(initialsOf("Byte Ask"), "BA");
+    assert.equal(initialsOf("zepto"), "Z");
+    assert.equal(initialsOf("  "), "?");
   });
 });

@@ -2429,8 +2429,23 @@ export type Database = {
           verified: boolean
           extraction_method: string | null
           is_featured: boolean
+          // 20260929000000; absent on a database without it.
+          confidence_score?: number | null
           total_count: number
         }[]
+      }
+      funding_round_coverage: {
+        Args: { round_ids: string[] }
+        Returns: {
+          round_id: string
+          source_name: string
+          url: string
+          published_at: string | null
+        }[]
+      }
+      funding_last_sync: {
+        Args: never
+        Returns: string | null
       }
       funding_snapshot: {
         Args: never

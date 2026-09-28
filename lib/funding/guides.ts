@@ -22,8 +22,20 @@ export type GuideBlock =
   | { type: "list"; items: string[] }
   | { type: "callout"; text: string };
 
+/** The playbook's shelves. Five, so a filter row of them fits a phone. */
+export const GUIDE_CATEGORIES = [
+  "Pitching",
+  "Fundraising",
+  "Investors",
+  "Finance",
+  "Due Diligence",
+] as const;
+
+export type GuideCategory = (typeof GUIDE_CATEGORIES)[number];
+
 export type FundingGuide = {
   slug: string;
+  category: GuideCategory;
   title: string;
   /** One sentence; used on the index, the meta description and the card. */
   excerpt: string;
@@ -37,24 +49,29 @@ export type FundingGuide = {
 export const FUNDING_ROADMAP: {
   step: number;
   title: string;
+  /** One or two words, for the compact journey strip. */
+  short: string;
   summary: string;
   guideSlug?: string;
 }[] = [
   {
     step: 1,
     title: "Validate the idea",
+    short: "Validate",
     summary:
       "Find ten people with the problem who will talk to you, and one who will pay before you have built anything. Validation is evidence of demand, not agreement that the idea sounds good.",
   },
   {
     step: 2,
     title: "Build an MVP",
+    short: "MVP",
     summary:
       "The smallest thing that lets someone get the outcome they wanted. Scope it to what you can put in front of a user in weeks, not quarters — the point is to learn what you were wrong about.",
   },
   {
     step: 3,
     title: "Get initial traction",
+    short: "Traction",
     summary:
       "Usage that repeats without you pushing it. Retention, revenue and referral are the three that survive scrutiny; downloads, signups and waitlist size do not.",
     guideSlug: "what-investors-look-for",
@@ -62,6 +79,7 @@ export const FUNDING_ROADMAP: {
   {
     step: 4,
     title: "Prepare your financials",
+    short: "Financials",
     summary:
       "Know your burn, your runway, your unit economics and your cap table to the rupee. You will be asked all four in the first meeting.",
     guideSlug: "how-much-funding-should-a-startup-raise",
@@ -69,6 +87,7 @@ export const FUNDING_ROADMAP: {
   {
     step: 5,
     title: "Build the pitch deck",
+    short: "Pitch deck",
     summary:
       "Ten to twelve slides that make the argument in order: problem, insight, product, evidence, market, plan, team, ask.",
     guideSlug: "how-to-create-a-startup-pitch-deck",
@@ -76,6 +95,7 @@ export const FUNDING_ROADMAP: {
   {
     step: 6,
     title: "Identify the right investors",
+    short: "Investors",
     summary:
       "Stage, sector and cheque size have to match before anything else matters. A brilliant pitch to a fund that does not write your cheque is a wasted month.",
     guideSlug: "how-to-find-vcs-in-india",
@@ -83,6 +103,7 @@ export const FUNDING_ROADMAP: {
   {
     step: 7,
     title: "Start outreach",
+    short: "Outreach",
     summary:
       "Warm introductions convert several times better than cold email. Build the list, find the paths, and run the process in parallel rather than one fund at a time.",
     guideSlug: "how-to-approach-angel-investors",
@@ -90,6 +111,7 @@ export const FUNDING_ROADMAP: {
   {
     step: 8,
     title: "Run due diligence",
+    short: "Due diligence",
     summary:
       "Diligence is a document exercise you can be ready for months early. Being ready is itself a signal.",
     guideSlug: "how-to-prepare-for-due-diligence",
@@ -97,6 +119,7 @@ export const FUNDING_ROADMAP: {
   {
     step: 9,
     title: "Negotiate the terms",
+    short: "Negotiation",
     summary:
       "Valuation is the number founders watch and rarely the term that costs them most. Read the preference, the pool and the control rights first.",
     guideSlug: "startup-valuation-basics",
@@ -104,6 +127,7 @@ export const FUNDING_ROADMAP: {
   {
     step: 10,
     title: "Close the round",
+    short: "Close",
     summary:
       "Signed documents, money received, filings made. In India that includes the Companies Act paperwork and, for a foreign investor, the FEMA reporting — none of which is optional.",
     guideSlug: "common-fundraising-mistakes",
@@ -113,6 +137,7 @@ export const FUNDING_ROADMAP: {
 export const FUNDING_GUIDES: FundingGuide[] = [
   {
     slug: "how-to-create-a-startup-pitch-deck",
+    category: "Pitching",
     title: "How to create a startup pitch deck",
     excerpt:
       "Ten to twelve slides, in the order that makes the argument. What each one has to prove, and the three that decide whether the rest get read.",
@@ -163,6 +188,7 @@ export const FUNDING_GUIDES: FundingGuide[] = [
 
   {
     slug: "how-much-funding-should-a-startup-raise",
+    category: "Finance",
     title: "How much funding should a startup raise?",
     excerpt:
       "Size the round to the milestone, not to the market. How runway, burn and the next round's bar decide the number.",
@@ -201,6 +227,7 @@ export const FUNDING_GUIDES: FundingGuide[] = [
 
   {
     slug: "pre-seed-vs-seed-vs-series-a",
+    category: "Fundraising",
     title: "Pre-seed vs Seed vs Series A",
     excerpt:
       "What each stage is actually buying, what has to be true to raise it, and the cheque sizes these labels tend to mean in India.",
@@ -240,6 +267,7 @@ export const FUNDING_GUIDES: FundingGuide[] = [
 
   {
     slug: "how-to-approach-angel-investors",
+    category: "Investors",
     title: "How to approach angel investors",
     excerpt:
       "Warm paths, the first email, and what an angel is actually deciding in the twenty minutes they give you.",
@@ -279,6 +307,7 @@ export const FUNDING_GUIDES: FundingGuide[] = [
 
   {
     slug: "how-to-find-vcs-in-india",
+    category: "Investors",
     title: "How to find VCs in India",
     excerpt:
       "Building a target list that matches on stage, sector and cheque size — and the three filters that remove most of it.",
@@ -321,6 +350,7 @@ export const FUNDING_GUIDES: FundingGuide[] = [
 
   {
     slug: "what-investors-look-for",
+    category: "Pitching",
     title: "What investors look for",
     excerpt:
       "The four things being assessed underneath every question, and the metrics that survive scrutiny.",
@@ -365,6 +395,7 @@ export const FUNDING_GUIDES: FundingGuide[] = [
 
   {
     slug: "startup-valuation-basics",
+    category: "Finance",
     title: "Startup valuation basics",
     excerpt:
       "Where an early-stage number actually comes from, why pre- and post-money is not a detail, and the terms that cost more than the price.",
@@ -413,6 +444,7 @@ export const FUNDING_GUIDES: FundingGuide[] = [
 
   {
     slug: "how-to-prepare-for-due-diligence",
+    category: "Due Diligence",
     title: "How to prepare for due diligence",
     excerpt:
       "What gets checked, what usually goes wrong, and why being ready is itself a signal.",
@@ -460,6 +492,7 @@ export const FUNDING_GUIDES: FundingGuide[] = [
 
   {
     slug: "common-fundraising-mistakes",
+    category: "Fundraising",
     title: "Common fundraising mistakes",
     excerpt:
       "The ten that cost the most time, most of which are process errors rather than pitch errors.",
@@ -495,6 +528,7 @@ export const FUNDING_GUIDES: FundingGuide[] = [
 
   {
     slug: "how-to-create-an-investor-data-room",
+    category: "Due Diligence",
     title: "How to create an investor data room",
     excerpt:
       "The folder structure, what belongs in each, and what to keep out until diligence is signed.",
