@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, ArrowRight } from "lucide-react";
 
 import { Container } from "@/components/ui/container";
 import { Numeric } from "@/components/ui/typography";
@@ -197,9 +197,10 @@ export default async function FundingInvestorsPage({ searchParams }: PageProps) 
 
                 <Link
                   href={`/funding?investor=${encodeURIComponent(investor.name)}`}
-                  className="text-xs font-semibold text-primary transition-colors hover:text-primary-active"
+                  className="inline-flex items-center gap-1 text-xs font-semibold text-primary transition-colors hover:text-primary-active"
                 >
-                  See every round →
+                  See every round
+                  <ArrowRight className="size-3" aria-hidden="true" />
                 </Link>
               </article>
             ))}

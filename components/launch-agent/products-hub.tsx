@@ -6,6 +6,7 @@ import { ArrowRight, Clock, Plus, Rocket } from "lucide-react";
 
 import { ProductLogo } from "@/components/products/product-logo";
 import { buttonVariants } from "@/components/ui/button";
+import { IconTile } from "@/components/ui/icon-tile";
 import { Numeric } from "@/components/ui/typography";
 import type { MakerCampaignSummary } from "@/lib/launch-agent/view";
 import { ProgressBar } from "./badges";
@@ -13,11 +14,9 @@ import { ProgressBar } from "./badges";
 export function LaunchAgentEmptyState() {
   return (
     <div className="flex flex-col items-center gap-4 rounded-3xl border border-dashed border-border bg-card p-10 text-center">
-      <span className="flex size-14 items-center justify-center rounded-2xl bg-[linear-gradient(135deg,#FF6B1A,#FF8A3D)] text-white">
-        <Rocket className="size-7" aria-hidden="true" />
-      </span>
+      <IconTile icon={Rocket} size="xl" />
       <div>
-        <h2 className="text-xl font-bold text-ink">🚀 Your Launch Agent is waiting</h2>
+        <h2 className="text-xl font-bold text-ink">Your Launch Agent is waiting</h2>
         <p className="mx-auto mt-1 max-w-md text-sm text-body">
           Publish a product on BharatHunt and we&apos;ll analyse where your product has the best opportunities for discovery.
         </p>

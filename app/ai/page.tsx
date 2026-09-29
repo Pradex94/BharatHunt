@@ -14,7 +14,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { Breadcrumbs } from "@/components/seo/breadcrumbs";
 import { JsonLd } from "@/components/seo/json-ld";
 import { absoluteUrl } from "@/lib/seo";
-import { SITE_NAME, SITE_URL } from "@/lib/constants";
+import { SITE_NAME, SITE_URL, TOPIC_ICONS } from "@/lib/constants";
 import {
   AiSearchInput,
   CategoryRail,
@@ -129,6 +129,8 @@ export async function generateMetadata({
     ...(params.q ? { robots: { index: false, follow: true } } : {}),
   };
 }
+
+const AiIcon = TOPIC_ICONS.ai;
 
 const none = <T,>(value: T) => Promise.resolve(value);
 
@@ -284,7 +286,7 @@ export default async function AiTrendingPage({ searchParams }: { searchParams: A
 
           <div className="flex flex-col gap-3">
             <span className="inline-flex w-max items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-bold tracking-[0.14em] text-primary uppercase">
-              <Sparkles aria-hidden="true" className="size-3.5" />
+              <AiIcon aria-hidden="true" className="size-3.5" />
               AI Intelligence Hub
             </span>
             <h1 className="max-w-3xl text-3xl leading-[1.08] font-bold text-white sm:text-4xl lg:text-5xl">

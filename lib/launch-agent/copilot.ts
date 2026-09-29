@@ -146,8 +146,8 @@ function whatsMissing(context: CopilotContext, platform: CopilotPlatform | null)
     blocks.push({
       label: `${target.name} · ${target.readiness}% ready`,
       text: [
-        ...missing.map((check) => `⚠ ${check.label}${check.hint ? ` — ${check.hint}` : ""}`),
-        ...manual.map((check) => `☐ On ${target.name}: ${check.label}`),
+        ...missing.map((check) => `Missing: ${check.label}${check.hint ? ` — ${check.hint}` : ""}`),
+        ...manual.map((check) => `To do on ${target.name}: ${check.label}`),
       ].join("\n"),
     });
   }

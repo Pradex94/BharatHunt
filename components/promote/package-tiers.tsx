@@ -16,7 +16,7 @@
  * state rather than a plausible-looking number.
  */
 
-import { ArrowRight, Crown, Layers, Tag } from "lucide-react";
+import { ArrowRight, Crown, LayoutGrid, Tag } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -38,7 +38,7 @@ const PLACEMENT_SURFACE: Record<PromotionPlacement, string> = {
 
 const PLACEMENT_ICON: Record<PromotionPlacement, LucideIcon> = {
   spotlight: Crown,
-  featured: Layers,
+  featured: LayoutGrid,
   category: Tag,
 };
 

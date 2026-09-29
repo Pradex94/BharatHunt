@@ -1,18 +1,19 @@
 import Link from "next/link";
-import { Layers, Sparkles, type LucideIcon } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 
-import { CATEGORIES } from "@/lib/constants";
+import { CATEGORIES, TOPIC_ICONS } from "@/lib/constants";
 import { MIN_PRODUCTS_TO_INDEX, type Collection } from "@/lib/collections";
 import { Numeric } from "@/components/ui/typography";
 import { FadeIn } from "@/components/ui/motion";
+import { IconTile } from "@/components/ui/icon-tile";
 import { SECTION_SHELL, SectionHeader } from "@/components/landing/section-header";
 
 type Tile = { key: string; label: string; href: string; count: number; icon: LucideIcon };
 
 /** The two cross-category topics a visitor thinks in, when they hold enough products. */
 const TOPIC_TILES: { slug: string; label: string; icon: LucideIcon }[] = [
-  { slug: "ai-tools", label: "AI", icon: Sparkles },
-  { slug: "saas-products", label: "SaaS", icon: Layers },
+  { slug: "ai-tools", label: "AI", icon: TOPIC_ICONS.ai },
+  { slug: "saas-products", label: "SaaS", icon: TOPIC_ICONS.saas },
 ];
 
 /**
@@ -85,9 +86,7 @@ export function CategoryExplorer({
                 href={tile.href}
                 className="group flex h-full items-center gap-3 rounded-2xl border border-border bg-card p-3.5 transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-hover"
               >
-                <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary transition-colors group-hover:bg-primary group-hover:text-white">
-                  <tile.icon className="size-5" aria-hidden="true" />
-                </span>
+                <IconTile icon={tile.icon} size="lg" />
                 <span className="flex min-w-0 flex-col">
                   <span className="truncate text-sm font-semibold text-ink">{tile.label}</span>
                   <span className="text-xs text-muted">

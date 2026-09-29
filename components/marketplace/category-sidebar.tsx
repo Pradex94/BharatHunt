@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
+import { Check } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { buttonVariants } from "@/components/ui/button";
@@ -95,9 +96,9 @@ function PricingFilter() {
               />
               <span
                 aria-hidden="true"
-                className="flex size-[17px] items-center justify-center rounded-[5px] border border-border bg-background text-[10px] font-bold text-transparent transition-colors duration-150 peer-checked:border-primary peer-checked:bg-primary peer-checked:text-primary-foreground peer-focus-visible:ring-2 peer-focus-visible:ring-ring/50"
+                className="flex size-[17px] items-center justify-center rounded-[5px] border border-border bg-background text-transparent transition-colors duration-150 peer-checked:border-primary peer-checked:bg-primary peer-checked:text-primary-foreground peer-focus-visible:ring-2 peer-focus-visible:ring-ring/50"
               >
-                ✓
+                <Check className="size-3" />
               </span>
             </span>
             {PRICING_TYPE_LABELS[value]}

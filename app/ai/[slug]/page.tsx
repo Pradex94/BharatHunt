@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { after } from "next/server";
-import { ArrowUpRight, Clock, Layers, TrendingUp } from "lucide-react";
+import { ArrowLeft, ArrowUpRight, Clock, Newspaper, TrendingUp } from "lucide-react";
 
 import { Container } from "@/components/ui/container";
 import { Numeric } from "@/components/ui/typography";
@@ -247,7 +247,7 @@ export default async function AiStoryPage({ params }: { params: StoryParams }) {
 
               {story.source_count > 0 ? (
                 <span className="inline-flex items-center gap-1.5">
-                  <Layers aria-hidden="true" className="size-4" />
+                  <Newspaper aria-hidden="true" className="size-4" />
                   {coverageLabel(story.source_count, story.top_source_name)}
                 </span>
               ) : null}
@@ -504,8 +504,9 @@ export default async function AiStoryPage({ params }: { params: StoryParams }) {
           </ul>
         </section>
 
-        <Link href="/ai" className="text-sm font-semibold text-primary hover:underline">
-          ← All AI stories
+        <Link href="/ai" className="inline-flex items-center gap-1 text-sm font-semibold text-primary hover:underline">
+          <ArrowLeft className="size-3.5" aria-hidden="true" />
+          All AI stories
         </Link>
       </Container>
     </main>

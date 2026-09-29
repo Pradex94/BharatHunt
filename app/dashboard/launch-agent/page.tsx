@@ -4,7 +4,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@clerk/nextjs/server";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Rocket } from "lucide-react";
 
 import { ProductsHub } from "@/components/launch-agent/products-hub";
 import { Container } from "@/components/ui/container";
@@ -32,7 +32,10 @@ export default async function LaunchAgentDashboardPage() {
             <ArrowLeft className="size-4" aria-hidden="true" /> Your products
           </Link>
           <header>
-            <p className="text-xs font-semibold tracking-[0.12em] text-primary uppercase">🚀 Launch Agent</p>
+            <p className="flex items-center gap-1.5 text-xs font-semibold tracking-[0.12em] text-primary uppercase">
+              <Rocket className="size-3.5" aria-hidden="true" />
+              Launch Agent
+            </p>
             <h1 className="mt-1 text-3xl font-bold tracking-tight text-ink sm:text-4xl">Launch Agent</h1>
             <p className="mt-2 max-w-2xl text-base text-body">
               Launch once on BharatHunt. Get your product ready for discovery everywhere — a plan, platform-specific copy and a

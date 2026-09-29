@@ -6,7 +6,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { AlertTriangle, CheckCircle2, Circle, ExternalLink, Loader2, Send, Sparkles } from "lucide-react";
+import { AlertTriangle, ArrowRight, CheckCircle2, Circle, ExternalLink, Loader2, Send, Sparkles } from "lucide-react";
 
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -46,8 +46,9 @@ function CheckRow({ check, productSlug }: { check: RequirementCheck; productSlug
         </p>
         {check.hint && <p className="mt-0.5 text-xs text-muted">{check.hint}</p>}
         {check.status === "missing" && check.fix === "edit_product" && (
-          <Link href={`/products/${productSlug}/edit`} className="mt-1 inline-block text-xs font-semibold text-primary hover:underline">
-            Edit your listing →
+          <Link href={`/products/${productSlug}/edit`} className="mt-1 inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline">
+            Edit your listing
+            <ArrowRight className="size-3" aria-hidden="true" />
           </Link>
         )}
       </div>

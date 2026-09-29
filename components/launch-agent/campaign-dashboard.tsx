@@ -7,7 +7,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { ArrowUpRight, ChevronDown, RefreshCw, TriangleAlert, X } from "lucide-react";
+import { ArrowUpRight, ChevronDown, RefreshCw, Rocket, TriangleAlert, X } from "lucide-react";
 
 import { ProductLogo } from "@/components/products/product-logo";
 import { Button } from "@/components/ui/button";
@@ -115,7 +115,10 @@ export function CampaignDashboard({ view }: { view: CampaignView }) {
           <div className="flex min-w-0 items-center gap-4">
             <ProductLogo src={product.heroImageUrl} name={product.name} size="md" />
             <div className="min-w-0">
-              <p className="text-xs font-semibold tracking-[0.12em] text-primary uppercase">🚀 Launch Agent</p>
+              <p className="flex items-center gap-1.5 text-xs font-semibold tracking-[0.12em] text-primary uppercase">
+              <Rocket className="size-3.5" aria-hidden="true" />
+              Launch Agent
+            </p>
               <h1 className="truncate text-2xl font-bold tracking-tight text-ink sm:text-3xl">{product.name}</h1>
               <p className="mt-0.5 flex items-center gap-1.5 text-sm text-body">
                 <span className="size-2 rounded-full bg-success" aria-hidden="true" /> Your product is live on BharatHunt

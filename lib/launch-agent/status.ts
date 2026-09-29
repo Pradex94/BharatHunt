@@ -7,20 +7,17 @@
 
 import type { AutomationLevel, PlatformCampaignStatus, RequirementCheck } from "./types.ts";
 
-export const AUTOMATION_META: Record<AutomationLevel, { label: string; dot: string; description: string }> = {
+export const AUTOMATION_META: Record<AutomationLevel, { label: string; description: string }> = {
   AUTOMATED: {
     label: "Automated",
-    dot: "🟢",
     description: "Connected through the platform's approved API. BharatHunt can submit once you connect.",
   },
   ASSISTED: {
     label: "Assisted",
-    dot: "🟡",
     description: "We prepare the submission and open the official form for you. You press submit.",
   },
   AI_PREPARED: {
     label: "Prepared kit",
-    dot: "🔵",
     description: "We prepare everything the platform asks for. You submit it on the platform yourself.",
   },
 };

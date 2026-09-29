@@ -786,7 +786,7 @@ export function ProductForm({ product, detectedState = null }: ProductFormProps)
                           : "bg-secondary-bg text-muted",
                     )}
                   >
-                    {isDone ? <Check size={13} strokeWidth={3} /> : <Icon size={13} />}
+                    {isDone ? <Check size={13} /> : <Icon size={13} />}
                   </span>
                   <span className="whitespace-nowrap lg:whitespace-normal">{entry.label}</span>
                   <span className="ml-auto hidden text-xs text-muted lg:inline">{index + 1}</span>
@@ -1527,7 +1527,7 @@ export function ProductForm({ product, detectedState = null }: ProductFormProps)
                         done ? "bg-primary text-primary-foreground" : "bg-secondary-bg text-muted",
                       )}
                     >
-                      {done ? <Check size={12} strokeWidth={3} /> : <X size={12} />}
+                      {done ? <Check size={12} /> : <X size={12} />}
                     </span>
                     <span className={done ? "text-body" : "text-muted"}>{entry.label}</span>
                     {!done && (

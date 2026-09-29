@@ -1,21 +1,20 @@
 /* Design system: design.md (Bharat Hunt — orange) · Launch Agent badges.
- * Automation levels and statuses as small pills. Colour follows the brief's
- * dots (green/amber, and violet where the brief says blue — design.md bans
- * blue) only inside the dot itself; the pill surfaces stay on
- * the orange/neutral/amber palette design.md allows. */
+ * Automation levels and statuses as small pills, on the orange/neutral/amber
+ * palette design.md allows. A level is told apart by its icon and label, not
+ * by a coloured dot — the old green/amber/violet dots were three colours the
+ * palette does not have. */
 
-import { Bot, Hand, Sparkles } from "lucide-react";
+import { Bot, Hand, Sparkles, type LucideIcon } from "lucide-react";
 
 import { AUTOMATION_META, STATUS_META } from "@/lib/launch-agent/status";
 import type { AutomationLevel, PlatformCampaignStatus } from "@/lib/launch-agent/types";
 import { cn } from "@/lib/utils";
 
-const LEVEL_ICON = { AUTOMATED: Bot, ASSISTED: Hand, AI_PREPARED: Sparkles } as const;
-
-const LEVEL_DOT: Record<AutomationLevel, string> = {
-  AUTOMATED: "bg-success",
-  ASSISTED: "bg-warning",
-  AI_PREPARED: "bg-violet-500", // design.md: no blue in the palette — violet is an allowed accent
+/** The one icon per automation level, shared with the public Launch Agent page. */
+export const AUTOMATION_ICON: Record<AutomationLevel, LucideIcon> = {
+  AUTOMATED: Bot,
+  ASSISTED: Hand,
+  AI_PREPARED: Sparkles,
 };
 
 export function AutomationBadge({ level, className }: { level: AutomationLevel; className?: string }) {
@@ -24,7 +23,7 @@ export function AutomationBadge({ level, className }: { level: AutomationLevel; 
      or an older deploy reading a newer row — would otherwise read `undefined`
      and throw inside render, blanking the whole campaign page over a badge. */
   const meta = AUTOMATION_META[level] ?? AUTOMATION_META.AI_PREPARED;
-  const Icon = LEVEL_ICON[level] ?? LEVEL_ICON.AI_PREPARED;
+  const Icon = AUTOMATION_ICON[level] ?? AUTOMATION_ICON.AI_PREPARED;
   return (
     <span
       title={meta.description}
@@ -33,11 +32,7 @@ export function AutomationBadge({ level, className }: { level: AutomationLevel; 
         className,
       )}
     >
-      <span
-        className={cn("size-2 rounded-full", LEVEL_DOT[level] ?? LEVEL_DOT.AI_PREPARED)}
-        aria-hidden="true"
-      />
-      <Icon className="size-3.5 text-muted" aria-hidden="true" />
+      <Icon className="size-3.5 text-primary" aria-hidden="true" />
       {meta.label}
     </span>
   );

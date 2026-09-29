@@ -13,6 +13,7 @@ import { Section } from "@/components/ui/section";
 import { Display, Lead, Numeric } from "@/components/ui/typography";
 import { buttonVariants } from "@/components/ui/button";
 import { FadeInStagger, FadeInItem } from "@/components/ui/motion";
+import { IconTile } from "@/components/ui/icon-tile";
 import { ProductCard, type ProductCardProduct } from "@/components/products/product-card";
 import { Breadcrumbs } from "@/components/seo/breadcrumbs";
 import { JsonLd } from "@/components/seo/json-ld";
@@ -132,9 +133,7 @@ export default async function CategoryPage({
               All categories
             </Link>
             <div className="flex items-start gap-4">
-              <span className="flex size-14 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                <Icon className="size-6" aria-hidden="true" />
-              </span>
+              <IconTile icon={Icon} size="xl" />
               <div className="flex flex-col gap-2">
                 <Display className="text-4xl sm:text-5xl">{category.name}</Display>
                 <p className="text-sm text-muted">
@@ -157,7 +156,8 @@ export default async function CategoryPage({
                   href="/submit"
                   className="font-medium text-primary underline-offset-4 hover:underline"
                 >
-                  Be the first to launch one →
+                  Be the first to launch one
+                  <ArrowRight className="ml-1 inline size-3.5 align-[-2px]" aria-hidden="true" />
                 </Link>
               </p>
             </div>

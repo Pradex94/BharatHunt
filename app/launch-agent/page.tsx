@@ -6,11 +6,12 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@clerk/nextjs/server";
-import { Bot, ClipboardCheck, Hand, Rocket, Sparkles } from "lucide-react";
+import { ClipboardCheck, Rocket, Sparkles } from "lucide-react";
 
 import { buttonVariants } from "@/components/ui/button";
 import { Container } from "@/components/ui/container";
 import { AUTOMATION_META } from "@/lib/launch-agent/status";
+import { AUTOMATION_ICON } from "@/components/launch-agent/badges";
 
 export const metadata: Metadata = {
   title: "Launch Agent",
@@ -36,7 +37,8 @@ export default async function LaunchAgentLanding() {
         <div className="mx-auto flex max-w-4xl flex-col gap-12">
           <header className="flex flex-col items-center gap-5 text-center">
             <span className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-3 py-1 text-xs font-semibold text-primary">
-              🚀 BharatHunt Launch Agent · Free
+              <Rocket className="size-3.5" aria-hidden="true" />
+              BharatHunt Launch Agent · Free
             </span>
             <h1 className="text-4xl font-bold tracking-tight text-ink sm:text-5xl">Launch Agent</h1>
             <p className="max-w-2xl text-lg text-body">Launch once on BharatHunt. Get your product ready for discovery everywhere.</p>
@@ -70,7 +72,7 @@ export default async function LaunchAgentLanding() {
             </p>
             <ul className="mt-5 grid gap-3 md:grid-cols-3">
               {(["AUTOMATED", "ASSISTED", "AI_PREPARED"] as const).map((level) => {
-                const Icon = level === "AUTOMATED" ? Bot : level === "ASSISTED" ? Hand : Sparkles;
+                const Icon = AUTOMATION_ICON[level];
                 return (
                   <li key={level} className="rounded-2xl bg-surface-dark-elevated p-4">
                     <p className="flex items-center gap-2 font-semibold text-white">

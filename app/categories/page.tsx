@@ -10,6 +10,7 @@ import { Container } from "@/components/ui/container";
 import { Section } from "@/components/ui/section";
 import { Display, Lead, Numeric } from "@/components/ui/typography";
 import { FadeIn, FadeInStagger, FadeInItem } from "@/components/ui/motion";
+import { IconTile } from "@/components/ui/icon-tile";
 import { CATEGORIES } from "@/lib/constants";
 import { getCategoryCounts } from "@/services/products";
 
@@ -49,9 +50,7 @@ export default async function CategoriesPage() {
                   className="group flex h-full flex-col gap-4 rounded-lg border border-border bg-card p-6 outline-none transition-all duration-200 ease-out hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-hover focus-visible:ring-2 focus-visible:ring-ring/50"
                 >
                   <div className="flex items-center justify-between">
-                    <span className="flex size-11 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                      <Icon className="size-5" aria-hidden="true" />
-                    </span>
+                    <IconTile icon={Icon} size="lg" />
                     <span className="text-xs text-muted">
                       <Numeric>{count}</Numeric> {count === 1 ? "product" : "products"}
                     </span>

@@ -19,17 +19,18 @@ import {
   ExternalLink,
   Eye,
   Heart,
+  Mail,
   MessageSquare,
   PencilLine,
   Rocket,
   ShieldCheck,
-  Sparkles,
   Wallet,
 } from "lucide-react";
 
 import { Breadcrumbs } from "@/components/seo/breadcrumbs";
 import { Container } from "@/components/ui/container";
 import { FadeIn } from "@/components/ui/motion";
+import { IconTile } from "@/components/ui/icon-tile";
 import { buttonVariants } from "@/components/ui/button";
 import { Caption, Display, H2, H3, Lead, Numeric } from "@/components/ui/typography";
 import { MAX_PRODUCTS_PER_USER, PRODUCT_CATEGORIES } from "@/lib/constants";
@@ -274,9 +275,7 @@ export default async function AboutPage() {
       <section>
         <Container className="py-16 md:py-20">
           <FadeIn className="mx-auto flex max-w-2xl flex-col items-center gap-4 text-center">
-            <span className="flex size-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
-              <Sparkles className="size-5" aria-hidden="true" />
-            </span>
+            <IconTile icon={Mail} size="lg" />
             <H2 className="text-3xl sm:text-4xl">Say hello</H2>
             <p className="text-body">
               Questions about a launch, a partnership, or something that looks broken — the same

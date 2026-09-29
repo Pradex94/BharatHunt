@@ -34,11 +34,11 @@ import {
   Building2,
   Filter,
   Info,
+  LockOpen,
   Mail,
   MapPin,
   Search,
   ShieldCheck,
-  Sparkles,
   Target,
   Users2,
 } from "lucide-react";
@@ -279,7 +279,7 @@ export default async function InvestorsPage({
                 One-time payment
               </span>
               <span className="flex items-center gap-1.5">
-                <Sparkles className="size-3.5" aria-hidden="true" />
+                <LockOpen className="size-3.5" aria-hidden="true" />
                 Instant access
               </span>
               <span className="flex items-center gap-1.5">

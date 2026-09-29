@@ -1,7 +1,10 @@
 import {
+  BrainCircuit,
+  Building2,
   Code2,
-  Zap,
+  Layers,
   Wallet,
+  Zap,
   UtensilsCrossed,
   Palette,
   Megaphone,
@@ -222,6 +225,31 @@ export const PRICING_TYPE_LABELS: Record<ProductPricingType, string> = {
   paid: "Paid",
 };
 
+/**
+ * The site's topics — what the homepage network, the category explorer and the
+ * AI hub call "AI", "SaaS", "Startups" and so on.
+ */
+export type TopicKey = "ai" | "saas" | "dev" | "productivity" | "fintech" | "startups";
+
+/**
+ * One icon per topic, everywhere. Every surface that shows a topic resolves
+ * its icon here (through `CategoryIcon`, or `CATEGORIES` for the stored
+ * categories, which borrow these), so AI can never be a brain on one page and
+ * a sparkle on the next. All stock Lucide outlines at the default stroke.
+ *
+ * Two icons are deliberately *not* topics: `Rocket` means "launch" (every
+ * launch CTA) and `Sparkles` means "prepared or highlighted for you". AI gets
+ * its own mark so it does not read as either.
+ */
+export const TOPIC_ICONS: Record<TopicKey, LucideIcon> = {
+  ai: BrainCircuit,
+  saas: Layers,
+  dev: Code2,
+  productivity: Zap,
+  fintech: Wallet,
+  startups: Building2,
+};
+
 export type Category = {
   /** The exact `category` value stored on product rows (from PRODUCT_CATEGORIES). */
   name: ProductCategory;
@@ -241,19 +269,19 @@ export const CATEGORIES: Category[] = [
   {
     name: "Developer Tools",
     slug: "developer-tools",
-    icon: Code2,
+    icon: TOPIC_ICONS.dev,
     blurb: "APIs, CLIs, and infrastructure that make shipping software faster.",
   },
   {
     name: "Productivity",
     slug: "productivity",
-    icon: Zap,
+    icon: TOPIC_ICONS.productivity,
     blurb: "Focus, planning, and automation tools that give you hours back.",
   },
   {
     name: "Finance",
     slug: "finance",
-    icon: Wallet,
+    icon: TOPIC_ICONS.fintech,
     blurb: "Invoicing, accounting, and money tools built for small teams.",
   },
   {

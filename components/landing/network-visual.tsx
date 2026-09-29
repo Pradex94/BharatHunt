@@ -2,19 +2,10 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Banknote, Code2, Layers, Sparkles, Wallet, Zap, type LucideIcon } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import type { NetworkNode, NetworkNodeKey } from "@/lib/network-summary";
-
-const ICON: Record<NetworkNodeKey, LucideIcon> = {
-  ai: Sparkles,
-  dev: Code2,
-  fintech: Wallet,
-  startups: Banknote,
-  productivity: Zap,
-  saas: Layers,
-};
+import { CategoryIcon } from "@/components/ui/icon-tile";
 
 /**
  * Where each node sits, as % of the square, clockwise from the top. Slightly
@@ -196,7 +187,6 @@ export function NetworkVisual({ nodes }: { nodes: NetworkNode[] }) {
 
         {nodes.map((node, index) => {
           const { x, y, float } = LAYOUT[node.key];
-          const Icon = ICON[node.key];
           const on = active === node.key;
           return (
             <Link
@@ -237,20 +227,11 @@ export function NetworkVisual({ nodes }: { nodes: NetworkNode[] }) {
                     className="bh-net-arrive pointer-events-none absolute -inset-1 rounded-[18px] border border-primary/60"
                     style={{ animationDelay: `${index * PACKET_SPACING}s` }}
                   />
-                  <span
-                    className={cn(
-                      "relative flex size-8 items-center justify-center rounded-xl bg-primary/10 text-primary transition-opacity duration-300",
-                      active && !on && "opacity-40",
-                    )}
-                  >
-                    <Icon className="size-4" aria-hidden="true" />
-                    {node.key === "ai" && (
-                      <span aria-hidden className="absolute -top-0.5 -right-0.5 flex size-2">
-                        <span className="bh-net-ping absolute inset-0 rounded-full bg-primary" />
-                        <span className="relative size-2 rounded-full bg-primary" />
-                      </span>
-                    )}
-                  </span>
+                  <CategoryIcon
+                    topic={node.key}
+                    size="sm"
+                    className={cn("transition-[opacity,background-color] duration-300", active && !on && "opacity-40")}
+                  />
                   <span
                     className={cn(
                       "flex flex-col leading-tight transition-opacity duration-300",
@@ -290,23 +271,14 @@ export function NetworkVisual({ nodes }: { nodes: NetworkNode[] }) {
         </div>
         <ul className="grid grid-cols-2 gap-2 sm:grid-cols-3">
           {nodes.map((node) => {
-            const Icon = ICON[node.key];
             return (
               <li key={node.key} className="min-w-0">
                 <Link
                   href={node.href}
                   prefetch={false}
-                  className="flex h-full min-h-11 items-center gap-2.5 rounded-2xl border border-border bg-card px-2.5 py-2 transition-colors hover:border-primary/40 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none active:bg-secondary-bg"
+                  className="group flex h-full min-h-11 items-center gap-2.5 rounded-2xl border border-border bg-card px-2.5 py-2 transition-colors hover:border-primary/40 focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none active:bg-secondary-bg"
                 >
-                  <span className="relative flex size-8 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-                    <Icon className="size-4" aria-hidden="true" />
-                    {node.key === "ai" && (
-                      <span aria-hidden className="absolute -top-0.5 -right-0.5 flex size-2">
-                        <span className="bh-net-ping absolute inset-0 rounded-full bg-primary" />
-                        <span className="relative size-2 rounded-full bg-primary" />
-                      </span>
-                    )}
-                  </span>
+                  <CategoryIcon topic={node.key} size="sm" />
                   <span className="flex min-w-0 flex-col leading-tight">
                     {/* Wraps rather than truncates: at 375px a two-column cell is
                         ~100px of text, and "Developer Tools" must stay readable. */}
