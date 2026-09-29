@@ -16,7 +16,7 @@
 
 import type { Metadata } from "next";
 
-import { Hero, type EcosystemNode } from "@/components/landing/hero";
+import { Hero } from "@/components/landing/hero";
 import { TrustStrip } from "@/components/landing/trust-strip";
 import { TodaysHunt } from "@/components/landing/todays-hunt";
 import { LaunchBoard } from "@/components/landing/launch-board";
@@ -33,6 +33,7 @@ import { COLLECTIONS, MIN_PRODUCTS_TO_INDEX } from "@/lib/collections";
 import { SITE_NAME, SITE_URL } from "@/lib/constants";
 import { formatDayMonth } from "@/lib/format-date";
 import { buildLaunchBoard, pickRecentLaunches, pickTodaysHunt } from "@/lib/home-feed";
+import { buildNetworkNodes } from "@/lib/network-summary";
 import { freshness } from "@/lib/ai-news/format";
 import { parseFundingFilters } from "@/lib/funding/filters";
 import { groupFundingEvents } from "@/lib/funding/grouping";
@@ -185,54 +186,17 @@ export default async function Home() {
       }
     : null;
 
-  // ── Hero: real destinations, real counts ──────────────────────────────
-  const count = (value: number | undefined, noun: string, plural = `${noun}s`) =>
-    value && value > 0 ? `${value.toLocaleString("en-IN")} ${value === 1 ? noun : plural}` : null;
-
+  // ── Hero: the discovery network — real destinations, real counts ──────
+  // Every value's source is documented in lib/network-summary.ts.
   const aiToolCount = collectionCounts["ai-tools"] ?? 0;
-  const saasCount = collectionCounts["saas-products"] ?? 0;
   const fundingRounds = funding.failed ? 0 : funding.totalCount;
-
-  const nodes: EcosystemNode[] = [
-    {
-      label: "AI",
-      href: "/ai",
-      meta:
-        aiFresh.stories_24h > 0
-          ? count(aiFresh.stories_24h, "story today", "stories today")
-          : count(aiToolCount, "AI product"),
-      icon: "ai",
-    },
-    {
-      label: "Developer Tools",
-      href: "/categories/developer-tools",
-      meta: count(categoryCounts["Developer Tools"], "product"),
-      icon: "dev",
-    },
-    {
-      label: "Fintech",
-      href: "/categories/finance",
-      meta: count(categoryCounts["Finance"], "product"),
-      icon: "fintech",
-    },
-    {
-      label: "Startups",
-      href: "/funding",
-      meta: count(fundingRounds, "round tracked", "rounds tracked"),
-      icon: "startups",
-    },
-    {
-      label: "Productivity",
-      href: "/categories/productivity",
-      meta: count(categoryCounts["Productivity"], "product"),
-      icon: "productivity",
-    },
-    // A collection page 404s with no products behind it, so SaaS only links
-    // there once it has some; otherwise the slot goes to the whole catalogue.
-    saasCount > 0
-      ? { label: "SaaS", href: "/collections/saas-products", meta: count(saasCount, "product"), icon: "saas" }
-      : { label: "All products", href: "/marketplace", meta: count(stats.products, "product"), icon: "saas" },
-  ];
+  const nodes = buildNetworkNodes({
+    categoryCounts,
+    collectionCounts,
+    aiStories24h: aiFresh.stories_24h,
+    fundingRounds,
+    totalProducts: stats.products,
+  });
 
   const shortcuts = [
     aiToolCount > 0

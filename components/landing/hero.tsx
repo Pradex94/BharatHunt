@@ -1,54 +1,19 @@
 import Link from "next/link";
-import {
-  ArrowRight,
-  Banknote,
-  Code2,
-  Layers,
-  Rocket,
-  Sparkles,
-  Wallet,
-  Zap,
-  type LucideIcon,
-} from "lucide-react";
+import { ArrowRight, Rocket } from "lucide-react";
 
 import { buttonVariants } from "@/components/ui/button";
 import { Display } from "@/components/ui/typography";
 import { IndiaFlag } from "@/components/ui/india-flag";
 import { SearchAutocomplete } from "@/components/layout/search-autocomplete";
+import { NetworkVisual } from "@/components/landing/network-visual";
+import type { NetworkNode } from "@/lib/network-summary";
 
 /** Grid fade: solid through the headline, gone before the section ends. */
 const GRID_FADE = "linear-gradient(to bottom, #000 0%, #000 30%, transparent 88%)";
 
-/** One node of the ecosystem visual — a real destination with a real count. */
-export type EcosystemNode = {
-  label: string;
-  href: string;
-  /** "12 products", "34 stories today" … omitted when there is no true number. */
-  meta: string | null;
-  icon: "ai" | "saas" | "fintech" | "dev" | "startups" | "productivity";
-};
-
-const NODE_ICON: Record<EcosystemNode["icon"], LucideIcon> = {
-  ai: Sparkles,
-  saas: Layers,
-  fintech: Wallet,
-  dev: Code2,
-  startups: Banknote,
-  productivity: Zap,
-};
-
-/** Where the six nodes sit, as % of the square — a hexagon around the centre. */
-const NODE_POSITIONS = [
-  { x: 50, y: 9 },
-  { x: 84, y: 29 },
-  { x: 84, y: 71 },
-  { x: 50, y: 91 },
-  { x: 16, y: 71 },
-  { x: 16, y: 29 },
-];
-
 export type HeroProps = {
-  nodes: EcosystemNode[];
+  /** The discovery network, built by `buildNetworkNodes` from live counts. */
+  nodes: NetworkNode[];
   /** Quick-search shortcuts under the input. Real destinations only. */
   shortcuts: { label: string; href: string }[];
 };
@@ -139,81 +104,8 @@ export function Hero({ nodes, shortcuts }: HeroProps) {
           </div>
         </div>
 
-        {nodes.length > 0 && <EcosystemMap nodes={nodes.slice(0, NODE_POSITIONS.length)} />}
+        <NetworkVisual nodes={nodes} />
       </div>
     </section>
-  );
-}
-
-/**
- * The ecosystem, drawn as a constellation: Bharat Hunt in the middle, the
- * things you can discover around it, each one a link with a live count.
- *
- * Plain SVG lines under absolutely positioned HTML chips — no canvas, no
- * WebGL, no animation library, no client JavaScript and no animation at all —
- * a still diagram costs nothing to paint and never competes with the headline.
- * Desktop only: on a phone the same destinations are the "Popular" chips under
- * the search, which is where a thumb is anyway.
- */
-function EcosystemMap({ nodes }: { nodes: EcosystemNode[] }) {
-  return (
-    <nav aria-label="Explore the ecosystem" className="relative mx-auto hidden aspect-square w-full max-w-[460px] lg:block">
-      <div
-        aria-hidden
-        className="absolute inset-[18%] rounded-full bg-[radial-gradient(circle,rgba(255,138,61,0.20),transparent_70%)] blur-2xl"
-      />
-      <svg aria-hidden viewBox="0 0 100 100" className="absolute inset-0 size-full">
-        <circle cx="50" cy="50" r="41" fill="none" stroke="rgba(23,20,15,0.08)" strokeWidth="0.25" />
-        <circle cx="50" cy="50" r="24" fill="none" stroke="rgba(255,107,26,0.18)" strokeWidth="0.25" />
-        {nodes.map((node, index) => {
-          const { x, y } = NODE_POSITIONS[index];
-          return (
-            <line
-              key={node.href}
-              x1="50"
-              y1="50"
-              x2={x}
-              y2={y}
-              stroke="rgba(255,107,26,0.45)"
-              strokeWidth="0.3"
-              strokeDasharray="1 1.4"
-            />
-          );
-        })}
-      </svg>
-
-      {/* The hub */}
-      <div className="absolute top-1/2 left-1/2 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-2">
-        <span className="flex size-20 items-center justify-center rounded-3xl bg-[linear-gradient(135deg,#ff6b1a,#ff8a3d)] text-3xl font-bold text-white shadow-[0_18px_40px_-12px_rgba(255,107,26,0.65)]">
-          B
-        </span>
-        <span className="rounded-full bg-card/90 px-2.5 py-0.5 text-xs font-semibold text-ink shadow-sm">
-          Bharat Hunt
-        </span>
-      </div>
-
-      {nodes.map((node, index) => {
-        const { x, y } = NODE_POSITIONS[index];
-        const Icon = NODE_ICON[node.icon];
-        return (
-          <Link
-            key={node.href}
-            href={node.href}
-            style={{ left: `${x}%`, top: `${y}%` }}
-            className="group absolute flex -translate-x-1/2 -translate-y-1/2 items-center gap-2.5 rounded-2xl border border-border bg-card py-2 pr-3.5 pl-2 whitespace-nowrap shadow-sm transition-all duration-200 hover:border-primary/40 hover:shadow-hover"
-          >
-            <span className="flex size-8 items-center justify-center rounded-xl bg-primary/10 text-primary">
-              <Icon className="size-4" aria-hidden="true" />
-            </span>
-            <span className="flex flex-col leading-tight">
-              <span className="text-sm font-semibold text-ink group-hover:text-primary">
-                {node.label}
-              </span>
-              {node.meta && <span className="text-[11px] text-muted">{node.meta}</span>}
-            </span>
-          </Link>
-        );
-      })}
-    </nav>
   );
 }

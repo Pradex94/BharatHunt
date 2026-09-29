@@ -690,3 +690,95 @@
     animation: none;
   }
 }
+
+/* ── Homepage intelligence network ───────────────────────────────────────
+ * components/landing/network-visual.tsx. CSS-only motion on ~25 small
+ * elements: transform and opacity everywhere except the spokes' dash drift
+ * (stroke-dashoffset on six hairlines). No JS animation loop, no library.
+ *
+ * `[data-paused]` is set by an IntersectionObserver when the network is off
+ * screen, so none of this runs while a visitor reads the rest of the page.
+ *
+ * Packets and arrival rings share one 18s cycle and are staggered 3s apart per
+ * node: exactly one packet is in flight at a time, travelling for the first
+ * 14% of the cycle. The arrival ring is decorative — it marks the packet
+ * landing, never a real event, and carries no text claiming one.
+ */
+.bh-net[data-paused="true"] * {
+  animation-play-state: paused !important;
+}
+
+@keyframes bh-net-breathe {
+  0%, 100% { transform: scale(1); opacity: 0.5; }
+  50% { transform: scale(1.14); opacity: 0.85; }
+}
+.bh-net-breathe { animation: bh-net-breathe 5.5s ease-in-out infinite; }
+
+@keyframes bh-net-spin { to { transform: rotate(360deg); } }
+.bh-net-spin {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: bh-net-spin 48s linear infinite;
+}
+
+@keyframes bh-net-float {
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  50% { transform: translate3d(var(--fx, 0px), var(--fy, -3px), 0); }
+}
+.bh-net-float { animation: bh-net-float 6.5s ease-in-out infinite; }
+
+@keyframes bh-net-dash { to { stroke-dashoffset: -2.4; } }
+.bh-net-dash { animation: bh-net-dash 3.2s linear infinite; }
+
+@keyframes bh-net-packet {
+  0% { transform: translate(0, 0); opacity: 0; }
+  2% { opacity: 0.9; }
+  14% { transform: translate(var(--dx), var(--dy)); opacity: 0.9; }
+  16%, 100% { transform: translate(var(--dx), var(--dy)); opacity: 0; }
+}
+.bh-net-packet { opacity: 0; animation: bh-net-packet 18s cubic-bezier(0.45, 0, 0.3, 1) infinite; }
+
+@keyframes bh-net-burst {
+  0% { transform: translate(0, 0); opacity: 0; }
+  12%, 85% { opacity: 1; }
+  100% { transform: translate(var(--dx), var(--dy)); opacity: 0; }
+}
+.bh-net-burst { opacity: 0; animation: bh-net-burst 1.5s ease-in infinite; }
+
+@keyframes bh-net-arrive {
+  0%, 13% { opacity: 0; transform: scale(0.96); }
+  15% { opacity: 0.9; }
+  26%, 100% { opacity: 0; transform: scale(1.12); }
+}
+.bh-net-arrive { opacity: 0; animation: bh-net-arrive 18s ease-out infinite; }
+
+@keyframes bh-net-ping {
+  0% { transform: scale(1); opacity: 0.6; }
+  70%, 100% { transform: scale(2.6); opacity: 0; }
+}
+.bh-net-ping { animation: bh-net-ping 2.4s cubic-bezier(0, 0, 0.2, 1) infinite; }
+
+@keyframes bh-net-fadein {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.bh-net-fadein { animation: bh-net-fadein 450ms ease-out both; }
+
+/* Reduced motion: nothing moves; hierarchy, hover and focus states remain.
+ * `animation: none` rather than the global 0.01ms collapse, which would freeze
+ * packets and rings on their final keyframe. */
+@media (prefers-reduced-motion: reduce) {
+  .bh-net-breathe,
+  .bh-net-spin,
+  .bh-net-float,
+  .bh-net-dash,
+  .bh-net-fadein {
+    animation: none !important;
+  }
+  .bh-net-packet,
+  .bh-net-burst,
+  .bh-net-arrive,
+  .bh-net-ping {
+    display: none !important;
+  }
+}
