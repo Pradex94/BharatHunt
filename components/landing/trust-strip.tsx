@@ -1,4 +1,5 @@
 import { Numeric } from "@/components/ui/typography";
+import { CountUp } from "./count-up";
 
 export type TrustStat = { value: number; label: string };
 
@@ -25,7 +26,9 @@ export function TrustStrip({ stats }: { stats: TrustStat[] }) {
             <div key={stat.label} className="flex min-w-0 flex-col-reverse">
               <dt className="text-xs text-muted">{stat.label}</dt>
               <dd className="text-xl font-bold text-ink sm:text-2xl">
-                <Numeric>{stat.value.toLocaleString("en-IN")}</Numeric>
+                <Numeric>
+                  <CountUp value={stat.value} />
+                </Numeric>
               </dd>
             </div>
           ))}
