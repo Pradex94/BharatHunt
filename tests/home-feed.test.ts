@@ -111,3 +111,31 @@ describe("pickRecentLaunches", () => {
     );
   });
 });
+
+describe("curated Daily 5 picks never compete in the rankings", () => {
+  const curated = (id: string, publishedAt: string, upvotes: number) => ({
+    ...launch(id, publishedAt, upvotes, 99),
+    source: "daily_agent",
+  });
+
+  it("keeps a curated pick out of Today's Hunt however much it trends", () => {
+    const pool = [curated("bot", "2026-09-29T05:00:00Z", 50), launch("maker", "2026-09-29T04:00:00Z", 1)];
+    assert.deepEqual(pickTodaysHunt(pool).map((p) => p.id), ["maker"]);
+  });
+
+  it("builds the daily board from maker launches only", () => {
+    const pool = [
+      curated("bot", "2026-09-29T05:00:00Z", 50),
+      launch("a", "2026-09-29T04:00:00Z", 3),
+      launch("b", "2026-09-29T04:30:00Z", 2),
+      launch("c", "2026-09-29T06:00:00Z", 1),
+    ];
+    const board = buildLaunchBoard(pool, [], NOW);
+    assert.deepEqual(board.products.map((p) => p.id), ["a", "b", "c"]);
+  });
+
+  it("still lists a curated pick under Recently launched", () => {
+    const pool = [curated("bot", "2026-09-29T05:00:00Z", 0), launch("maker", "2026-09-29T04:00:00Z")];
+    assert.deepEqual(pickRecentLaunches(pool, []).map((p) => p.id), ["bot", "maker"]);
+  });
+});

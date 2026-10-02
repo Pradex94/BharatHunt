@@ -80,6 +80,23 @@ AI_NEWS_INGEST_SECRET=<a-long-random-string>
 # opening Launch Agent analyses that campaign on the spot.
 LAUNCH_AGENT_JOB_SECRET=<a-long-random-string>
 
+# BharatHunt Daily 5 agent (/admin/daily-agent, /daily-5). Shared secret for
+# /api/daily-agent/run, which .github/workflows/daily-agent.yml ticks hourly (the
+# run time itself is an admin setting). Unset = the endpoint answers 503; the
+# dashboard's Run buttons still work for a signed-in admin. Set the same value
+# as the GitHub Actions secret DAILY_AGENT_JOB_SECRET.
+DAILY_AGENT_JOB_SECRET=<a-long-random-string>
+# Optional. Outbound requests one agent step may make. Defaults to 50 (the
+# Workers Free per-invocation ceiling); on Vercel or Workers Paid, raise it so a
+# batch needs fewer steps.
+# DAILY_AGENT_SUBREQUEST_LIMIT=200
+# Optional model pass over the drafted listings — off without ANTHROPIC_API_KEY,
+# which this deployment deliberately does not set. Drafts are built from verified
+# facts either way. Model defaults to claude-opus-5-5; prices feed the cost meter.
+# DAILY_AGENT_AI_MODEL=claude-opus-5-5
+# DAILY_AGENT_AI_PRICE_IN_PER_MTOK=4
+# DAILY_AGENT_AI_PRICE_OUT_PER_MTOK=20
+
 # Cloudflare Turnstile — captcha on the /advertise inquiry form (REQUIRED for that form)
 NEXT_PUBLIC_TURNSTILE_SITE_KEY=<your-turnstile-site-key>
 TURNSTILE_SECRET_KEY=<your-turnstile-secret-key>

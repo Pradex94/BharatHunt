@@ -21,7 +21,18 @@ export type PoolProduct = {
   trend_score?: number | string | null;
   /** Absent on all-time leaderboard rows, which never need a date. */
   published_at?: string | null;
+  /** 'maker' or 'daily_agent'. Absent means maker (rows from before the column). */
+  source?: string | null;
 };
+
+/**
+ * Curated Daily 5 picks are real products and appear in "Recently launched",
+ * but they do not compete in the rankings: a product BharatHunt listed itself
+ * must never push a maker's own launch off Today's Hunt or the daily board.
+ */
+export function isMakerLaunch(product: PoolProduct): boolean {
+  return (product.source ?? "maker") === "maker";
+}
 
 /** A board must have at least this many launches before it earns its own heading. */
 export const MIN_BOARD_SIZE = 3;
@@ -64,7 +75,8 @@ function byUpvotes(a: PoolProduct, b: PoolProduct): number {
  * is still an honest reading of "fresh".
  */
 export function pickTodaysHunt<T extends PoolProduct>(pool: T[], limit = 6): T[] {
-  return [...pool]
+  return pool
+    .filter(isMakerLaunch)
     .sort(
       (a, b) =>
         num(b.trend_score) - num(a.trend_score) ||
@@ -95,7 +107,7 @@ export function buildLaunchBoard<T extends PoolProduct, U extends PoolProduct = 
       .slice(0, size)
       .map((product, index) => ({ ...product, rank: index + 1 }));
 
-  const dated = pool.filter((product) => product.published_at);
+  const dated = pool.filter((product) => product.published_at && isMakerLaunch(product));
   const latest = dated.reduce<T | null>(
     (newest, product) => (!newest || publishedMs(product) > publishedMs(newest) ? product : newest),
     null,
@@ -118,7 +130,7 @@ export function buildLaunchBoard<T extends PoolProduct, U extends PoolProduct = 
     }
   }
 
-  return { scope: { kind: "all-time" }, products: rank(allTime) };
+  return { scope: { kind: "all-time" }, products: rank(allTime.filter(isMakerLaunch)) };
 }
 
 /** Newest first, minus anything already shown higher up the page. */

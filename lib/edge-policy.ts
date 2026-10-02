@@ -164,7 +164,9 @@ const PAGE_RULES: { match: (path: string) => boolean; rule: EdgeCacheRule }[] = 
       p === "/categories" ||
       /^\/categories\/[a-z0-9-]+$/.test(p) ||
       p === "/collections" ||
-      /^\/collections\/[a-z0-9-]+$/.test(p),
+      /^\/collections\/[a-z0-9-]+$/.test(p) ||
+      p === "/daily-5" ||
+      /^\/daily-5\/\d{4}-\d{2}-\d{2}$/.test(p),
     rule: { fresh: 5 * MINUTE, stale: HOUR },
   },
   {

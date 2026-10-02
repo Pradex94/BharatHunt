@@ -57,6 +57,15 @@ those through the PowerShell tool instead.
   `supabase/tests/search-normalize-parity.sql` against a database. `npm test`
   fails if the fixtures are stale but cannot see Postgres — the SQL run is the
   step that actually proves parity. Details in `tests/README.md`.
+- **Daily 5 agent creates products only through `lib/daily-agent/publish.ts`.**
+  Candidates live in `daily_agent_candidates` (migration `20261002000000`); no
+  `products` row exists until an admin approves (or auto-publish passes every
+  gate in `select.ts`). Curated products have `source = 'daily_agent'` and are
+  owned by the `system_bharathunt_curator` profile; a trigger stops a maker's
+  session setting `source`. Homepage rankings read `source = 'maker'` only.
+  Decision logic is pure and tested (`lib/daily-agent/*.ts` with `.ts` imports);
+  `run.ts` advances a batch one bounded step per call. Check real-world
+  behaviour with `node scripts/daily-agent-dry-run.mjs` (read-only).
 - **Data layer.** `services/products.ts` holds all product queries (server-only,
   imports the Supabase client). `lib/actions/*` are Server Actions. Anything a
   client component needs (category taxonomy, sorts, pricing types) lives in

@@ -6,6 +6,7 @@ import { CATEGORIES, PROMOTE_ENABLED, SITE_URL } from "@/lib/constants";
 import { FUNDING_GUIDES } from "@/lib/funding/guides";
 import { isIndexableProduct } from "@/lib/seo";
 import { getAllAiStorySlugs } from "@/services/ai-news";
+import { getDaily5Dates } from "@/services/daily-agent";
 import { getFundedStartupSlugs } from "@/services/funding";
 import {
   getAllPublishedProductSlugs,
@@ -203,8 +204,27 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     priority: 0.6,
   }));
 
+  /*
+   * BharatHunt Daily 5: the hub and one URL per day that has published picks.
+   * `getDaily5Dates` is the same query the date page answers 404 without, so
+   * an empty day can never be advertised here.
+   */
+  const daily5Dates = await getDaily5Dates(365).catch(() => [] as string[]);
+  const daily5Routes: MetadataRoute.Sitemap = daily5Dates.length
+    ? [
+        { url: `${SITE_URL}/daily-5`, lastModified: now, changeFrequency: "daily", priority: 0.8 },
+        ...daily5Dates.map((date) => ({
+          url: `${SITE_URL}/daily-5/${date}`,
+          lastModified: new Date(`${date}T12:00:00Z`),
+          changeFrequency: "monthly" as const,
+          priority: 0.5,
+        })),
+      ]
+    : [];
+
   return [
     ...staticRoutes,
+    ...daily5Routes,
     ...categoryRoutes,
     ...collectionRoutes,
     ...blogRoutes,

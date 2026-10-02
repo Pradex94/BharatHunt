@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@clerk/nextjs/server";
-import { Building2, Clock, Newspaper, Rocket, Search, ShieldCheck, Sparkles } from "lucide-react";
+import { Building2, Clock, Newspaper, Radar, Rocket, Search, ShieldCheck, Sparkles } from "lucide-react";
 
 import { getIsAdmin } from "@/lib/admin";
 import { adminProductsHref, asAdminProductStatus, sanitizeAdminSearch } from "@/lib/admin-filters";
@@ -31,6 +31,7 @@ export const dynamic = "force-dynamic";
 
 /** The other admin screens, so none of them is reachable only by typing a URL. */
 const TOOLS = [
+  { href: "/admin/daily-agent", label: "Daily 5 Agent", icon: Radar },
   { href: "/admin/launch-agent", label: "Launch platforms", icon: Rocket },
   { href: "/admin/ai-news", label: "AI news", icon: Sparkles },
   { href: "/admin/funding", label: "Funding", icon: Newspaper },
