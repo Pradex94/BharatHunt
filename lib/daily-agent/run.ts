@@ -308,6 +308,8 @@ async function discover(batch: BatchRow, config: AgentConfig, fetcher: Fetcher, 
       source_snippet: candidate.snippet,
       website_inferred: !candidate.homeUrl,
       discovery_score: candidate.discoveryScore,
+      // Explicit, so every row in the bulk insert carries the same columns.
+      status: "discovered",
       india_signals: candidate.discoverySignals as unknown as Json,
     };
 

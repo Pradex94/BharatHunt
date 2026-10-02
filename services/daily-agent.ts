@@ -221,7 +221,10 @@ export async function insertCandidates(rows: CandidateInsert[]): Promise<number>
   const supabase = createServiceClient();
   const { data, error } = await supabase
     .from("daily_agent_candidates")
-    .upsert(rows, { onConflict: "batch_id,normalized_domain", ignoreDuplicates: true })
+    // `defaultToNull: false`: in a bulk insert, a column some rows omit must
+    // take its default, not NULL — rows here differ (a duplicate carries a
+    // status and a reason, a fresh candidate does not).
+    .upsert(rows, { onConflict: "batch_id,normalized_domain", ignoreDuplicates: true, defaultToNull: false })
     .select("id");
   if (error) throw new Error(`Could not save candidates: ${error.message}`);
   return data?.length ?? 0;
