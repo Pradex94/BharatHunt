@@ -3,6 +3,7 @@
  */
 
 import type { Metadata } from "next";
+import { CURATOR_PROFILE_ID } from "@/lib/daily-agent/config";
 import Link from "next/link";
 import { headers } from "next/headers";
 import { notFound } from "next/navigation";
@@ -199,6 +200,8 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
 
   // Owners manage their own product; admins can moderate any product.
   const isOwner = userId === product.creator_id;
+  // A Daily 5 pick is owned by the system curator profile (lib/daily-agent/config.ts).
+  const curated = product.creator_id === CURATOR_PROFILE_ID;
   const isAdmin = userId ? await getIsAdmin() : false;
   const canManage = isOwner || isAdmin;
 
@@ -308,7 +311,13 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
             <p className="text-base text-body">{product.tagline}</p>
             <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted">
               <span className="rounded-full bg-secondary-bg px-2 py-0.5">{product.category}</span>
-              {product.creator && <span>by {product.creator.display_name}</span>}
+              {curated ? (
+                <Link href="/daily-5" className="font-medium text-primary hover:underline">
+                  Discovered by BharatHunt Daily 5
+                </Link>
+              ) : (
+                product.creator && <span>by {product.creator.display_name}</span>
+              )}
               {launchStateName && (
                 <span className="flex items-center gap-1">
                   <MapPin className="size-3.5" aria-hidden="true" />
@@ -319,6 +328,15 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
                 <Numeric>{product.view_count ?? 0}</Numeric> views
               </span>
             </div>
+            {curated && (
+              <p className="mt-2 text-xs text-muted">
+                BharatHunt found and verified this product; its makers did not submit it. Built it?{" "}
+                <a href={`mailto:info@bharathunt.org?subject=${encodeURIComponent(`Claim ${product.name} on BharatHunt`)}`} className="text-primary underline-offset-2 hover:underline">
+                  Claim this listing
+                </a>
+                .
+              </p>
+            )}
           </div>
         </div>
 

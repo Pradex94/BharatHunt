@@ -47,6 +47,13 @@ const LAUNCH_FIELD_COLUMNS = [
   "hire_pitch",
 ];
 const LAUNCH_LOCATION_COLUMNS = ["launch_state"];
+/**
+ * `products.source` (20261002000000_daily_agent.sql): 'maker' or 'daily_agent'.
+ * The homepage's rankings read maker launches only, so a curated Daily 5 pick
+ * never pushes a real maker off the board. Every read that filters on it
+ * retries without the filter on a database that predates the column.
+ */
+const SOURCE_COLUMNS = ["source"];
 
 /*
  * `rating_count` arrives with the ratings migration, so it is its own group: a
@@ -232,13 +239,16 @@ const LANDING_PRODUCT_COLUMNS =
 export async function getTopUpvotedProducts(limit = 6): Promise<LandingProduct[]> {
   return cacheRemember(`${PRODUCTS_CACHE_PREFIX}top-upvoted:${limit}`, AGGREGATE_TTL, async () => {
     const supabase = createPublicClient();
-    const { data, error } = await supabase
-      .from("products")
-      .select(LANDING_PRODUCT_COLUMNS)
-      .eq("status", "published")
-      .order("upvote_count", { ascending: false, nullsFirst: false })
-      .order("published_at", { ascending: false, nullsFirst: false })
-      .limit(limit);
+    const query = (makersOnly: boolean) => {
+      let builder = supabase.from("products").select(LANDING_PRODUCT_COLUMNS).eq("status", "published");
+      if (makersOnly) builder = builder.eq("source", "maker");
+      return builder
+        .order("upvote_count", { ascending: false, nullsFirst: false })
+        .order("published_at", { ascending: false, nullsFirst: false })
+        .limit(limit);
+    };
+    let { data, error } = await query(true);
+    if (error && isMissingColumnError(error)) ({ data, error } = await query(false));
 
     if (error) return [];
     return (data ?? []) as LandingProduct[];
@@ -251,9 +261,11 @@ export type PoolLaunch = LandingProduct & {
   trend_score: number | null;
   /** ISO 3166-2:IN code the maker confirmed, or null. */
   launch_state?: string | null;
+  /** 'maker' or 'daily_agent'; absent on a database that predates the column. */
+  source?: string | null;
 };
 
-const POOL_COLUMNS = `${LANDING_PRODUCT_COLUMNS}, published_at, trend_score, launch_state`;
+const POOL_COLUMNS = `${LANDING_PRODUCT_COLUMNS}, published_at, trend_score, launch_state, source`;
 
 /** How many recent launches the homepage reads — every feed on it is a view of these. */
 export const RECENT_LAUNCH_POOL_SIZE = 30;
@@ -283,7 +295,7 @@ export async function getRecentLaunchPool(): Promise<PoolLaunch[]> {
 
     let { data, error } = await query(POOL_COLUMNS);
     if (error && isMissingColumnError(error)) {
-      ({ data, error } = await query(withoutColumns(POOL_COLUMNS, LAUNCH_LOCATION_COLUMNS)));
+      ({ data, error } = await query(withoutColumns(POOL_COLUMNS, [...LAUNCH_LOCATION_COLUMNS, ...SOURCE_COLUMNS])));
     }
     if (error) return [];
     return (data ?? []) as unknown as PoolLaunch[];
@@ -308,7 +320,7 @@ export async function getLaunchesPage(offset: number, limit: number): Promise<Po
 
     let { data, error } = await query(POOL_COLUMNS);
     if (error && isMissingColumnError(error)) {
-      ({ data, error } = await query(withoutColumns(POOL_COLUMNS, LAUNCH_LOCATION_COLUMNS)));
+      ({ data, error } = await query(withoutColumns(POOL_COLUMNS, [...LAUNCH_LOCATION_COLUMNS, ...SOURCE_COLUMNS])));
     }
     if (error) return [];
     return (data ?? []) as unknown as PoolLaunch[];
@@ -330,14 +342,20 @@ export type LeadingLaunch = {
  */
 async function leadingLaunchSince(since: Date): Promise<LandingProduct | null> {
   const supabase = createPublicClient();
-  const { data, error } = await supabase
-    .from("products")
-    .select(LANDING_PRODUCT_COLUMNS)
-    .eq("status", "published")
-    .gte("published_at", since.toISOString())
-    .order("upvote_count", { ascending: false, nullsFirst: false })
-    .order("published_at", { ascending: false, nullsFirst: false })
-    .limit(1);
+  const query = (makersOnly: boolean) => {
+    let builder = supabase
+      .from("products")
+      .select(LANDING_PRODUCT_COLUMNS)
+      .eq("status", "published")
+      .gte("published_at", since.toISOString());
+    if (makersOnly) builder = builder.eq("source", "maker");
+    return builder
+      .order("upvote_count", { ascending: false, nullsFirst: false })
+      .order("published_at", { ascending: false, nullsFirst: false })
+      .limit(1);
+  };
+  let { data, error } = await query(true);
+  if (error && isMissingColumnError(error)) ({ data, error } = await query(false));
 
   if (error) return null;
   return ((data ?? [])[0] as LandingProduct | undefined) ?? null;
@@ -346,12 +364,13 @@ async function leadingLaunchSince(since: Date): Promise<LandingProduct | null> {
 /** When the most recent launch went live, or null if nothing is published. */
 async function latestLaunchAt(): Promise<Date | null> {
   const supabase = createPublicClient();
-  const { data, error } = await supabase
-    .from("products")
-    .select("published_at")
-    .eq("status", "published")
-    .order("published_at", { ascending: false, nullsFirst: false })
-    .limit(1);
+  const query = (makersOnly: boolean) => {
+    let builder = supabase.from("products").select("published_at").eq("status", "published");
+    if (makersOnly) builder = builder.eq("source", "maker");
+    return builder.order("published_at", { ascending: false, nullsFirst: false }).limit(1);
+  };
+  let { data, error } = await query(true);
+  if (error && isMissingColumnError(error)) ({ data, error } = await query(false));
 
   const publishedAt = (data ?? [])[0]?.published_at;
   if (error || !publishedAt) return null;

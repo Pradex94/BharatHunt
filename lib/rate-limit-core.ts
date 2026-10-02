@@ -236,6 +236,16 @@ export const RATE_LIMITS = {
     windowSeconds: 3600,
     message: "Too many job requests.",
   },
+  /**
+   * The Daily 5 agent's secret-gated step endpoint, keyed per IP. The scheduler
+   * ticks hourly and a run takes a dozen-odd steps, so this leaves room for a
+   * full run plus retries inside one hour while still bounding secret guessing.
+   */
+  dailyAgentRun: {
+    limit: 40,
+    windowSeconds: 3600,
+    message: "Too many agent requests.",
+  },
   /** Public registry JSON. Cached and small; bounded so it is not a free scrape target. */
   launchPlatformsApi: {
     limit: 60,

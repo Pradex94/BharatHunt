@@ -1,0 +1,81 @@
+name: Daily 5 agent
+
+# BharatHunt Daily 5: discovers, verifies and proposes Indian products once a
+# day (lib/daily-agent/run.ts).
+#
+# Why hourly when the agent runs once a day
+# -----------------------------------------
+# The run time is a setting on /admin/daily-agent, not a value baked into this
+# file. So this ticks every hour and the endpoint decides: before the
+# configured local time (default 09:00 Asia/Kolkata), or while the agent is
+# switched off, a tick is one cheap request that returns `more: false` at once.
+# From the run time on, the first tick creates today's batch and steps it to
+# the end; later ticks find it finished and stop. Today's batch is unique per
+# agent per day, so a repeated or overlapping tick never creates a second one.
+#
+# One batch is many short steps (each a fresh invocation with its own time and
+# request budget), so the step below calls again while the answer says
+# `more: true`, capped at MAX_STEPS.
+#
+# Required repository secret, which must MATCH the deployment's env var:
+#   gh secret set DAILY_AGENT_JOB_SECRET
+# Optional: VERCEL_PROTECTION_BYPASS (see ingest.yml for why).
+
+on:
+  schedule:
+    # Minute 23, off the top of the hour (GitHub's busiest slot).
+    - cron: "23 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: daily-agent
+  cancel-in-progress: false
+
+jobs:
+  tick:
+    name: Advance today's batch
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      SITE_URL: https://bharathunt.org
+      MAX_STEPS: 25
+      VERCEL_BYPASS: ${{ secrets.VERCEL_PROTECTION_BYPASS }}
+      JOB_SECRET: ${{ secrets.DAILY_AGENT_JOB_SECRET }}
+    steps:
+      - name: Tick
+        run: |
+          set -euo pipefail
+          if [ -z "${JOB_SECRET}" ]; then
+            echo "::notice::DAILY_AGENT_JOB_SECRET is not set — skipping. Add it with: gh secret set DAILY_AGENT_JOB_SECRET"
+            exit 0
+          fi
+          url="${SITE_URL}/api/daily-agent/run?mode=tick"
+          for step in $(seq 1 "${MAX_STEPS}"); do
+            code=$(curl -sS --max-time 120 -o response.json -w '%{http_code}' -X POST "${url}" \
+              -H "Authorization: Bearer ${JOB_SECRET}" \
+              -H "x-vercel-protection-bypass: ${VERCEL_BYPASS}") || true
+            echo "Step ${step}: HTTP ${code}"
+            if [ "${code}" = "000" ]; then
+              echo "::warning::Step ${step} did not answer in time; the next tick resumes the batch."
+              exit 0
+            fi
+            head -c 2000 response.json || true
+            echo
+            if [ "${code}" != "200" ]; then
+              echo "::error::Daily 5 agent returned HTTP ${code}"
+              exit 1
+            fi
+            more=$(jq -r '.more // false' response.json)
+            batch=$(jq -r '.batchId // empty' response.json)
+            busy=$(jq -r '.busy // false' response.json)
+            if [ "${more}" != "true" ] || [ -z "${batch}" ]; then
+              echo "Nothing more to do this tick."
+              exit 0
+            fi
+            if [ "${busy}" = "true" ]; then sleep 15; fi
+            url="${SITE_URL}/api/daily-agent/run?mode=continue&batch=${batch}"
+          done
+          echo "::warning::Stopped at ${MAX_STEPS} steps; the next tick carries on."

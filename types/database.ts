@@ -837,6 +837,8 @@ export type Database = {
           hire_pitch: string | null
           launch_state: string | null
           launch_state_source: string | null
+
+          source: string
           search_name: string | null
           search_text: string | null
         }
@@ -884,6 +886,8 @@ export type Database = {
           hire_pitch?: string | null
           launch_state?: string | null
           launch_state_source?: string | null
+
+          source?: string
         }
         Update: {
           avg_rating?: number | null
@@ -929,6 +933,8 @@ export type Database = {
           hire_pitch?: string | null
           launch_state?: string | null
           launch_state_source?: string | null
+
+          source?: string
         }
         Relationships: [
           {
@@ -2325,6 +2331,321 @@ export type Database = {
             columns: ["platform_id"]
             isOneToOne: false
             referencedRelation: "launch_platforms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      daily_agent_configs: {
+        Row: {
+          agent_type: string
+          label: string
+          enabled: boolean
+          daily_target: number
+          run_time: string
+          timezone: string
+          mode: string
+          auto_publish_allowed: boolean
+          min_india_confidence: number
+          min_quality_score: number
+          enabled_sources: string[]
+          max_discovery_candidates: number
+          max_sites_per_batch: number
+          max_ai_calls: number
+          max_concurrent_requests: number
+          request_timeout_ms: number
+          cache_ttl_days: number
+          score_weights: Json
+          filters: Json
+          notify_enabled: boolean
+          manual_urls: string[]
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          agent_type: string
+          label: string
+          enabled?: boolean
+          daily_target?: number
+          run_time?: string
+          timezone?: string
+          mode?: string
+          auto_publish_allowed?: boolean
+          min_india_confidence?: number
+          min_quality_score?: number
+          enabled_sources?: string[]
+          max_discovery_candidates?: number
+          max_sites_per_batch?: number
+          max_ai_calls?: number
+          max_concurrent_requests?: number
+          request_timeout_ms?: number
+          cache_ttl_days?: number
+          score_weights?: Json
+          filters?: Json
+          notify_enabled?: boolean
+          manual_urls?: string[]
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          agent_type?: string
+          label?: string
+          enabled?: boolean
+          daily_target?: number
+          run_time?: string
+          timezone?: string
+          mode?: string
+          auto_publish_allowed?: boolean
+          min_india_confidence?: number
+          min_quality_score?: number
+          enabled_sources?: string[]
+          max_discovery_candidates?: number
+          max_sites_per_batch?: number
+          max_ai_calls?: number
+          max_concurrent_requests?: number
+          request_timeout_ms?: number
+          cache_ttl_days?: number
+          score_weights?: Json
+          filters?: Json
+          notify_enabled?: boolean
+          manual_urls?: string[]
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      daily_agent_batches: {
+        Row: {
+          id: string
+          agent_type: string
+          batch_date: string
+          is_dry_run: boolean
+          trigger: string
+          status: string
+          failed_stage: string | null
+          attempts: number
+          target_count: number
+          config_snapshot: Json
+          discovered_count: number
+          duplicate_count: number
+          skipped_count: number
+          ineligible_count: number
+          needs_review_count: number
+          eligible_count: number
+          selected_count: number
+          published_count: number
+          rejected_count: number
+          sites_fetched: number
+          cache_hits: number
+          ai_calls: number
+          ai_cost_usd: number
+          source_reports: Json
+          log: Json
+          locked_until: string | null
+          error_message: string | null
+          notified_at: string | null
+          started_at: string
+          completed_at: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          agent_type: string
+          batch_date: string
+          is_dry_run?: boolean
+          trigger?: string
+          status?: string
+          failed_stage?: string | null
+          attempts?: number
+          target_count: number
+          config_snapshot?: Json
+          discovered_count?: number
+          duplicate_count?: number
+          skipped_count?: number
+          ineligible_count?: number
+          needs_review_count?: number
+          eligible_count?: number
+          selected_count?: number
+          published_count?: number
+          rejected_count?: number
+          sites_fetched?: number
+          cache_hits?: number
+          ai_calls?: number
+          ai_cost_usd?: number
+          source_reports?: Json
+          log?: Json
+          locked_until?: string | null
+          error_message?: string | null
+          notified_at?: string | null
+          started_at?: string
+          completed_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          agent_type?: string
+          batch_date?: string
+          is_dry_run?: boolean
+          trigger?: string
+          status?: string
+          failed_stage?: string | null
+          attempts?: number
+          target_count?: number
+          config_snapshot?: Json
+          discovered_count?: number
+          duplicate_count?: number
+          skipped_count?: number
+          ineligible_count?: number
+          needs_review_count?: number
+          eligible_count?: number
+          selected_count?: number
+          published_count?: number
+          rejected_count?: number
+          sites_fetched?: number
+          cache_hits?: number
+          ai_calls?: number
+          ai_cost_usd?: number
+          source_reports?: Json
+          log?: Json
+          locked_until?: string | null
+          error_message?: string | null
+          notified_at?: string | null
+          started_at?: string
+          completed_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "daily_agent_batches_agent_type_fkey"
+            columns: ["agent_type"]
+            isOneToOne: false
+            referencedRelation: "daily_agent_configs"
+            referencedColumns: ["agent_type"]
+          },
+        ]
+      }
+      daily_agent_candidates: {
+        Row: {
+          id: string
+          batch_id: string
+          agent_type: string
+          normalized_domain: string
+          website_url: string | null
+          name: string
+          source_name: string
+          source_urls: string[]
+          source_snippet: string | null
+          website_inferred: boolean
+          discovery_score: number
+          discovered_at: string
+          verified_at: string | null
+          status: string
+          status_reason: string | null
+          duplicate_of_product_id: string | null
+          duplicate_reason: string | null
+          india_confidence: number | null
+          india_signals: Json
+          facts: Json
+          content: Json
+          scores: Json
+          overall_score: number | null
+          issues: string[]
+          rank: number | null
+          product_id: string | null
+          reviewed_by: string | null
+          reviewed_at: string | null
+          review_note: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          batch_id: string
+          agent_type: string
+          normalized_domain: string
+          website_url?: string | null
+          name: string
+          source_name: string
+          source_urls?: string[]
+          source_snippet?: string | null
+          website_inferred?: boolean
+          discovery_score?: number
+          discovered_at?: string
+          verified_at?: string | null
+          status?: string
+          status_reason?: string | null
+          duplicate_of_product_id?: string | null
+          duplicate_reason?: string | null
+          india_confidence?: number | null
+          india_signals?: Json
+          facts?: Json
+          content?: Json
+          scores?: Json
+          overall_score?: number | null
+          issues?: string[]
+          rank?: number | null
+          product_id?: string | null
+          reviewed_by?: string | null
+          reviewed_at?: string | null
+          review_note?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          batch_id?: string
+          agent_type?: string
+          normalized_domain?: string
+          website_url?: string | null
+          name?: string
+          source_name?: string
+          source_urls?: string[]
+          source_snippet?: string | null
+          website_inferred?: boolean
+          discovery_score?: number
+          discovered_at?: string
+          verified_at?: string | null
+          status?: string
+          status_reason?: string | null
+          duplicate_of_product_id?: string | null
+          duplicate_reason?: string | null
+          india_confidence?: number | null
+          india_signals?: Json
+          facts?: Json
+          content?: Json
+          scores?: Json
+          overall_score?: number | null
+          issues?: string[]
+          rank?: number | null
+          product_id?: string | null
+          reviewed_by?: string | null
+          reviewed_at?: string | null
+          review_note?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "daily_agent_candidates_batch_id_fkey"
+            columns: ["batch_id"]
+            isOneToOne: false
+            referencedRelation: "daily_agent_batches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "daily_agent_candidates_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: true
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "daily_agent_candidates_duplicate_of_product_id_fkey"
+            columns: ["duplicate_of_product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
             referencedColumns: ["id"]
           },
         ]
