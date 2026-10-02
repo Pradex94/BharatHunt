@@ -122,7 +122,15 @@ function configFrom(batch: BatchRow, fallback: AgentConfig): AgentConfig {
  */
 export async function scheduledTick(agentType: string, now = new Date()): Promise<StepResult> {
   const config = await getAgentConfig(agentType);
-  if (!config) return { ok: false, batchId: null, status: null, more: false, message: `No agent "${agentType}".` };
+  if (!config) {
+    return {
+      ok: true,
+      batchId: null,
+      status: "disabled",
+      more: false,
+      message: `Agent "${agentType}" is not set up — apply migration 20261002000000_daily_agent.sql.`,
+    };
+  }
   if (!config.enabled) return { ok: true, batchId: null, status: "disabled", more: false, message: "Agent is switched off." };
   if (!isRunDue(now, config)) {
     return { ok: true, batchId: null, status: "waiting", more: false, message: `Runs at ${config.runTime} ${config.timezone}.` };

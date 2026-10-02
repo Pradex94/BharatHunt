@@ -2,6 +2,7 @@ import "server-only";
 
 import { cache } from "react";
 
+import { isMissingTableError } from "@/lib/supabase/errors";
 import { createServiceClient } from "@/lib/supabase/service";
 import { parseConfig, type AgentConfig, type AgentConfigRow } from "@/lib/daily-agent/config";
 import type { ExistingProduct } from "@/lib/daily-agent/domain";
@@ -35,6 +36,9 @@ export async function getAgentConfig(agentType: string): Promise<AgentConfig | n
     .select("*")
     .eq("agent_type", agentType)
     .maybeSingle();
+  // Before 20261002000000 is applied the agent simply is not set up: the hourly
+  // scheduler gets a quiet "not set up" rather than a 500 every hour.
+  if (error && isMissingTableError(error)) return null;
   if (error) throw new Error(`Could not read the agent settings: ${error.message}`);
   return data ? parseConfig(data as AgentConfigRow) : null;
 }
