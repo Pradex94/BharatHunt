@@ -1,0 +1,66 @@
+name: Product Intelligence
+
+# Keeps the derived product knowledge and the precomputed "similar products"
+# current (lib/intelligence/reindex.ts). Product pages never compute either;
+# they read what this job wrote.
+#
+# Why hourly
+# ----------
+# A tick where no listing changed is two narrow reads and no writes: the
+# indexer compares a content hash per product and returns `skipped: true`.
+# So the schedule only costs anything in the hour after a launch is approved,
+# an edit lands, or a Daily 5 pick is published — and then the new product has
+# similar products within the hour. Until then its page falls back to
+# same-category products.
+#
+# Secret: INTELLIGENCE_JOB_SECRET if you set one, otherwise the existing
+# DAILY_AGENT_JOB_SECRET (the route accepts either). Must MATCH the
+# deployment's env var. Optional: VERCEL_PROTECTION_BYPASS (see ingest.yml).
+
+on:
+  schedule:
+    # Minute 41, off the top of the hour and clear of the Daily 5 tick at :23.
+    - cron: "41 * * * *"
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "Rebuild every row even if nothing changed"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: intelligence
+  cancel-in-progress: false
+
+jobs:
+  reindex:
+    name: Refresh product intelligence
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      SITE_URL: https://bharathunt.org
+      VERCEL_BYPASS: ${{ secrets.VERCEL_PROTECTION_BYPASS }}
+      JOB_SECRET: ${{ secrets.INTELLIGENCE_JOB_SECRET || secrets.DAILY_AGENT_JOB_SECRET }}
+      FORCE: ${{ github.event.inputs.force == 'true' && '1' || '0' }}
+    steps:
+      - name: Reindex
+        run: |
+          set -euo pipefail
+          if [ -z "${JOB_SECRET}" ]; then
+            echo "::notice::No job secret is set — skipping. Add DAILY_AGENT_JOB_SECRET or INTELLIGENCE_JOB_SECRET."
+            exit 0
+          fi
+          code=$(curl -sS --max-time 90 -o response.json -w '%{http_code}' -X POST \
+            "${SITE_URL}/api/intelligence/run?force=${FORCE}" \
+            -H "Authorization: Bearer ${JOB_SECRET}" \
+            -H "x-vercel-protection-bypass: ${VERCEL_BYPASS}") || true
+          echo "HTTP ${code}"
+          cat response.json || true
+          echo
+          if [ "${code}" != "200" ]; then
+            echo "::error::Indexer returned HTTP ${code}"
+            exit 1
+          fi

@@ -18,6 +18,7 @@ import { Logo } from "@/components/layout/logo";
 import { SearchAutocomplete } from "@/components/layout/search-autocomplete";
 import { Skeleton } from "@/components/ui/skeleton";
 import { UserAvatar } from "@/components/layout/user-avatar";
+import { SavedNavLink } from "@/components/discovery/saved-nav-link";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -128,6 +129,7 @@ export function Navbar() {
             >
               <Search className="size-4" aria-hidden="true" />
             </Link>
+            <SavedNavLink />
 
             {showAuthSkeleton ? (
               <div className="flex items-center gap-2">
@@ -196,6 +198,7 @@ export function Navbar() {
           </div>
 
           <div className="flex items-center gap-1 lg:hidden">
+            <SavedNavLink className="size-11" />
             {/* Search is inside the menu sheet; the icon opens it straight there. */}
             <Button
               variant="ghost"

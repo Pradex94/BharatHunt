@@ -8,17 +8,19 @@ import { PRODUCT_SORTS, type ProductSort } from "@/lib/constants";
 
 const SORT_LABELS: Record<ProductSort, string> = {
   trending: "Trending",
+  rising: "Rising",
   newest: "Newest",
   "top-rated": "Top rated",
+  "most-saved": "Most saved",
+  "most-compared": "Most compared",
   "price-low": "Price: Low to High",
   "price-high": "Price: High to Low",
   relevance: "Best match",
 };
 
-/** The compact segmented control only surfaces the three sorts the mockup
- * shows; price sorting stays reachable via the URL (?sort=price-low) but
- * isn't exposed here to keep the control from overflowing. */
-const VISIBLE_SORTS: ProductSort[] = ["trending", "newest", "top-rated"];
+/** The segmented control scrolls horizontally on phones, so five fit. Price
+ * sorting and "Most compared" stay reachable via the URL (?sort=price-low). */
+const VISIBLE_SORTS: ProductSort[] = ["trending", "rising", "newest", "top-rated", "most-saved"];
 
 export function SortPills() {
   const searchParams = useSearchParams();

@@ -9,6 +9,7 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { isMissingColumnError, isTransportError } from "@/lib/supabase/errors";
 import { getIsAdmin, isAdminUser } from "@/lib/admin";
 import { cacheInvalidatePrefix } from "@/lib/cache";
+import { scheduleIntelligenceRefresh } from "@/lib/intelligence/schedule";
 import { ensureProfile } from "@/lib/ensure-profile";
 import { checkRateLimitByIpAndUser } from "@/lib/rate-limit";
 import { getUserProductCount, PRODUCTS_CACHE_PREFIX } from "@/services/products";
@@ -787,6 +788,7 @@ export async function updateProduct(
   }
 
   await cacheInvalidatePrefix(PRODUCTS_CACHE_PREFIX);
+  scheduleIntelligenceRefresh("listing-changed");
   // The dashboard shows name/tagline/status, so an edit changes it too.
   revalidatePath("/dashboard");
   revalidatePath("/admin");
@@ -849,6 +851,7 @@ export async function deleteProduct(
   }
 
   await cacheInvalidatePrefix(PRODUCTS_CACHE_PREFIX);
+  scheduleIntelligenceRefresh("listing-changed");
 
   // Drop the row from every cached render that showed it. Revalidating the two
   // dashboards is what lets them refresh in place instead of navigating away.

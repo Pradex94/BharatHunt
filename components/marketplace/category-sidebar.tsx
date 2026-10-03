@@ -109,6 +109,66 @@ function PricingFilter() {
   );
 }
 
+const TOGGLE_ROW =
+  "flex items-center justify-between rounded-lg px-3 py-2 text-left text-sm font-medium transition-colors duration-150 outline-none pointer-coarse:min-h-11 focus-visible:ring-2 focus-visible:ring-ring/50";
+
+/**
+ * Discovery filters (lib/constants.ts parseDiscoveryFilters): AI-first, made in
+ * India, launch window. URL params like the rest, so a filtered view is a link.
+ */
+function DiscoveryFilter() {
+  const searchParams = useSearchParams();
+  const updateSearchParams = useUpdateSearchParams();
+  const ai = searchParams.get("ai") === "1";
+  const india = searchParams.get("made_in") === "india";
+  const launched = searchParams.get("launched");
+
+  const toggles: { label: string; active: boolean; onClick: () => void; hint: string }[] = [
+    {
+      label: "AI-first",
+      hint: "Listings that describe themselves as AI — not just tagged",
+      active: ai,
+      onClick: () => updateSearchParams({ ai: ai ? null : "1" }, { resetPage: true }),
+    },
+    {
+      label: "Made in India",
+      hint: "An Indian state confirmed by the maker or verified by BharatHunt",
+      active: india,
+      onClick: () => updateSearchParams({ made_in: india ? null : "india" }, { resetPage: true }),
+    },
+    {
+      label: "Launched this week",
+      hint: "Published on BharatHunt in the last 7 days",
+      active: launched === "week",
+      onClick: () => updateSearchParams({ launched: launched === "week" ? null : "week" }, { resetPage: true }),
+    },
+    {
+      label: "Launched this month",
+      hint: "Published on BharatHunt in the last 30 days",
+      active: launched === "month",
+      onClick: () => updateSearchParams({ launched: launched === "month" ? null : "month" }, { resetPage: true }),
+    },
+  ];
+
+  return (
+    <div className="flex flex-col gap-1" role="group" aria-label="Discovery filters">
+      {toggles.map((toggle) => (
+        <button
+          key={toggle.label}
+          type="button"
+          title={toggle.hint}
+          aria-pressed={toggle.active}
+          onClick={toggle.onClick}
+          className={cn(TOGGLE_ROW, toggle.active ? "bg-primary/10 text-primary" : "text-ink hover:bg-secondary-bg")}
+        >
+          <span>{toggle.label}</span>
+          {toggle.active && <Check className="size-4" aria-hidden="true" />}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export function CategorySidebar({
   categoryCounts,
   totalCount,
@@ -125,6 +185,10 @@ export function CategorySidebar({
       <div>
         <Caption className="mb-3 block">Pricing</Caption>
         <PricingFilter />
+      </div>
+      <div>
+        <Caption className="mb-3 block">Discover</Caption>
+        <DiscoveryFilter />
       </div>
       <div className="rounded-lg bg-primary p-5 text-on-primary">
         <p className="text-sm font-semibold">Building something?</p>

@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 
 import { ProductCard, type ProductCardProduct } from "@/components/products/product-card";
 import { loadMoreProducts } from "@/lib/actions/marketplace";
+import { SignalClickArea } from "@/components/discovery/signals";
 import type { GetProductsParams } from "@/services/products";
 
 export function ProductList({
@@ -47,14 +48,21 @@ export function ProductList({
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-col gap-3">
-        {products.map((product) => (
-          <ProductCard
-            key={product.id}
-            product={product}
-            isUpvoted={upvotedIds.has(product.id)}
-            isLoggedIn={isLoggedIn}
-          />
-        ))}
+        {products.map((product) =>
+          // A click from a search result is a search signal; a browse is not.
+          filters.q ? (
+            <SignalClickArea key={product.id} productId={product.id} event="search_click" surface="search">
+              <ProductCard product={product} isUpvoted={upvotedIds.has(product.id)} isLoggedIn={isLoggedIn} />
+            </SignalClickArea>
+          ) : (
+            <ProductCard
+              key={product.id}
+              product={product}
+              isUpvoted={upvotedIds.has(product.id)}
+              isLoggedIn={isLoggedIn}
+            />
+          ),
+        )}
       </div>
 
       {hasMore && (

@@ -539,6 +539,98 @@ export type Database = {
           },
         ]
       }
+      product_intelligence: {
+        Row: {
+          attributes: string[]
+          audiences: string[]
+          concepts: string[]
+          content_hash: string
+          indexed_at: string
+          knowledge: Json
+          knowledge_version: number
+          product_id: string
+        }
+        Insert: {
+          attributes?: string[]
+          audiences?: string[]
+          concepts?: string[]
+          content_hash: string
+          indexed_at?: string
+          knowledge?: Json
+          knowledge_version: number
+          product_id: string
+        }
+        Update: {
+          attributes?: string[]
+          audiences?: string[]
+          concepts?: string[]
+          content_hash?: string
+          indexed_at?: string
+          knowledge?: Json
+          knowledge_version?: number
+          product_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_intelligence_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: true
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      product_similarities: {
+        Row: {
+          computed_at: string
+          concept_score: number | null
+          method: string
+          product_id: string
+          rank: number
+          score: number
+          shared_concepts: string[]
+          similar_product_id: string
+          text_score: number | null
+        }
+        Insert: {
+          computed_at?: string
+          concept_score?: number | null
+          method: string
+          product_id: string
+          rank: number
+          score: number
+          shared_concepts?: string[]
+          similar_product_id: string
+          text_score?: number | null
+        }
+        Update: {
+          computed_at?: string
+          concept_score?: number | null
+          method?: string
+          product_id?: string
+          rank?: number
+          score?: number
+          shared_concepts?: string[]
+          similar_product_id?: string
+          text_score?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_similarities_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_similarities_similar_product_id_fkey"
+            columns: ["similar_product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       comments: {
         Row: {
           body: string
@@ -692,6 +784,9 @@ export type Database = {
           ip_address: string | null
           product_id: string
           user_id: string | null
+          session_hash: string | null
+          dedup_bucket: number | null
+          surface: string | null
         }
         Insert: {
           created_at?: string | null
@@ -700,6 +795,9 @@ export type Database = {
           ip_address?: string | null
           product_id: string
           user_id?: string | null
+          session_hash?: string | null
+          dedup_bucket?: number | null
+          surface?: string | null
         }
         Update: {
           created_at?: string | null
@@ -733,6 +831,7 @@ export type Database = {
           query_normalized: string
           result_count: number
           created_at: string
+          source: string
         }
         Insert: {
           id?: string
@@ -740,6 +839,7 @@ export type Database = {
           query_normalized: string
           result_count: number
           created_at?: string
+          source?: string
         }
         Update: {
           id?: string
@@ -749,6 +849,136 @@ export type Database = {
           created_at?: string
         }
         Relationships: []
+      }
+      product_signal_daily: {
+        Row: {
+          comments: number
+          compares: number
+          day: string
+          match_clicks: number
+          match_impressions: number
+          product_id: string
+          saves: number
+          search_clicks: number
+          unsaves: number
+          upvotes: number
+          views: number
+          visitors: number
+          website_clicks: number
+        }
+        Insert: {
+          comments?: number
+          compares?: number
+          day: string
+          match_clicks?: number
+          match_impressions?: number
+          product_id: string
+          saves?: number
+          search_clicks?: number
+          unsaves?: number
+          upvotes?: number
+          views?: number
+          visitors?: number
+          website_clicks?: number
+        }
+        Update: {
+          comments?: number
+          compares?: number
+          day?: string
+          match_clicks?: number
+          match_impressions?: number
+          product_id?: string
+          saves?: number
+          search_clicks?: number
+          unsaves?: number
+          upvotes?: number
+          views?: number
+          visitors?: number
+          website_clicks?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_signal_daily_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_lists: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          is_public: boolean
+          owner_id: string
+          slug: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_public?: boolean
+          owner_id: string
+          slug: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_public?: boolean
+          owner_id?: string
+          slug?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_lists_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      user_list_items: {
+        Row: {
+          added_at: string
+          list_id: string
+          product_id: string
+        }
+        Insert: {
+          added_at?: string
+          list_id: string
+          product_id: string
+        }
+        Update: {
+          added_at?: string
+          list_id?: string
+          product_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_list_items_list_id_fkey"
+            columns: ["list_id"]
+            isOneToOne: false
+            referencedRelation: "user_lists"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_list_items_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       product_ratings: {
         Row: {
@@ -837,6 +1067,10 @@ export type Database = {
           hire_pitch: string | null
           launch_state: string | null
           launch_state_source: string | null
+          rising_score: number
+          recent_saves: number
+          recent_compares: number
+          signals_at: string | null
 
           source: string
           search_name: string | null
@@ -886,6 +1120,10 @@ export type Database = {
           hire_pitch?: string | null
           launch_state?: string | null
           launch_state_source?: string | null
+          rising_score?: number
+          recent_saves?: number
+          recent_compares?: number
+          signals_at?: string | null
 
           source?: string
         }
@@ -933,6 +1171,10 @@ export type Database = {
           hire_pitch?: string | null
           launch_state?: string | null
           launch_state_source?: string | null
+          rising_score?: number
+          recent_saves?: number
+          recent_compares?: number
+          signals_at?: string | null
 
           source?: string
         }
@@ -2660,6 +2902,21 @@ export type Database = {
         Returns: undefined
       }
       calculate_product_scores: { Args: never; Returns: undefined }
+      refresh_discovery_signals: {
+        Args: {
+          half_life_days?: number
+          min_rising?: number
+          w_visitor?: number
+          w_click?: number
+          w_save?: number
+          w_compare?: number
+          w_comment?: number
+          w_upvote?: number
+          w_match_click?: number
+          w_search_click?: number
+        }
+        Returns: Json
+      }
       search_products: {
         Args: {
           search_query: string
@@ -2668,6 +2925,10 @@ export type Database = {
           sort_mode?: string
           page_limit?: number
           page_offset?: number
+          state_filter?: string | null
+          made_in_india?: boolean | null
+          launched_since?: string | null
+          attribute_filter?: string[] | null
         }
         Returns: {
           id: string

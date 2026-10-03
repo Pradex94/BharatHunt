@@ -7,6 +7,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { after } from "next/server";
 import { auth } from "@clerk/nextjs/server";
+import { Target } from "lucide-react";
 
 import { Container } from "@/components/ui/container";
 import { Numeric } from "@/components/ui/typography";
@@ -22,8 +23,24 @@ import {
   getUpvotedProductIds,
   PRODUCTS_PAGE_SIZE,
 } from "@/services/products";
-import { PRODUCT_CATEGORIES, PRODUCT_SORTS, type ProductSort } from "@/lib/constants";
+import {
+  LAUNCH_WINDOW_DAYS,
+  parseDiscoveryFilters,
+  PRODUCT_CATEGORIES,
+  PRODUCT_SORTS,
+  type ProductSort,
+} from "@/lib/constants";
 import { recordSearch } from "@/lib/search-analytics";
+import { getConceptRelatedProducts } from "@/services/intelligence";
+import { conceptLabel } from "@/lib/intelligence/concepts";
+import { ProductCard } from "@/components/products/product-card";
+import { SignalClickArea } from "@/components/discovery/signals";
+
+/** "video editing or AI video generation" — the concepts a query was read as. */
+function conceptListPhrase(keys: string[]): string {
+  const labels = keys.slice(0, 3).map(conceptLabel);
+  return labels.length <= 1 ? (labels[0] ?? "this") : `${labels.slice(0, -1).join(", ")} or ${labels.at(-1)}`;
+}
 
 type MarketplaceSearchParams = Promise<{
   category?: string;
@@ -31,6 +48,9 @@ type MarketplaceSearchParams = Promise<{
   q?: string;
   pricing?: string;
   page?: string;
+  ai?: string;
+  made_in?: string;
+  launched?: string;
 }>;
 
 /** `?page=` as a positive integer; anything else is page 1. */
@@ -56,7 +76,9 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const params = await searchParams;
   const page = pageFrom(params.page);
-  const filtered = Boolean(params.category || params.pricing || params.q);
+  const filtered = Boolean(
+    params.category || params.pricing || params.q || params.ai || params.made_in || params.launched,
+  );
 
   return {
     title: page > 1 ? `Marketplace — page ${page}` : "Marketplace",
@@ -101,7 +123,16 @@ export default async function MarketplacePage({
       : "trending";
   const pricing = params.pricing ? params.pricing.split(",").filter(Boolean) : undefined;
 
-  const filters = { category, sort, q, pricing };
+  const discovery = parseDiscoveryFilters(params);
+  const filters = {
+    category,
+    sort,
+    q,
+    pricing,
+    ai: discovery.ai || undefined,
+    madeInIndia: discovery.madeInIndia || undefined,
+    launchedWithinDays: discovery.launched ? LAUNCH_WINDOW_DAYS[discovery.launched] : undefined,
+  };
   // Previously hardcoded to 1, which made `?page=` inert: every paginated URL
   // rendered page 1, so the only product links a crawler could ever reach were
   // the first twelve. Everything past them sat in the sitemap with no link
@@ -109,9 +140,12 @@ export default async function MarketplacePage({
   // "Discovered - currently not indexed".
   const page = pageFrom(params.page);
 
-  const [{ products, totalCount }, categoryCounts] = await Promise.all([
+  // The concept-related block is fetched alongside the list, not after it:
+  // over-fetch, then drop whatever the lexical results already show.
+  const [{ products, totalCount }, categoryCounts, relatedPool] = await Promise.all([
     getProducts({ ...filters, page }),
     getCategoryCounts(),
+    q && page === 1 ? getConceptRelatedProducts(q, [], 24) : Promise.resolve(null),
   ]);
 
   // Only ask for a spelling suggestion once the search has genuinely come up
@@ -125,10 +159,25 @@ export default async function MarketplacePage({
     after(() => recordSearch(q, totalCount));
   }
 
-  const upvotedIds = await getUpvotedProductIds(
-    userId,
-    products.map((product) => product.id),
-  );
+  // Search by meaning, on the first page only: listings whose *concepts*
+  // answer the query ("AI video" → editors, generators, avatar tools), minus
+  // anything the lexical search already returned. One cached read of the
+  // precomputed index — no model, no per-product work. Empty before the
+  // intelligence migration is applied, and the page reads as it always did.
+  const shownIds = new Set(products.map((product) => product.id));
+  const related = relatedPool
+    ? {
+        concepts: relatedPool.concepts,
+        products: relatedPool.products
+          .filter((product) => !shownIds.has(product.id))
+          .slice(0, products.length === 0 ? 12 : 6),
+      }
+    : null;
+
+  const upvotedIds = await getUpvotedProductIds(userId, [
+    ...products.map((product) => product.id),
+    ...(related?.products ?? []).map((product) => product.id),
+  ]);
 
   const totalCategoryCount = Object.values(categoryCounts).reduce((sum, n) => sum + n, 0);
   const hasMore = totalCount > page * PRODUCTS_PAGE_SIZE;
@@ -140,7 +189,19 @@ export default async function MarketplacePage({
       </aside>
 
       <div className="flex flex-col gap-5">
-        <h1 className="text-3xl sm:text-4xl">The marketplace</h1>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <h1 className="text-3xl sm:text-4xl">The marketplace</h1>
+          {/* The entry to Product Match: for when you know the job, not the name. */}
+          <Link
+            href={q ? `/discover?q=${encodeURIComponent(q)}` : "/discover"}
+            className="group inline-flex items-center gap-2 self-start rounded-lg border border-border bg-card px-3 py-2 text-sm text-body transition-colors hover:border-primary/40 sm:self-auto"
+          >
+            <Target className="size-4 text-primary" aria-hidden="true" />
+            <span>
+              Not sure what to search for? <span className="font-semibold text-ink group-hover:text-primary">Describe what you need</span>
+            </span>
+          </Link>
+        </div>
 
         {/* Sticky just under the sticky navbar (h-16 = 64px, z-40) so the
             search + sort controls stay reachable while the list scrolls.
@@ -199,7 +260,7 @@ export default async function MarketplacePage({
           </div>
         ) : (
           <ProductList
-            key={`${category ?? "all"}:${sort}:${q ?? ""}:${(pricing ?? []).join(",")}:${page}`}
+            key={`${category ?? "all"}:${sort}:${q ?? ""}:${(pricing ?? []).join(",")}:${page}:${JSON.stringify(discovery)}`}
             initialProducts={products}
             initialPage={page}
             initialUpvotedIds={[...upvotedIds]}
@@ -207,6 +268,27 @@ export default async function MarketplacePage({
             filters={filters}
             isLoggedIn={Boolean(userId)}
           />
+        )}
+
+        {related && related.products.length > 0 && (
+          <section aria-labelledby="related-results" className="flex flex-col gap-3 border-t border-border pt-6">
+            <div className="flex flex-col gap-1">
+              <h2 id="related-results" className="font-sans text-lg font-semibold tracking-normal text-ink">
+                {products.length === 0 ? "Products that do this" : "Related products"}
+              </h2>
+              <p className="text-sm text-muted">
+                Listings that describe {conceptListPhrase(related.concepts)}, even without the exact words
+                &ldquo;{q}&rdquo;. Matched on what each product says it does.
+              </p>
+            </div>
+            <div className="flex flex-col gap-3">
+              {related.products.map((product) => (
+                <SignalClickArea key={product.id} productId={product.id} event="search_click" surface="search-related">
+                  <ProductCard product={product} isUpvoted={upvotedIds.has(product.id)} isLoggedIn={Boolean(userId)} />
+                </SignalClickArea>
+              ))}
+            </div>
+          </section>
         )}
       </div>
     </Container>

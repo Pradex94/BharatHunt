@@ -85,11 +85,15 @@ export async function cacheRemember<T>(
 
   try {
     const cached = await redis.get<T>(key);
-    if (cached !== null && cached !== undefined) return cached;
+    if (cached !== null && cached !== undefined) {
+      sampleCacheOutcome(redis, "hit");
+      return cached;
+    }
   } catch {
     // Cache read failed — fall through to the loader.
   }
 
+  sampleCacheOutcome(redis, "miss");
   const fresh = await loader();
 
   try {
@@ -99,6 +103,31 @@ export async function cacheRemember<T>(
   }
 
   return fresh;
+}
+
+/*
+ * Cache hit rate for /admin/intelligence, sampled: one read in twenty bumps a
+ * hash counter, fire-and-forget. Measuring every read would double the Redis
+ * commands this cache exists to save; 5% is plenty for a rate.
+ */
+const METRICS_KEY = "bh:metrics:cache";
+const METRICS_SAMPLE_RATE = 0.05;
+
+function sampleCacheOutcome(redis: Redis, outcome: "hit" | "miss"): void {
+  if (Math.random() >= METRICS_SAMPLE_RATE) return;
+  redis.hincrby(METRICS_KEY, outcome, 1).catch(() => {});
+}
+
+/** Sampled hit/miss counts since the counters were last reset; null without Redis. */
+export async function getCacheMetrics(): Promise<{ hits: number; misses: number } | null> {
+  const redis = getRedis();
+  if (!redis) return null;
+  try {
+    const values = (await redis.hgetall<Record<string, number | string>>(METRICS_KEY)) ?? {};
+    return { hits: Number(values.hit ?? 0), misses: Number(values.miss ?? 0) };
+  } catch {
+    return null;
+  }
 }
 
 /** Delete one or more exact keys. */

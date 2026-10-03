@@ -479,7 +479,20 @@ export type GetProductsParams = {
   q?: string;
   page?: number;
   pricing?: string[];
+  /** Listings described as AI (product_intelligence.attributes 'ai-first'). */
+  ai?: boolean;
+  /** A confirmed or verified Indian state is recorded. */
+  madeInIndia?: boolean;
+  /** Published within this many days. */
+  launchedWithinDays?: number;
 };
+
+/** Browse columns: the card, plus what its status badge reads. */
+const BROWSE_COLUMNS = `${PRODUCT_CARD_COLUMNS}, published_at, rising_score`;
+
+function launchedSince(days: number | undefined): string | null {
+  return days && days > 0 ? new Date(Date.now() - days * 86_400_000).toISOString() : null;
+}
 
 export type GetProductsResult = {
   products: ProductCardProduct[];
@@ -511,6 +524,9 @@ async function searchProductsRanked({
   sort,
   from,
   limit,
+  ai,
+  madeInIndia,
+  launchedWithinDays,
 }: {
   q: string;
   category?: string;
@@ -518,11 +534,13 @@ async function searchProductsRanked({
   sort: ProductSort;
   from: number;
   limit: number;
+  ai?: boolean;
+  madeInIndia?: boolean;
+  launchedWithinDays?: number;
 }): Promise<GetProductsResult> {
   const supabase = createClient();
   const validPricing = (pricing ?? []).filter((value) => PRICING_TYPE_VALUES.includes(value));
-
-  const { data, error } = await supabase.rpc("search_products", {
+  const base = {
     search_query: q,
     category_filter:
       category && (PRODUCT_CATEGORIES as readonly string[]).includes(category) ? category : null,
@@ -530,7 +548,17 @@ async function searchProductsRanked({
     sort_mode: sort,
     page_limit: limit,
     page_offset: from,
-  });
+  };
+  const filters = {
+    made_in_india: madeInIndia ? true : null,
+    launched_since: launchedSince(launchedWithinDays),
+    attribute_filter: ai ? ["ai-first"] : null,
+  };
+
+  let { data, error } = await supabase.rpc("search_products", { ...base, ...filters });
+  // A database that predates 20261004000000 only has the six-argument
+  // function; search still works there, just without the new filters.
+  if (error?.code === "PGRST202") ({ data, error } = await supabase.rpc("search_products", base));
 
   if (error) {
     throw new Error(`Failed to search products: ${error.message}`);
@@ -587,6 +615,9 @@ export async function getProducts({
   q,
   page = 1,
   pricing,
+  ai,
+  madeInIndia,
+  launchedWithinDays,
 }: GetProductsParams): Promise<GetProductsResult> {
   const currentPage = Number.isFinite(page) && page > 0 ? Math.floor(page) : 1;
   const cacheKey = `${PRODUCTS_CACHE_PREFIX}list:${JSON.stringify({
@@ -595,6 +626,9 @@ export async function getProducts({
     q: q ?? "",
     page: currentPage,
     pricing: [...(pricing ?? [])].sort(),
+    ai: Boolean(ai),
+    madeInIndia: Boolean(madeInIndia),
+    launched: launchedWithinDays ?? 0,
   })}`;
 
   return cacheRemember(cacheKey, LIST_TTL, async () => {
@@ -614,67 +648,113 @@ export async function getProducts({
         sort,
         from,
         limit: PRODUCTS_PAGE_SIZE,
+        ai,
+        madeInIndia,
+        launchedWithinDays,
       });
     }
 
-    let query = supabase
-      .from("products")
-      .select(PRODUCT_CARD_COLUMNS, { count: "exact" })
-      .eq("status", "published");
+    const run = (withSignals: boolean) => {
+      // The AI filter joins the derived attributes; `!inner` makes products
+      // without a matching row drop out rather than come back with nulls.
+      const columns = withSignals
+        ? ai
+          ? `${BROWSE_COLUMNS}, product_intelligence!inner(attributes)`
+          : BROWSE_COLUMNS
+        : PRODUCT_CARD_COLUMNS;
+      let query = supabase
+        .from("products")
+        .select(columns, { count: "exact" })
+        .eq("status", "published");
 
-    if (category && (PRODUCT_CATEGORIES as readonly string[]).includes(category)) {
-      query = query.eq("category", category as ProductCategory);
-    }
+      if (category && (PRODUCT_CATEGORIES as readonly string[]).includes(category)) {
+        query = query.eq("category", category as ProductCategory);
+      }
 
-    const validPricing = (pricing ?? []).filter((value) => PRICING_TYPE_VALUES.includes(value));
-    if (validPricing.length > 0) {
-      query = query.in("pricing_type", validPricing);
-    }
+      const validPricing = (pricing ?? []).filter((value) => PRICING_TYPE_VALUES.includes(value));
+      if (validPricing.length > 0) {
+        query = query.in("pricing_type", validPricing);
+      }
+      if (withSignals && ai) query = query.contains("product_intelligence.attributes", ["ai-first"]);
+      if (madeInIndia) query = query.not("launch_state", "is", null);
+      const since = launchedSince(launchedWithinDays);
+      if (since) query = query.gte("published_at", since);
 
-    switch (sort) {
-      case "trending":
-        query = query.order("trend_score", { ascending: false, nullsFirst: false });
-        break;
-      case "price-low":
-        query = query.order("pricing_amount", { ascending: true, nullsFirst: false });
-        break;
-      case "price-high":
-        query = query.order("pricing_amount", { ascending: false, nullsFirst: false });
-        break;
-      // "Top rated" is the all-time community favourites board: upvotes, not
-      // `avg_rating`. The rating column is fed by the `feedback` table, which
-      // nothing in the app writes, so ordering by it left every row tied at
-      // NULL and the page came back in effectively random order.
-      case "top-rated":
-        query = query.order("upvote_count", { ascending: false, nullsFirst: false });
-        break;
-      case "newest":
-      default:
-        query = query.order("published_at", { ascending: false, nullsFirst: false });
-        break;
-    }
+      return orderBrowse(query, withSignals ? sort : sort === "rising" || sort.startsWith("most-") ? "trending" : sort)
+        .range(from, to);
+    };
 
-    // Deterministic tie-break, mirroring `search_products`: without it rows
-    // with equal scores come back in whatever order Postgres happens to
-    // produce, which lets a product repeat -- or vanish -- across pages.
-    query = query
-      .order("upvote_count", { ascending: false, nullsFirst: false })
-      .order("published_at", { ascending: false, nullsFirst: false })
-      .order("id", { ascending: true });
-
-    const { data, error, count } = await query.range(from, to);
+    let { data, error, count } = await run(true);
+    // Before 20261004000000 the signal columns do not exist; browse still
+    // works, ordered by what the database has.
+    if (error && isMissingColumnError(error)) ({ data, error, count } = await run(false));
 
     if (error) {
       throw new Error(`Failed to load products: ${error.message}`);
     }
 
     return {
-      products: (data ?? []) as ProductCardProduct[],
+      // The joined attributes row was only there to filter on.
+      products: ((data ?? []) as unknown as (ProductCardProduct & { product_intelligence?: unknown })[]).map(
+        (row) => {
+          const product = { ...row };
+          delete product.product_intelligence;
+          return product as ProductCardProduct;
+        },
+      ),
       totalCount: count ?? 0,
       page: currentPage,
       pageSize: PRODUCTS_PAGE_SIZE,
     };
   });
+}
+
+/** The ORDER BY for a marketplace browse — every sort the pills and URLs offer. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- the builder's generic type changes with the select string
+function orderBrowse(query: any, sort: ProductSort): any {
+  switch (sort) {
+    case "trending":
+      query = query.order("trend_score", { ascending: false, nullsFirst: false });
+      break;
+    case "rising":
+      query = query
+        .order("rising_score", { ascending: false, nullsFirst: false })
+        .order("trend_score", { ascending: false, nullsFirst: false });
+      break;
+    case "most-saved":
+      query = query
+        .order("recent_saves", { ascending: false, nullsFirst: false })
+        .order("bookmark_count", { ascending: false, nullsFirst: false });
+      break;
+    case "most-compared":
+      query = query.order("recent_compares", { ascending: false, nullsFirst: false });
+      break;
+    case "price-low":
+      query = query.order("pricing_amount", { ascending: true, nullsFirst: false });
+      break;
+    case "price-high":
+      query = query.order("pricing_amount", { ascending: false, nullsFirst: false });
+      break;
+    // "Top rated" is the all-time community favourites board: upvotes, not
+    // `avg_rating`. The rating column is fed by the `feedback` table, which
+    // nothing in the app writes, so ordering by it left every row tied at
+    // NULL and the page came back in effectively random order.
+    case "top-rated":
+      query = query.order("upvote_count", { ascending: false, nullsFirst: false });
+      break;
+    case "newest":
+    default:
+      query = query.order("published_at", { ascending: false, nullsFirst: false });
+      break;
+  }
+
+  // Deterministic tie-break, mirroring `search_products`: without it rows
+  // with equal scores come back in whatever order Postgres happens to
+  // produce, which lets a product repeat -- or vanish -- across pages.
+  return query
+    .order("upvote_count", { ascending: false, nullsFirst: false })
+    .order("published_at", { ascending: false, nullsFirst: false })
+    .order("id", { ascending: true });
 }
 
 /**
