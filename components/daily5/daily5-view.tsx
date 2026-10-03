@@ -1,11 +1,12 @@
 import Link from "next/link";
-import { ArrowUpRight, Building2, MapPin } from "lucide-react";
+import { ArrowUpRight, Building2, ChevronLeft, ChevronRight, MapPin } from "lucide-react";
 
 import { ProductLogo } from "@/components/products/product-logo";
 import { Breadcrumbs, type Crumb } from "@/components/seo/breadcrumbs";
 import { JsonLd } from "@/components/seo/json-ld";
 import { Container } from "@/components/ui/container";
 import { indiaStateName } from "@/lib/india-states";
+import { slugForCategory } from "@/lib/constants";
 import { absoluteUrl, itemListSchema, withReferral } from "@/lib/seo";
 import { ShareMenu } from "@/components/products/share-menu";
 import { SaveButton } from "@/components/discovery/save-button";
@@ -48,6 +49,11 @@ export function Daily5View({
   const heading = dailyHeading(day.products.length);
   const pretty = formatDailyDate(day.date);
   const archive = dates.filter((date) => date !== day.date).slice(0, 14);
+  // `dates` is newest first and holds only days with published picks, so the
+  // neighbours are never an empty page.
+  const index = dates.indexOf(day.date);
+  const older = index >= 0 ? (dates[index + 1] ?? null) : null;
+  const newer = index > 0 ? dates[index - 1] : null;
 
   return (
     <main className="min-h-dvh bg-background pb-16 pt-8 md:pt-12">
@@ -63,10 +69,30 @@ export function Daily5View({
             </div>
             <h1 className="text-3xl font-bold tracking-tight text-ink md:text-5xl">{heading}</h1>
             <p className="max-w-2xl text-base text-body">
-              Every day BharatHunt looks for products built by Indian teams, checks the India connection on each
-              product&apos;s own website, and an editor approves the picks. Built one of these? Write to us and we will hand
-              the listing over to you.
+              Indian products discovered and verified by BharatHunt. Every day BharatHunt looks for products built by
+              Indian teams, checks the India connection on each product&apos;s own website, and an editor approves the
+              picks. Built one of these? Write to us and we will hand the listing over to you.
             </p>
+            {(older || newer) && (
+              <nav aria-label="Daily 5 by day" className="flex items-center justify-between gap-3 text-sm">
+                {older ? (
+                  <Link href={`/daily-5/${older}`} rel="prev" className="inline-flex min-h-10 items-center gap-1 font-semibold text-ink hover:text-primary">
+                    <ChevronLeft className="size-4" aria-hidden="true" /> {formatDailyDate(older)}
+                  </Link>
+                ) : (
+                  <span />
+                )}
+                {newer && (
+                  <Link
+                    href={index === 1 ? "/daily-5" : `/daily-5/${newer}`}
+                    rel="next"
+                    className="inline-flex min-h-10 items-center gap-1 font-semibold text-ink hover:text-primary"
+                  >
+                    {index === 1 ? "Latest" : formatDailyDate(newer)} <ChevronRight className="size-4" aria-hidden="true" />
+                  </Link>
+                )}
+              </nav>
+            )}
           </header>
 
           <ol className="grid grid-cols-1 gap-4">
@@ -85,7 +111,12 @@ export function Daily5View({
                       </h2>
                       <p className="mt-1 text-body">{product.tagline}</p>
                       <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted">
-                        <span className="rounded-full bg-secondary-bg px-2.5 py-0.5 text-xs font-semibold text-body-strong">{product.category}</span>
+                        <Link
+                          href={`/categories/${slugForCategory(product.category) ?? ""}`}
+                          className="rounded-full bg-secondary-bg px-2.5 py-0.5 text-xs font-semibold text-body-strong hover:text-primary"
+                        >
+                          {product.category}
+                        </Link>
                         {place && (
                           <span className="inline-flex items-center gap-1">
                             <MapPin className="size-3.5" aria-hidden="true" /> {place}

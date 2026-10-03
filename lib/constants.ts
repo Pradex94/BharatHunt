@@ -14,6 +14,7 @@ import {
   Shapes,
   type LucideIcon,
 } from "lucide-react";
+import { isIndiaStateCode } from "./india-states.ts";
 
 export type NavLink = {
   label: string;
@@ -217,9 +218,18 @@ export const PRODUCT_SORTS = [
   "top-rated",
   "most-saved",
   "most-compared",
+  "most-viewed",
+  "most-discussed",
   "relevance",
 ] as const;
 export type ProductSort = (typeof PRODUCT_SORTS)[number];
+
+/**
+ * Sorts that order by an all-time counter `search_products` does not select
+ * (`view_count`) or does not rank on. A search keeps relevance instead of
+ * pretending to honour them; the sort menu hides them while a query is active.
+ */
+export const BROWSE_ONLY_SORTS: readonly ProductSort[] = ["most-viewed", "most-discussed"];
 
 /**
  * Marketplace discovery filters beyond category and pricing, as URL params so
@@ -238,6 +248,8 @@ export type DiscoveryFilters = {
   ai: boolean;
   madeInIndia: boolean;
   launched: "week" | "month" | null;
+  /** ISO 3166-2:IN code from `?state=` (e.g. "IN-KA"), validated against INDIA_STATES. */
+  state: string | null;
 };
 
 export const LAUNCH_WINDOW_DAYS = { week: 7, month: 30 } as const;
@@ -246,11 +258,13 @@ export function parseDiscoveryFilters(params: {
   ai?: string | null;
   made_in?: string | null;
   launched?: string | null;
+  state?: string | null;
 }): DiscoveryFilters {
   return {
     ai: params.ai === "1",
     madeInIndia: params.made_in === "india",
     launched: params.launched === "week" || params.launched === "month" ? params.launched : null,
+    state: params.state && isIndiaStateCode(params.state) ? params.state : null,
   };
 }
 

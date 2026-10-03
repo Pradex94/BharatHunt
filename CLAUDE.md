@@ -66,6 +66,17 @@ those through the PowerShell tool instead.
   Decision logic is pure and tested (`lib/daily-agent/*.ts` with `.ts` imports);
   `run.ts` advances a batch one bounded step per call. Check real-world
   behaviour with `node scripts/daily-agent-dry-run.mjs` (read-only).
+- **Product ↔ company/funding links are verified, never name-only.**
+  `lib/intelligence/connections.ts` `fundingLinkVerified` attaches a
+  `funding_startups` row to a product only when the name *and* the product's
+  own website domain agree (tested). No match → no funding section. The same
+  file owns the "why people are discovering this" floors; product-page reads
+  live in `services/product-connections.ts` (cached, fail-soft, no model calls).
+- **Admin → Platform Health (`/admin/health`)** reads the run tables each
+  pipeline already writes; thresholds and the workflow cron mirror are in
+  `lib/platform-health.ts` (a test fails if `.github/workflows` crons drift).
+  Category suggestions (`lib/intelligence/taxonomy.ts`) are review-only on
+  `/admin/intelligence` — nothing is recategorised automatically.
 - **Data layer.** `services/products.ts` holds all product queries (server-only,
   imports the Supabase client). `lib/actions/*` are Server Actions. Anything a
   client component needs (category taxonomy, sorts, pricing types) lives in

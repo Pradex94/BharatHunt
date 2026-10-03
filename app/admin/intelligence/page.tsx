@@ -218,6 +218,54 @@ export default async function IntelligenceAdminPage() {
         </Panel>
       </div>
 
+      <Panel
+        title="Category review"
+        note={`Suggestions from each listing's own words — nothing is recategorised automatically. ${status.classification.otherTotal} products are filed under "Other".`}
+      >
+        <div className="grid grid-cols-3 gap-3">
+          <Stat label="In “Other”, clear home" value={status.classification.counts.uncategorised} />
+          <Stat label="Category unsupported" value={status.classification.counts["possible-mismatch"]} />
+          <Stat label="Too little detail" value={status.classification.counts["too-little-detail"]} note="Thin listing, not a wrong one" />
+        </div>
+        <div className="overflow-x-auto rounded-xl border border-border bg-card">
+          <table className="w-full min-w-[40rem] text-left text-sm">
+            <thead>
+              <tr className="border-b border-border text-xs text-muted">
+                <th className="p-3 font-medium">Product</th>
+                <th className="p-3 font-medium">Now</th>
+                <th className="p-3 font-medium">Listing describes</th>
+                <th className="p-3 font-medium">Confidence</th>
+                <th className="p-3 font-medium">Evidence</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {status.classification.items.length === 0 && (
+                <tr>
+                  <td colSpan={5} className="p-3 text-muted">
+                    Every category is supported by its listing.
+                  </td>
+                </tr>
+              )}
+              {status.classification.items.map((item) => (
+                <tr key={item.slug}>
+                  <td className="p-3">
+                    <Link href={`/products/${item.slug}/edit`} className="text-ink hover:text-primary">
+                      {item.name}
+                    </Link>
+                  </td>
+                  <td className="p-3 text-body">{item.current}</td>
+                  <td className="p-3 text-ink">{item.suggested ?? "—"}</td>
+                  <td className="p-3 text-muted">
+                    {item.suggested ? <Numeric>{`${Math.round(item.confidence * 100)}%`}</Numeric> : "—"}
+                  </td>
+                  <td className="p-3 text-xs text-muted">{item.evidence.join(", ") || "No mappable terms"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Panel>
+
       <Panel title="Most common concepts" note="What the catalogue says it does, per the lexicon.">
         <ul className="flex flex-wrap gap-2">
           {status.topConcepts.map((concept) => (

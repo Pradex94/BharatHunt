@@ -9,6 +9,7 @@ import type { ExistingProduct } from "@/lib/daily-agent/domain";
 import type { StoredArticle, StoredRound } from "@/lib/daily-agent/sources";
 import type { CandidateStatus } from "@/lib/daily-agent/types";
 import type { Database, Json } from "@/types/database";
+import { plausibleCompanyName } from "@/lib/intelligence/connections";
 
 /**
  * Every database read and write the Daily 5 agent makes.
@@ -415,8 +416,17 @@ export type Daily5Day = { date: string; products: Daily5Product[] };
 
 const PUBLIC_AGENT = "daily5";
 
+/**
+ * The public Daily 5 reads go through the service role (the agent's tables
+ * have no public policies). A build without the key — CI prerendering
+ * /daily-5 and the homepage — gets "no list yet" instead of a thrown
+ * "supabaseKey is required" that fails the whole build.
+ */
+const canReadDaily5 = () => Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY && process.env.NEXT_PUBLIC_SUPABASE_URL);
+
 /** The dates that have at least one published product, newest first. */
 export const getDaily5Dates = cache(async (limit = 60): Promise<string[]> => {
+  if (!canReadDaily5()) return [];
   const supabase = createServiceClient();
   const { data } = await supabase
     .from("daily_agent_batches")
@@ -435,7 +445,7 @@ export const getDaily5Dates = cache(async (limit = 60): Promise<string[]> => {
  * rejected or deleted product never appears.
  */
 export const getDaily5Day = cache(async (date: string): Promise<Daily5Day | null> => {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return null;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !canReadDaily5()) return null;
   const supabase = createServiceClient();
   const { data: batch } = await supabase
     .from("daily_agent_batches")
@@ -468,10 +478,21 @@ export const getDaily5Day = cache(async (date: string): Promise<Daily5Day | null
       upvote_count: product.upvote_count ?? 0,
       rank: products.length + 1,
       candidateId: row.id,
-      companyName: facts.companyName ?? null,
+      // The extractor occasionally keeps a sentence; never print one as a company.
+      companyName: plausibleCompanyName(facts.companyName),
       city: facts.city ?? null,
       whyInteresting: content.whyInteresting ?? null,
     });
   }
   return products.length ? { date: batch.batch_date, products } : null;
 });
+
+/** The most recent day with published picks, or null before the first list (or without the key). */
+export async function getLatestDaily5(): Promise<Daily5Day | null> {
+  try {
+    const [latest] = await getDaily5Dates(1);
+    return latest ? await getDaily5Day(latest) : null;
+  } catch {
+    return null;
+  }
+}

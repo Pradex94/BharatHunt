@@ -50,6 +50,8 @@ type DiscoveryContextValue = {
   isSaved: (productId: string) => boolean;
   toggleSave: (productId: string) => Promise<{ error?: string }>;
   savedCount: number;
+  /** Every saved id — the account's when signed in, this browser's otherwise. */
+  savedIds: readonly string[];
   /** Ids saved in this browser while signed out — what /saved lists for them. */
   localSavedIds: readonly string[];
   compare: readonly CompareItem[];
@@ -121,6 +123,7 @@ export function DiscoveryProvider({ children }: { children: React.ReactNode }) {
   // and Compare still work instead of sitting disabled.
   const ready = hydrated && (!signedIn || accountIds !== null);
 
+  const savedIds = useMemo(() => [...savedSet], [savedSet]);
   const isSaved = useCallback((productId: string) => savedSet.has(productId), [savedSet]);
 
   const toggleSave = useCallback(
@@ -193,6 +196,7 @@ export function DiscoveryProvider({ children }: { children: React.ReactNode }) {
       isSaved,
       toggleSave,
       savedCount: savedSet.size,
+      savedIds,
       localSavedIds: localSaved,
       compare,
       isComparing,
@@ -200,7 +204,7 @@ export function DiscoveryProvider({ children }: { children: React.ReactNode }) {
       removeFromCompare,
       clearCompare,
     }),
-    [ready, signedIn, isSaved, toggleSave, savedSet, localSaved, compare, isComparing, addToCompare, removeFromCompare, clearCompare],
+    [ready, signedIn, isSaved, toggleSave, savedSet, savedIds, localSaved, compare, isComparing, addToCompare, removeFromCompare, clearCompare],
   );
 
   return <DiscoveryContext.Provider value={value}>{children}</DiscoveryContext.Provider>;

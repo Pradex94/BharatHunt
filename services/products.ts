@@ -4,7 +4,7 @@ import { isMissingColumnError } from "@/lib/supabase/errors";
 import { cacheRemember } from "@/lib/cache";
 import { istDayKey, istDayStart } from "@/lib/format-date";
 import type { ProductCardProduct } from "@/components/products/product-card";
-import { PRODUCT_CATEGORIES, type ProductCategory, type ProductSort } from "@/lib/constants";
+import { BROWSE_ONLY_SORTS, PRODUCT_CATEGORIES, type ProductCategory, type ProductSort } from "@/lib/constants";
 
 // ── Cache keys / TTLs ────────────────────────────────────────────────────
 // Every product cache key shares this prefix, so a single product write can
@@ -16,7 +16,7 @@ const AGGREGATE_TTL = 300; // featured / counts / stats / slugs
 // Literal strings (not built dynamically) so the Supabase client can infer the
 // row type from the selected columns.
 const PRODUCT_PAGE_COLUMNS =
-  "id, slug, creator_id, name, tagline, description, hero_image_url, screenshot_urls, website_url, github_url, video_url, category, pricing_type, tags, view_count, upvote_count, comment_count, avg_rating, rating_count, cta_text, cta_url, platform_links, tech_stack, coupon_code, offer_description, offer_expires_at, roadmap_url, changelog_url, available_for_hire, hire_pitch, launch_state, creator:profiles!products_creator_id_fkey(display_name, username)";
+  "id, slug, creator_id, name, tagline, description, hero_image_url, screenshot_urls, website_url, github_url, video_url, category, pricing_type, tags, view_count, upvote_count, comment_count, avg_rating, rating_count, cta_text, cta_url, platform_links, tech_stack, coupon_code, offer_description, offer_expires_at, roadmap_url, changelog_url, available_for_hire, hire_pitch, launch_state, launch_state_source, published_at, rising_score, creator:profiles!products_creator_id_fkey(display_name, username)";
 
 /**
  * Split a select list on its top-level commas only — the embedded creator join
@@ -46,7 +46,9 @@ const LAUNCH_FIELD_COLUMNS = [
   "available_for_hire",
   "hire_pitch",
 ];
-const LAUNCH_LOCATION_COLUMNS = ["launch_state"];
+const LAUNCH_LOCATION_COLUMNS = ["launch_state", "launch_state_source"];
+/** `rising_score` (20261004000000): the product page's "rising this week" line. */
+const PAGE_SIGNAL_COLUMNS = ["rising_score"];
 /**
  * `products.source` (20261002000000_daily_agent.sql): 'maker' or 'daily_agent'.
  * The homepage's rankings read maker launches only, so a curated Daily 5 pick
@@ -71,16 +73,14 @@ const RATING_COLUMNS = ["avg_rating", "rating_count"];
  * the database actually has.
  */
 const PRODUCT_PAGE_FALLBACK_COLUMNS = [
-  withoutColumns(PRODUCT_PAGE_COLUMNS, RATING_COLUMNS),
-  withoutColumns(PRODUCT_PAGE_COLUMNS, LAUNCH_LOCATION_COLUMNS),
-  withoutColumns(PRODUCT_PAGE_COLUMNS, LAUNCH_FIELD_COLUMNS),
-  withoutColumns(PRODUCT_PAGE_COLUMNS, [...RATING_COLUMNS, ...LAUNCH_LOCATION_COLUMNS]),
-  withoutColumns(PRODUCT_PAGE_COLUMNS, [
-    ...RATING_COLUMNS,
-    ...LAUNCH_FIELD_COLUMNS,
-    ...LAUNCH_LOCATION_COLUMNS,
-  ]),
-];
+  // The newest group goes first and is dropped from every narrower variant.
+  [],
+  RATING_COLUMNS,
+  LAUNCH_LOCATION_COLUMNS,
+  LAUNCH_FIELD_COLUMNS,
+  [...RATING_COLUMNS, ...LAUNCH_LOCATION_COLUMNS],
+  [...RATING_COLUMNS, ...LAUNCH_FIELD_COLUMNS, ...LAUNCH_LOCATION_COLUMNS],
+].map((drop) => withoutColumns(PRODUCT_PAGE_COLUMNS, [...PAGE_SIGNAL_COLUMNS, ...drop]));
 
 /**
  * Single published product by slug. Wrapped in React `cache()` so the product
@@ -485,10 +485,12 @@ export type GetProductsParams = {
   madeInIndia?: boolean;
   /** Published within this many days. */
   launchedWithinDays?: number;
+  /** ISO 3166-2:IN code: launched from this state. */
+  launchState?: string;
 };
 
 /** Browse columns: the card, plus what its status badge reads. */
-const BROWSE_COLUMNS = `${PRODUCT_CARD_COLUMNS}, published_at, rising_score`;
+const BROWSE_COLUMNS = `${PRODUCT_CARD_COLUMNS}, published_at, rising_score, launch_state`;
 
 function launchedSince(days: number | undefined): string | null {
   return days && days > 0 ? new Date(Date.now() - days * 86_400_000).toISOString() : null;
@@ -527,6 +529,7 @@ async function searchProductsRanked({
   ai,
   madeInIndia,
   launchedWithinDays,
+  launchState,
 }: {
   q: string;
   category?: string;
@@ -537,6 +540,7 @@ async function searchProductsRanked({
   ai?: boolean;
   madeInIndia?: boolean;
   launchedWithinDays?: number;
+  launchState?: string;
 }): Promise<GetProductsResult> {
   const supabase = createClient();
   const validPricing = (pricing ?? []).filter((value) => PRICING_TYPE_VALUES.includes(value));
@@ -545,11 +549,14 @@ async function searchProductsRanked({
     category_filter:
       category && (PRODUCT_CATEGORIES as readonly string[]).includes(category) ? category : null,
     pricing_filter: validPricing.length > 0 ? validPricing : null,
-    sort_mode: sort,
+    // Browse-only sorts rank on counters the search function does not read;
+    // a search keeps its relevance order rather than claim to honour them.
+    sort_mode: BROWSE_ONLY_SORTS.includes(sort) ? "relevance" : sort,
     page_limit: limit,
     page_offset: from,
   };
   const filters = {
+    state_filter: launchState ?? null,
     made_in_india: madeInIndia ? true : null,
     launched_since: launchedSince(launchedWithinDays),
     attribute_filter: ai ? ["ai-first"] : null,
@@ -618,6 +625,7 @@ export async function getProducts({
   ai,
   madeInIndia,
   launchedWithinDays,
+  launchState,
 }: GetProductsParams): Promise<GetProductsResult> {
   const currentPage = Number.isFinite(page) && page > 0 ? Math.floor(page) : 1;
   const cacheKey = `${PRODUCTS_CACHE_PREFIX}list:${JSON.stringify({
@@ -629,6 +637,7 @@ export async function getProducts({
     ai: Boolean(ai),
     madeInIndia: Boolean(madeInIndia),
     launched: launchedWithinDays ?? 0,
+    state: launchState ?? "",
   })}`;
 
   return cacheRemember(cacheKey, LIST_TTL, async () => {
@@ -651,6 +660,7 @@ export async function getProducts({
         ai,
         madeInIndia,
         launchedWithinDays,
+        launchState,
       });
     }
 
@@ -677,10 +687,11 @@ export async function getProducts({
       }
       if (withSignals && ai) query = query.contains("product_intelligence.attributes", ["ai-first"]);
       if (madeInIndia) query = query.not("launch_state", "is", null);
+      if (launchState) query = query.eq("launch_state", launchState);
       const since = launchedSince(launchedWithinDays);
       if (since) query = query.gte("published_at", since);
 
-      return orderBrowse(query, withSignals ? sort : sort === "rising" || sort.startsWith("most-") ? "trending" : sort)
+      return orderBrowse(query, withSignals || !SIGNAL_SORTS.has(sort) ? sort : "trending")
         .range(from, to);
     };
 
@@ -709,6 +720,9 @@ export async function getProducts({
   });
 }
 
+/** Sorts that read columns added by 20261004000000. */
+const SIGNAL_SORTS = new Set<ProductSort>(["rising", "most-saved", "most-compared"]);
+
 /** The ORDER BY for a marketplace browse — every sort the pills and URLs offer. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- the builder's generic type changes with the select string
 function orderBrowse(query: any, sort: ProductSort): any {
@@ -728,6 +742,14 @@ function orderBrowse(query: any, sort: ProductSort): any {
       break;
     case "most-compared":
       query = query.order("recent_compares", { ascending: false, nullsFirst: false });
+      break;
+    // All-time counters. Views are counted once per visitor-hour by
+    // /api/signals; comments by the engagement trigger.
+    case "most-viewed":
+      query = query.order("view_count", { ascending: false, nullsFirst: false });
+      break;
+    case "most-discussed":
+      query = query.order("comment_count", { ascending: false, nullsFirst: false });
       break;
     case "price-low":
       query = query.order("pricing_amount", { ascending: true, nullsFirst: false });

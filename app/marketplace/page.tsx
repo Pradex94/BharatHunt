@@ -18,6 +18,7 @@ import { SearchInput } from "@/components/marketplace/search-input";
 import { ProductList } from "@/components/marketplace/product-list";
 import {
   getCategoryCounts,
+  getLaunchStateCounts,
   getProducts,
   suggestProductName,
   getUpvotedProductIds,
@@ -31,6 +32,7 @@ import {
   type ProductSort,
 } from "@/lib/constants";
 import { recordSearch } from "@/lib/search-analytics";
+import { indiaStateName } from "@/lib/india-states";
 import { getConceptRelatedProducts } from "@/services/intelligence";
 import { conceptLabel } from "@/lib/intelligence/concepts";
 import { ProductCard } from "@/components/products/product-card";
@@ -51,6 +53,7 @@ type MarketplaceSearchParams = Promise<{
   ai?: string;
   made_in?: string;
   launched?: string;
+  state?: string;
 }>;
 
 /** `?page=` as a positive integer; anything else is page 1. */
@@ -77,7 +80,7 @@ export async function generateMetadata({
   const params = await searchParams;
   const page = pageFrom(params.page);
   const filtered = Boolean(
-    params.category || params.pricing || params.q || params.ai || params.made_in || params.launched,
+    params.category || params.pricing || params.q || params.ai || params.made_in || params.launched || params.state,
   );
 
   return {
@@ -132,7 +135,9 @@ export default async function MarketplacePage({
     ai: discovery.ai || undefined,
     madeInIndia: discovery.madeInIndia || undefined,
     launchedWithinDays: discovery.launched ? LAUNCH_WINDOW_DAYS[discovery.launched] : undefined,
+    launchState: discovery.state ?? undefined,
   };
+  const stateName = indiaStateName(discovery.state);
   // Previously hardcoded to 1, which made `?page=` inert: every paginated URL
   // rendered page 1, so the only product links a crawler could ever reach were
   // the first twelve. Everything past them sat in the sitemap with no link
@@ -142,9 +147,10 @@ export default async function MarketplacePage({
 
   // The concept-related block is fetched alongside the list, not after it:
   // over-fetch, then drop whatever the lexical results already show.
-  const [{ products, totalCount }, categoryCounts, relatedPool] = await Promise.all([
+  const [{ products, totalCount }, categoryCounts, stateCounts, relatedPool] = await Promise.all([
     getProducts({ ...filters, page }),
     getCategoryCounts(),
+    getLaunchStateCounts(),
     q && page === 1 ? getConceptRelatedProducts(q, [], 24) : Promise.resolve(null),
   ]);
 
@@ -185,7 +191,7 @@ export default async function MarketplacePage({
   return (
     <Container className="grid grid-cols-1 gap-10 py-10 lg:grid-cols-[240px_1fr] lg:items-start">
       <aside className="hidden lg:sticky lg:top-24 lg:flex lg:flex-col">
-        <CategorySidebar categoryCounts={categoryCounts} totalCount={totalCategoryCount} />
+        <CategorySidebar categoryCounts={categoryCounts} totalCount={totalCategoryCount} stateCounts={stateCounts} />
       </aside>
 
       <div className="flex flex-col gap-5">
@@ -216,13 +222,14 @@ export default async function MarketplacePage({
             <div className="no-scrollbar -mx-1 min-w-0 flex-1 overflow-x-auto px-1 sm:mx-0 sm:flex-initial sm:px-0">
               <SortPills />
             </div>
-            <MobileFilters categoryCounts={categoryCounts} totalCount={totalCategoryCount} />
+            <MobileFilters categoryCounts={categoryCounts} totalCount={totalCategoryCount} stateCounts={stateCounts} />
           </div>
         </div>
 
         <p className="text-sm text-muted">
           <Numeric>{totalCount}</Numeric> {totalCount === 1 ? "product" : "products"}
           {category ? ` in ${category}` : ""}
+          {stateName ? ` from ${stateName}` : ""}
         </p>
 
         {products.length === 0 ? (

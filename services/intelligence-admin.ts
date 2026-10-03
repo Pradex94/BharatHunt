@@ -3,7 +3,8 @@ import "server-only";
 import { getCacheMetrics, isCacheEnabled } from "@/lib/cache";
 import { isMissingTableError } from "@/lib/supabase/errors";
 import { createServiceClient } from "@/lib/supabase/service";
-import { contentHash, KNOWLEDGE_VERSION, type KnowledgeInput } from "@/lib/intelligence/knowledge";
+import { contentHash, deriveKnowledge, KNOWLEDGE_VERSION, type KnowledgeInput } from "@/lib/intelligence/knowledge";
+import { reviewCategory, type ReviewFlag } from "@/lib/intelligence/taxonomy";
 import { conceptLabel } from "@/lib/intelligence/concepts";
 import { queryConcepts } from "@/services/intelligence";
 import { getComparePairs } from "@/services/compare-pairs";
@@ -62,6 +63,20 @@ export type IntelligenceStatus = {
   zeroResultSearches: { query: string; searches: number; readAs: string[] }[];
   lists: { total: number; public: number; items: number };
   cache: { enabled: boolean; hits: number; misses: number } ;
+  /** Suggestions only — nothing is recategorised automatically (lib/intelligence/taxonomy.ts). */
+  classification: {
+    counts: Record<ReviewFlag, number>;
+    otherTotal: number;
+    items: {
+      slug: string;
+      name: string;
+      flag: ReviewFlag;
+      current: string;
+      suggested: string | null;
+      confidence: number;
+      evidence: string[];
+    }[];
+  };
 };
 
 const PRODUCT_COLUMNS =
@@ -224,5 +239,34 @@ export async function getIntelligenceStatus(): Promise<IntelligenceStatus> {
       items: listItems.count ?? 0,
     },
     cache: { enabled: isCacheEnabled(), hits: cacheMetrics?.hits ?? 0, misses: cacheMetrics?.misses ?? 0 },
+    classification: classificationReview(rows),
   };
+}
+
+const FLAG_ORDER: Record<ReviewFlag, number> = { uncategorised: 0, "possible-mismatch": 1, "too-little-detail": 2 };
+
+/**
+ * Every published product's category against what its listing describes.
+ * Derived on the admin request (≤5,000 products, pure functions, no I/O) —
+ * the page that shows it is the only consumer.
+ */
+function classificationReview(rows: (KnowledgeInput & { slug: string })[]): IntelligenceStatus["classification"] {
+  const counts: Record<ReviewFlag, number> = { uncategorised: 0, "possible-mismatch": 0, "too-little-detail": 0 };
+  const items: IntelligenceStatus["classification"]["items"] = [];
+  for (const row of rows) {
+    const review = reviewCategory(row.category, deriveKnowledge(row));
+    if (!review) continue;
+    counts[review.flag] += 1;
+    items.push({
+      slug: row.slug,
+      name: row.name,
+      flag: review.flag,
+      current: review.current,
+      suggested: review.suggested,
+      confidence: review.confidence,
+      evidence: review.evidence.slice(0, 4),
+    });
+  }
+  items.sort((a, b) => FLAG_ORDER[a.flag] - FLAG_ORDER[b.flag] || b.confidence - a.confidence);
+  return { counts, otherTotal: rows.filter((row) => row.category === "Other").length, items: items.slice(0, 40) };
 }
