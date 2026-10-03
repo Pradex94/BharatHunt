@@ -6,7 +6,11 @@ import { Breadcrumbs, type Crumb } from "@/components/seo/breadcrumbs";
 import { JsonLd } from "@/components/seo/json-ld";
 import { Container } from "@/components/ui/container";
 import { indiaStateName } from "@/lib/india-states";
-import { itemListSchema, withReferral } from "@/lib/seo";
+import { absoluteUrl, itemListSchema, withReferral } from "@/lib/seo";
+import { ShareMenu } from "@/components/products/share-menu";
+import { SaveButton } from "@/components/discovery/save-button";
+import { CompareButton } from "@/components/discovery/compare-button";
+import { TrackedExternalLink } from "@/components/discovery/signals";
 import type { Daily5Day } from "@/services/daily-agent";
 
 /**
@@ -53,7 +57,10 @@ export function Daily5View({
           <Breadcrumbs items={crumbs} className="text-sm" />
 
           <header className="flex flex-col gap-3">
-            <p className="text-sm font-semibold uppercase tracking-wide text-primary">BharatHunt Daily 5 · {pretty}</p>
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-sm font-semibold uppercase tracking-wide text-primary">BharatHunt Daily 5 · {pretty}</p>
+              <ShareMenu url={absoluteUrl(path)} name={`BharatHunt Daily 5 · ${pretty}`} tagline={heading} />
+            </div>
             <h1 className="text-3xl font-bold tracking-tight text-ink md:text-5xl">{heading}</h1>
             <p className="max-w-2xl text-base text-body">
               Every day BharatHunt looks for products built by Indian teams, checks the India connection on each
@@ -100,15 +107,23 @@ export function Daily5View({
                           View on BharatHunt
                         </Link>
                         {product.website_url && (
-                          <a
+                          <TrackedExternalLink
+                            productId={product.id}
+                            surface="daily5"
                             href={withReferral(product.website_url)}
                             target="_blank"
                             rel="noopener"
                             className="inline-flex min-h-10 items-center gap-1 rounded-md border border-border bg-card px-4 text-sm font-semibold text-ink hover:bg-secondary-bg"
                           >
                             Visit website <ArrowUpRight className="size-4" aria-hidden="true" />
-                          </a>
+                          </TrackedExternalLink>
                         )}
+                        <span className="ml-auto flex items-center gap-0.5">
+                          <SaveButton productId={product.id} productName={product.name} />
+                          <CompareButton
+                            item={{ id: product.id, slug: product.slug, name: product.name, logo: product.hero_image_url }}
+                          />
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -116,6 +131,18 @@ export function Daily5View({
               );
             })}
           </ol>
+
+          {/* Daily 5 picks are ordinary launches: they take part in matching. */}
+          <Link
+            href="/discover"
+            className="flex flex-col gap-1 rounded-2xl border border-border bg-card p-5 transition-colors hover:border-primary/40 sm:flex-row sm:items-center sm:justify-between"
+          >
+            <span>
+              <span className="block text-base font-bold text-ink">Looking for something specific?</span>
+              <span className="text-sm text-body">Describe what you need and Product Match searches every launch, these included.</span>
+            </span>
+            <span className="text-sm font-semibold text-primary">Find the right product &rarr;</span>
+          </Link>
 
           {archive.length > 0 && (
             <nav aria-label="Earlier Daily 5 lists" className="rounded-2xl bg-secondary-bg p-5">

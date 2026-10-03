@@ -9,7 +9,6 @@ import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import {
   Briefcase,
-  ChevronUp,
   ExternalLink,
   MapPin,
   Map as RoadmapIcon,
@@ -19,6 +18,17 @@ import { auth } from "@clerk/nextjs/server";
 import { createClient } from "@/lib/supabase/server";
 import { getIsAdmin } from "@/lib/admin";
 import { getCompetingProducts, getPublishedProductBySlug } from "@/services/products";
+import { getSimilarProducts } from "@/services/intelligence";
+import { getComparePairsFor } from "@/services/compare-pairs";
+import { ComparisonLinks } from "@/components/discovery/compare-table";
+import { deriveKnowledge } from "@/lib/intelligence/knowledge";
+import { splitRelated } from "@/lib/intelligence/related";
+import { compareHref } from "@/lib/compare-links";
+import { SaveButton } from "@/components/discovery/save-button";
+import { CompareButton } from "@/components/discovery/compare-button";
+import { RelatedProductList } from "@/components/discovery/related-products";
+import { AddToListButton } from "@/components/discovery/add-to-list";
+import { ProductViewBeacon, TrackedExternalLink } from "@/components/discovery/signals";
 import { UpvoteButton } from "@/components/products/upvote-button";
 import { CommentForm } from "@/components/products/comment-form";
 import { CommentItem, type CommentItemData } from "@/components/products/comment-item";
@@ -205,7 +215,7 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
   const isAdmin = userId ? await getIsAdmin() : false;
   const canManage = isOwner || isAdmin;
 
-  const [{ data: comments }, { data: upvote }, { data: myRating }, competitors] = await Promise.all(
+  const [{ data: comments }, { data: upvote }, { data: myRating }, competitors, similarProducts, comparisons] = await Promise.all(
     [
       supabase
         .from("comments")
@@ -232,11 +242,42 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
             .eq("user_id", userId)
             .maybeSingle()
         : Promise.resolve({ data: null }),
-      getCompetingProducts(product.category, product.id, 4),
+      // Over-fetched so "More from this category" still has something left
+      // after the alternatives and similar products take their share.
+      getCompetingProducts(product.category, product.id, 8),
+      // Precomputed by the background indexer — a read, never a computation.
+      // `null` until this product has been indexed; the sections below fall
+      // back to same-category products in that case.
+      getSimilarProducts(product.id, 12),
+      // Curated "A vs B" pages that include this product (cached list).
+      getComparePairsFor(product.id, 4),
     ],
   );
 
-  await supabase.rpc("increment_view_count", { target_product_id: product.id });
+  const baseForComparison = {
+    ...product,
+    tags: product.tags ?? [],
+    source: curated ? "daily_agent" : "maker",
+    platform_links: (product.platform_links as Record<string, string> | null) ?? null,
+  };
+  const { alternatives, similar } = similarProducts
+    ? splitRelated(
+        { ...baseForComparison, knowledge: deriveKnowledge(baseForComparison) },
+        similarProducts,
+      )
+    : { alternatives: [], similar: [] };
+  const shownIds = new Set([...alternatives, ...similar].map((entry) => entry.product.id));
+  // Before indexing (or with nothing similar enough), the category list is the
+  // alternatives section, exactly as the page worked before.
+  const fallbackAlternatives = alternatives.length === 0 ? competitors.slice(0, 4) : [];
+  for (const competitor of fallbackAlternatives) shownIds.add(competitor.id);
+  const moreFromCategory = competitors.filter((competitor) => !shownIds.has(competitor.id)).slice(0, 4);
+  const compareWith = alternatives.slice(0, 2).map((entry) => entry.product);
+  // Prefer a curated comparison page over the working tool when one exists.
+  const compareLink = comparisons[0]?.path ?? compareHref([product.slug, ...compareWith.map((other) => other.slug)]);
+
+  // Views are counted by the browser beacon (<ProductViewBeacon />) through
+  // /api/signals — once per visitor per hour, bots filtered — not on render.
 
   /*
    * Absolute URL for share links + the embeddable badge. Both leave the site —
@@ -264,6 +305,7 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
 
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-8 px-4 py-12 md:py-16">
+      <ProductViewBeacon productId={product.id} />
       <JsonLd
         data={productSchema({
           name: product.name,
@@ -362,9 +404,22 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
             initialUpvoted={Boolean(upvote)}
             isLoggedIn={Boolean(userId)}
           />
+          <SaveButton productId={product.id} productName={product.name} variant="labeled" />
+          <CompareButton
+            variant="labeled"
+            item={{
+              id: product.id,
+              slug: product.slug,
+              name: product.name,
+              logo: product.hero_image_url,
+            }}
+          />
+          <AddToListButton productId={product.id} productName={product.name} />
           {product.cta_url && (
             // Primary conversion CTA (gradient) — the maker's own call-to-action.
-            <a
+            <TrackedExternalLink
+              productId={product.id}
+              surface="product-cta"
               href={withReferral(product.cta_url)}
               target="_blank"
               rel="noopener"
@@ -372,14 +427,16 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
             >
               {product.cta_text || "Get it"}
               <ExternalLink aria-hidden="true" />
-            </a>
+            </TrackedExternalLink>
           )}
           {product.website_url && (
             // Dofollow (no `nofollow`) so the maker earns a real backlink, and
             // no `noreferrer` so their analytics see us. `?ref=bharathunt` names
             // us explicitly — browsers strip or coarsen the Referer header often
             // enough that referral traffic otherwise lands under "direct".
-            <a
+            <TrackedExternalLink
+              productId={product.id}
+              surface="product"
               href={withReferral(product.website_url)}
               target="_blank"
               rel="noopener"
@@ -387,7 +444,7 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
             >
               Visit website
               <ExternalLink aria-hidden="true" />
-            </a>
+            </TrackedExternalLink>
           )}
           {product.github_url && (
             <a
@@ -562,14 +619,75 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
         </nav>
       )}
 
-      {competitors.length > 0 && (
+      {/*
+       * Alternatives, similar products and the rest of the category. The first
+       * two come from the background indexer (lib/intelligence/reindex.ts) —
+       * matched on what each listing says it does, never on popularity — and
+       * every difference chip is computed from fields both listings carry.
+       */}
+      {(alternatives.length > 0 || fallbackAlternatives.length > 0) && (
         <section
           aria-labelledby="alternatives"
           className="flex flex-col gap-4 border-t border-border pt-8"
         >
           <div className="flex flex-wrap items-baseline justify-between gap-2">
             <H2 id="alternatives" className="text-2xl sm:text-2xl">
-              {product.name} alternatives
+              Alternatives to {product.name}
+            </H2>
+            {(compareWith.length > 0 || comparisons.length > 0) && (
+              <Link
+                href={compareLink}
+                className="text-sm font-semibold text-primary transition-colors hover:text-primary-active"
+              >
+                Compare side by side &rarr;
+              </Link>
+            )}
+          </div>
+          <p className="text-sm text-body">
+            {alternatives.length > 0
+              ? "Products whose listings describe the same job. Differences come from each listing's own pricing, links and description."
+              : `Other ${product.category.toLowerCase()} products on Bharat Hunt, most upvoted first.`}
+          </p>
+          <RelatedProductList
+            rows={
+              alternatives.length > 0
+                ? alternatives.map((entry) => ({
+                    ...entry.product,
+                    reason: entry.reason,
+                    differences: entry.differences,
+                  }))
+                : fallbackAlternatives
+            }
+          />
+        </section>
+      )}
+
+      {comparisons.length > 0 && (
+        <nav aria-label={`Comparisons with ${product.name}`} className="flex flex-col gap-3 border-t border-border pt-8">
+          <h2 className="text-sm font-semibold text-ink">Compare {product.name}</h2>
+          <ComparisonLinks pairs={comparisons} />
+        </nav>
+      )}
+
+      {similar.length > 0 && (
+        <section aria-labelledby="similar" className="flex flex-col gap-4 border-t border-border pt-8">
+          <H2 id="similar" className="text-2xl sm:text-2xl">
+            Similar products
+          </H2>
+          <p className="text-sm text-body">
+            Related work, often from other categories — matched on listing text, not on votes.
+          </p>
+          <RelatedProductList
+            rows={similar.map((entry) => ({ ...entry.product, reason: entry.reason }))}
+          />
+        </section>
+      )}
+
+      {moreFromCategory.length > 0 && (
+        <section aria-labelledby="more-in-category" className="flex flex-col gap-4 border-t border-border pt-8">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <H2 id="more-in-category" className="text-2xl sm:text-2xl">
+              More in {product.category}
             </H2>
             <Link
               href={`/categories/${slugForCategory(product.category) ?? ""}`}
@@ -578,32 +696,7 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
               All {product.category} &rarr;
             </Link>
           </div>
-          <p className="text-sm text-body">
-            Other {product.category.toLowerCase()} products on Bharat Hunt, most upvoted first.
-          </p>
-          <ul className="flex flex-col gap-3">
-            {competitors.map((competitor) => (
-              <li key={competitor.id}>
-                <Link
-                  href={`/products/${competitor.slug}`}
-                  className="flex items-center gap-4 rounded-xl border border-border bg-card p-4 transition-colors hover:border-primary/30"
-                >
-                  <ProductLogo src={competitor.hero_image_url} name={competitor.name} size="sm" />
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate font-semibold text-ink">{competitor.name}</span>
-                    <span className="mt-0.5 line-clamp-1 block text-sm text-body">
-                      {competitor.tagline}
-                    </span>
-                  </span>
-                  <span className="flex shrink-0 items-center gap-1 text-sm font-semibold text-ink">
-                    <ChevronUp className="size-4 text-primary" aria-hidden="true" />
-                    <Numeric>{competitor.upvote_count ?? 0}</Numeric>
-                    <span className="sr-only">upvotes</span>
-                  </span>
-                </Link>
-              </li>
-            ))}
-          </ul>
+          <RelatedProductList rows={moreFromCategory} />
         </section>
       )}
 

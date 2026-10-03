@@ -246,6 +246,62 @@ export const RATE_LIMITS = {
     windowSeconds: 3600,
     message: "Too many agent requests.",
   },
+  /** The secret-gated Product Intelligence indexer, keyed per IP. Hourly schedule plus manual runs. */
+  intelligenceRun: {
+    limit: 20,
+    windowSeconds: 3600,
+    message: "Too many indexer requests.",
+  },
+  /** Admin "Rebuild" buttons on /admin/intelligence. Each one rewrites every derived row. */
+  intelligenceAdmin: {
+    limit: 10,
+    windowSeconds: 600,
+    message: "Rebuilt recently — give it a few minutes.",
+  },
+  /**
+   * Saving and unsaving a product, keyed per user and IP. One row each, but
+   * saves feed the "Most saved" signal, so the button must not be a lever.
+   */
+  save: {
+    limit: 60,
+    windowSeconds: 60,
+    message: "You are saving too quickly. Try again shortly.",
+  },
+  /**
+   * Public product lookups by id or slug — the anonymous saved list, the
+   * compare tray and the compare picker. Cached reads; bounded so they are not
+   * a free catalogue scraper.
+   */
+  productLookup: {
+    limit: 60,
+    windowSeconds: 60,
+    message: "Too many requests. Please slow down.",
+  },
+
+  /**
+   * Engagement beacons, keyed per IP. A product view is one beacon, so this is
+   * far above real browsing; it exists because these counts feed Trending, and
+   * an unbounded endpoint would be a lever to move a product up the page.
+   * Over the limit the endpoint still answers 204 and simply records nothing.
+   */
+  signals: {
+    limit: 300,
+    windowSeconds: 3600,
+    message: "Too many requests.",
+  },
+  /** Product Match queries, keyed per IP. Cached and cheap, but each miss is several reads. */
+  productMatch: {
+    limit: 40,
+    windowSeconds: 60,
+    message: "Too many searches. Please slow down.",
+  },
+  /** Creating, renaming and filling lists, keyed per user and IP. */
+  lists: {
+    limit: 60,
+    windowSeconds: 300,
+    message: "You are changing lists too quickly. Try again shortly.",
+  },
+
   /** Public registry JSON. Cached and small; bounded so it is not a free scrape target. */
   launchPlatformsApi: {
     limit: 60,

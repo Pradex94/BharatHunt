@@ -10,6 +10,8 @@ import { JsonLd } from "@/components/seo/json-ld";
 import { GoogleAnalytics } from "@/components/analytics/google-analytics";
 import { ConsentSync } from "@/components/analytics/consent-sync";
 import { GaPageViews } from "@/components/analytics/ga-page-views";
+import { DiscoveryProvider } from "@/components/discovery/discovery-provider";
+import { CompareTray } from "@/components/discovery/compare-tray";
 import { organizationSchema, websiteSchema } from "@/lib/seo";
 import { SITE_NAME, SITE_URL } from "@/lib/constants";
 import "./globals.css";
@@ -114,9 +116,14 @@ export default function RootLayout({
             reducedMotion="user"
             transition={{ duration: 0.2, ease: "easeOut" }}
           >
-            <Navbar />
-            <main className="flex flex-1 flex-col">{children}</main>
-            <Footer />
+            {/* Save and Compare state for every product surface — client-side,
+                because cached pages carry no per-person HTML. */}
+            <DiscoveryProvider>
+              <Navbar />
+              <main className="flex flex-1 flex-col">{children}</main>
+              <Footer />
+              <CompareTray />
+            </DiscoveryProvider>
             <CookieConsent />
             <ChatWidgetLazy />
           </MotionConfig>

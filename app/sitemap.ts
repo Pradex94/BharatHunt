@@ -8,6 +8,8 @@ import { isIndexableProduct } from "@/lib/seo";
 import { getAllAiStorySlugs } from "@/services/ai-news";
 import { getDaily5Dates } from "@/services/daily-agent";
 import { getFundedStartupSlugs } from "@/services/funding";
+import { getComparePairs } from "@/services/compare-pairs";
+import { getIndexableLists } from "@/services/lists";
 import {
   getAllPublishedProductSlugs,
   getCategoryCounts,
@@ -222,8 +224,38 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
       ]
     : [];
 
+  /*
+   * Product Intelligence. Every entry here is a page that qualifies by the same
+   * rule it applies to itself: curated "A vs B" pairs (lib/intelligence/
+   * compare-pairs.ts) and public collections with enough products to index.
+   * The query-string tools (/compare?products=, /discover?q=) never appear.
+   */
+  const [comparePairs, publicLists] = await Promise.all([
+    getComparePairs().catch(() => []),
+    getIndexableLists().catch(() => []),
+  ]);
+  const discoveryRoutes: MetadataRoute.Sitemap = [
+    { url: `${SITE_URL}/discover`, lastModified: now, changeFrequency: "weekly", priority: 0.8 },
+    ...(comparePairs.length
+      ? [{ url: `${SITE_URL}/compare`, lastModified: now, changeFrequency: "weekly" as const, priority: 0.6 }]
+      : []),
+    ...comparePairs.map((pair) => ({
+      url: `${SITE_URL}${pair.path}`,
+      lastModified: now,
+      changeFrequency: "weekly" as const,
+      priority: 0.5,
+    })),
+    ...publicLists.map((list) => ({
+      url: `${SITE_URL}/lists/${list.slug}`,
+      lastModified: new Date(list.updatedAt),
+      changeFrequency: "weekly" as const,
+      priority: 0.4,
+    })),
+  ];
+
   return [
     ...staticRoutes,
+    ...discoveryRoutes,
     ...daily5Routes,
     ...categoryRoutes,
     ...collectionRoutes,

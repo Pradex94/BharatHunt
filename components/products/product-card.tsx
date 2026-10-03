@@ -1,10 +1,12 @@
 import Link from "next/link";
-import { Code2, Globe, MessageSquare } from "lucide-react";
+import { Code2, Globe, MessageSquare, TrendingUp } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { absoluteUrl } from "@/lib/seo";
 import { UpvoteButton } from "@/components/products/upvote-button";
 import { ShareMenu } from "@/components/products/share-menu";
 import { ProductLogo } from "@/components/products/product-logo";
+import { SaveButton } from "@/components/discovery/save-button";
+import { CompareButton } from "@/components/discovery/compare-button";
 import { Numeric } from "@/components/ui/typography";
 import { cardInteractiveClassName } from "@/components/ui/card";
 
@@ -36,7 +38,20 @@ export type ProductCardProduct = {
   website_url: string | null;
   github_url: string | null;
   creator: { display_name: string; username: string } | null;
+  /** Present on marketplace browse results; drives the one status badge. */
+  published_at?: string | null;
+  rising_score?: number | null;
 };
+
+/** Rising beats New: acceleration is the rarer, more useful thing to point out. */
+const RISING_THRESHOLD = 1.5;
+const NEW_WINDOW_MS = 7 * 86_400_000;
+
+function statusBadge(product: ProductCardProduct): "Rising" | "New" | null {
+  if ((product.rising_score ?? 0) >= RISING_THRESHOLD) return "Rising";
+  if (product.published_at && Date.now() - new Date(product.published_at).getTime() < NEW_WINDOW_MS) return "New";
+  return null;
+}
 
 export function ProductCard({
   product,
@@ -56,6 +71,7 @@ export function ProductCard({
   ].filter((p): p is { key: string; label: string; Icon: typeof Globe } => p !== null);
   const tags = (product.tags ?? []).filter(Boolean).slice(0, 3);
   const makerInitial = product.creator?.display_name?.slice(0, 1).toUpperCase() ?? "?";
+  const badge = statusBadge(product);
 
   return (
     <article
@@ -109,6 +125,12 @@ export function ProductCard({
                 {product.name}
               </Link>
             </HeadingTag>
+            {badge && (
+              <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-primary px-2 py-0.5 text-xs font-semibold whitespace-nowrap text-primary-foreground">
+                {badge === "Rising" && <TrendingUp className="size-3" aria-hidden="true" />}
+                {badge}
+              </span>
+            )}
             <span className="shrink-0 rounded-full bg-secondary-bg px-2 py-0.5 text-xs font-medium whitespace-nowrap text-muted">
               {product.category}
             </span>
@@ -173,7 +195,16 @@ export function ProductCard({
             <MessageSquare className="size-3.5" aria-hidden="true" />
             <Numeric>{product.comment_count ?? 0}</Numeric> comments
           </Link>
-          <div className="ml-auto">
+          <div className="ml-auto flex items-center gap-0.5">
+            <SaveButton productId={product.id} productName={product.name} />
+            <CompareButton
+              item={{
+                id: product.id,
+                slug: product.slug,
+                name: product.name,
+                logo: product.hero_image_url,
+              }}
+            />
             <ShareMenu
               url={absoluteUrl(productPath)}
               name={product.name}

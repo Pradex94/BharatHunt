@@ -1,6 +1,7 @@
 import "server-only";
 
 import { revalidatePath } from "next/cache";
+import { scheduleIntelligenceRefresh } from "@/lib/intelligence/schedule";
 import { clerkClient } from "@clerk/nextjs/server";
 
 import { ADMIN_EMAILS, SITE_URL } from "@/lib/constants";
@@ -149,6 +150,7 @@ export async function sendSubmissionAck(
 /** Everything a publish changes: lists, featured, counts, stats, the sitemap. */
 async function revalidateAfterReview(slug: string): Promise<void> {
   await cacheInvalidatePrefix(PRODUCTS_CACHE_PREFIX);
+  scheduleIntelligenceRefresh("launch-approved");
   revalidatePath("/admin");
   revalidatePath("/dashboard");
   revalidatePath("/marketplace");

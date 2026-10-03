@@ -3,6 +3,7 @@ import "server-only";
 import { revalidatePath } from "next/cache";
 
 import { cacheInvalidatePrefix } from "@/lib/cache";
+import { scheduleIntelligenceRefresh } from "@/lib/intelligence/schedule";
 import { PRODUCT_CATEGORIES, PRODUCT_PRICING_TYPES } from "@/lib/constants";
 import { moderateProduct } from "@/lib/moderation";
 import { createServiceClient } from "@/lib/supabase/service";
@@ -105,6 +106,8 @@ async function toCloudinary(url: string | null): Promise<string | null> {
 }
 
 function revalidateAfterPublish(slug: string, batchDate: string) {
+  // A Daily 5 pick joins similar products, Product Match and comparisons now.
+  scheduleIntelligenceRefresh("daily5-publish");
   revalidatePath("/");
   revalidatePath("/marketplace");
   revalidatePath(`/products/${slug}`);

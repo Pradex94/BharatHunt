@@ -9,6 +9,20 @@ import { checkRateLimitByIpAndUser } from "@/lib/rate-limit";
 
 export type UpvoteActionState = { error?: string } | undefined;
 
+async function countTransitionally(
+  supabase: ReturnType<typeof createClient>,
+  productId: string,
+  column: "upvote_count",
+  delta: number,
+): Promise<void> {
+  const { error } = await supabase.rpc("increment_product_counter", {
+    target_product_id: productId,
+    counter_column: column,
+    delta,
+  });
+  if (error) console.error(`[upvotes] transitional counter call failed: ${error.message}`);
+}
+
 export async function toggleUpvote(productId: string): Promise<UpvoteActionState> {
   const { userId } = await auth();
 
@@ -32,7 +46,6 @@ export async function toggleUpvote(productId: string): Promise<UpvoteActionState
     .eq("user_id", userId)
     .maybeSingle();
 
-  const delta = existing ? -1 : 1;
 
   if (existing) {
     const { error } = await supabase
@@ -57,12 +70,10 @@ export async function toggleUpvote(productId: string): Promise<UpvoteActionState
     if (error) return { error: error.message };
   }
 
-  const { error: counterError } = await supabase.rpc("increment_product_counter", {
-    target_product_id: productId,
-    counter_column: "upvote_count",
-    delta,
-  });
-  if (counterError) return { error: counterError.message };
-
+  // upvote_count follows the insert/delete through a trigger on `upvotes`
+  // (20261005000000). Transitional: until that migration is applied this RPC
+  // still does the counting; after it, the RPC is a no-op. Either order of
+  // deploy and migration counts correctly. Remove once it is applied.
+  await countTransitionally(supabase, productId, "upvote_count", existing ? -1 : 1);
   revalidatePath("/");
 }

@@ -54,6 +54,8 @@ export const PROMOTE_ENABLED = process.env.NEXT_PUBLIC_PROMOTE_ENABLED === "true
  */
 export const NAV_LINKS: NavLink[] = [
   { label: "Discover", href: "/marketplace" },
+  // Natural-language matching (/discover) — "tell us what you need".
+  { label: "Product Match", href: "/discover" },
   { label: "Launches", href: "/marketplace?sort=newest" },
   // "AI Trends", not "AI" — the page's own h1 is the long form, and a bare
   // "AI" reads as a product category rather than the news hub it is.
@@ -208,13 +210,49 @@ export type ProductPlatformKey = (typeof PRODUCT_PLATFORMS)[number]["key"];
 // and is never offered as a browse sort — see components/marketplace/sort-pills.tsx.
 export const PRODUCT_SORTS = [
   "trending",
+  "rising",
   "newest",
   "price-low",
   "price-high",
   "top-rated",
+  "most-saved",
+  "most-compared",
   "relevance",
 ] as const;
 export type ProductSort = (typeof PRODUCT_SORTS)[number];
+
+/**
+ * Marketplace discovery filters beyond category and pricing, as URL params so
+ * every view stays shareable: `?ai=1`, `?made_in=india`, `?launched=week`.
+ *
+ *   - ai: listings whose name, tagline or description describe them as AI
+ *     (derived — a bare "ai" tag is not enough; see lib/intelligence/knowledge.ts).
+ *   - made_in=india: the maker confirmed, or BharatHunt verified, an Indian
+ *     state for the product.
+ *   - launched: published on BharatHunt within the last week or month.
+ *
+ * No "recently updated": `products.updated_at` moves on every view and
+ * upvote, so it cannot honestly say when a listing last changed.
+ */
+export type DiscoveryFilters = {
+  ai: boolean;
+  madeInIndia: boolean;
+  launched: "week" | "month" | null;
+};
+
+export const LAUNCH_WINDOW_DAYS = { week: 7, month: 30 } as const;
+
+export function parseDiscoveryFilters(params: {
+  ai?: string | null;
+  made_in?: string | null;
+  launched?: string | null;
+}): DiscoveryFilters {
+  return {
+    ai: params.ai === "1",
+    madeInIndia: params.made_in === "india",
+    launched: params.launched === "week" || params.launched === "month" ? params.launched : null,
+  };
+}
 
 export const PRODUCT_PRICING_TYPES = ["free", "freemium", "paid"] as const;
 export type ProductPricingType = (typeof PRODUCT_PRICING_TYPES)[number];

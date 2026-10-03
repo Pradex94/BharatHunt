@@ -71,7 +71,6 @@ import {
   isLikelyBot,
   isProbePath,
   isStorableResponse,
-  productSlugFromPath,
   routeLabel,
   subrequestKind,
 } from "./lib/edge-policy.ts";
@@ -256,46 +255,13 @@ function anonymousCopy(request) {
   return new Request(request.url, { method: "GET", headers });
 }
 
-/**
- * Keeps `products.view_count` counting visits that the cache answered.
- *
- * The product page increments it on every render (`increment_view_count`,
- * app/products/[slug]/page.tsx). A cached hit renders nothing, so without this
- * a popular product would count one view per cache lifetime instead of one per
- * visit. Two cheap subrequests, off the response path, fail-silent — the same
- * contract as the page's own call, which does not check its result either.
+/*
+ * Product views are no longer counted here. The page's own browser beacon
+ * (<ProductViewBeacon />, /api/signals) fires on cache hits too, so it counts
+ * every visit the cache answers — and `increment_view_count` is service-role
+ * only since 20261005000000, so the anon-key call this file used to make
+ * would be refused anyway.
  */
-const productIds = new Map();
-const PRODUCT_ID_CACHE_LIMIT = 500;
-
-async function countProductView(env, slug) {
-  const base = env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!base || !key) return;
-  const auth = { apikey: key, authorization: `Bearer ${key}` };
-
-  try {
-    let id = productIds.get(slug);
-    if (!id) {
-      const lookup = await fetch(
-        `${base}/rest/v1/products?select=id&status=eq.published&limit=1&slug=eq.${encodeURIComponent(slug)}`,
-        { headers: auth },
-      );
-      if (!lookup.ok) return;
-      id = (await lookup.json())?.[0]?.id;
-      if (!id) return;
-      if (productIds.size >= PRODUCT_ID_CACHE_LIMIT) productIds.clear();
-      productIds.set(slug, id);
-    }
-    await fetch(`${base}/rest/v1/rpc/increment_view_count`, {
-      method: "POST",
-      headers: { ...auth, "content-type": "application/json" },
-      body: JSON.stringify({ target_product_id: id }),
-    });
-  } catch {
-    // A lost view is not worth an error.
-  }
-}
 
 /**
  * Answers a signed-out request for a public page from the Cache API, or
@@ -309,7 +275,6 @@ async function countProductView(env, slug) {
 async function serveCached(request, env, ctx, url, rule, record) {
   const cache = caches.default;
   const key = new Request(edgeCacheKey(url, env.CF_VERSION_METADATA.id), { method: "GET" });
-  const slug = productSlugFromPath(url.pathname);
   const stored = await cache.match(key);
 
   if (stored) {
@@ -317,7 +282,6 @@ async function serveCached(request, env, ctx, url, rule, record) {
 
     if (state === "fresh") {
       record.cache = "HIT";
-      if (slug) ctx.waitUntil(countProductView(env, slug));
       return forClient(stored, "HIT", request.method);
     }
 
@@ -331,8 +295,6 @@ async function serveCached(request, env, ctx, url, rule, record) {
             try {
               const leaseStart = Date.now() - (rule.fresh - LEASE_SECONDS) * 1000;
               await cache.put(key, forStorage(leased, leaseStart, rule));
-              // The re-render is itself a product-page render, which counts
-              // this view — so no separate beacon on this path.
               const fresh = await openNextWorker.fetch(anonymousCopy(request), env, ctx);
               if (isStorableResponse(fresh.status, (name) => fresh.headers.get(name))) {
                 await cache.put(key, forStorage(fresh, Date.now(), rule));
@@ -344,8 +306,6 @@ async function serveCached(request, env, ctx, url, rule, record) {
             }
           })(),
         );
-      } else if (slug) {
-        ctx.waitUntil(countProductView(env, slug));
       }
       return forClient(stored, "STALE", request.method);
     }

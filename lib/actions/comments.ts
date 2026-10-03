@@ -66,15 +66,14 @@ export async function addComment(
     return { error: error.message };
   }
 
-  const { error: counterError } = await supabase.rpc("increment_product_counter", {
+  // comment_count is kept by a trigger on `comments` (20261005000000).
+  // Transitional: before that migration this RPC does the counting; after
+  // it, it is a no-op. Remove once the migration is applied.
+  await supabase.rpc("increment_product_counter", {
     target_product_id: productId,
     counter_column: "comment_count",
     delta: 1,
   });
-  if (counterError) {
-    return { error: counterError.message };
-  }
-
   revalidatePath(`/products/${productSlug}`);
 }
 
@@ -123,21 +122,12 @@ export async function deleteComment(
     return { error: "That comment no longer exists, or it isn't yours to delete." };
   }
 
-  /*
-   * The counter is corrected but never allowed to fail the delete: the comment
-   * is already gone, and a count that is one too high is a smaller problem than
-   * an error message telling the user nothing happened when something did.
-   */
-  const { error: counterError } = await db.rpc("increment_product_counter", {
+  // comment_count follows the delete through a trigger (20261005000000),
+  // replies removed by the cascade included. Transitional no-op afterwards.
+  await db.rpc("increment_product_counter", {
     target_product_id: productId,
     counter_column: "comment_count",
     delta: -1,
   });
-  if (counterError) {
-    console.error(
-      `[comments] comment_count not decremented for ${productSlug}: ${counterError.message}`,
-    );
-  }
-
   revalidatePath(`/products/${productSlug}`);
 }

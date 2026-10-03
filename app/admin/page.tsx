@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@clerk/nextjs/server";
-import { Building2, Clock, Newspaper, Radar, Rocket, Search, ShieldCheck, Sparkles } from "lucide-react";
+import { Building2, Clock, Network, Newspaper, Radar, Rocket, Search, ShieldCheck, Sparkles } from "lucide-react";
 
 import { getIsAdmin } from "@/lib/admin";
 import { adminProductsHref, asAdminProductStatus, sanitizeAdminSearch } from "@/lib/admin-filters";
@@ -37,6 +37,7 @@ const TOOLS = [
   { href: "/admin/funding", label: "Funding", icon: Newspaper },
   { href: "/admin/investors", label: "Investors", icon: Building2 },
   { href: "/admin/seo", label: "SEO audit", icon: Search },
+  { href: "/admin/intelligence", label: "Product Intelligence", icon: Network },
 ] as const;
 
 export default async function AdminPage({

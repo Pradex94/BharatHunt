@@ -26,7 +26,11 @@ const MAX_LOGGED_LENGTH = 120;
  * extra here either, since `search_queries` accepts inserts from anon already;
  * it is used purely because it needs no request context.
  */
-export async function recordSearch(query: string, resultCount: number): Promise<void> {
+export async function recordSearch(
+  query: string,
+  resultCount: number,
+  source: "marketplace" | "match" = "marketplace",
+): Promise<void> {
   const trimmed = query.trim();
   const normalized = normalizeSearchText(trimmed);
 
@@ -42,6 +46,7 @@ export async function recordSearch(query: string, resultCount: number): Promise<
       query: trimmed.slice(0, MAX_LOGGED_LENGTH),
       query_normalized: normalized.slice(0, MAX_LOGGED_LENGTH),
       result_count: resultCount,
+      source,
     });
     if (error) {
       console.error(`[search-analytics] insert failed: ${error.message}`);
