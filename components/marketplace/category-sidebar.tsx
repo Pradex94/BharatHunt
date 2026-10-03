@@ -13,6 +13,7 @@ import {
   PRODUCT_PRICING_TYPES,
   PRICING_TYPE_LABELS,
 } from "@/lib/constants";
+import { indiaStateName } from "@/lib/india-states";
 
 function CategoryList({
   categoryCounts,
@@ -169,13 +170,68 @@ function DiscoveryFilter() {
   );
 }
 
+/**
+ * Where a product was built: only states that have at least one launch, busiest
+ * first. Twenty empty states would be a list of dead ends. The busiest five are
+ * shown; the rest open on demand.
+ */
+function LocationFilter({ stateCounts }: { stateCounts: Record<string, number> }) {
+  const searchParams = useSearchParams();
+  const updateSearchParams = useUpdateSearchParams();
+  const active = searchParams.get("state");
+  const states = Object.entries(stateCounts)
+    .map(([code, count]) => ({ code, count, name: indiaStateName(code) }))
+    .filter((state): state is { code: string; count: number; name: string } => Boolean(state.name) && state.count > 0)
+    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+
+  if (states.length === 0) return null;
+
+  const row = (state: { code: string; count: number; name: string }) => (
+    <button
+      key={state.code}
+      type="button"
+      aria-pressed={active === state.code}
+      onClick={() => updateSearchParams({ state: active === state.code ? null : state.code }, { resetPage: true })}
+      className={cn(TOGGLE_ROW, active === state.code ? "bg-primary/10 text-primary" : "text-ink hover:bg-secondary-bg")}
+    >
+      <span className="truncate">{state.name}</span>
+      <Numeric className="text-xs text-muted">{state.count}</Numeric>
+    </button>
+  );
+
+  const head = states.slice(0, 5);
+  const rest = states.slice(5);
+  // Keep a chosen state visible even when it sits in the collapsed tail.
+  const activeInRest = rest.some((state) => state.code === active);
+
+  return (
+    <div className="flex flex-col gap-1" role="group" aria-label="Filter by location">
+      {head.map(row)}
+      {rest.length > 0 && (
+        <details className="group/more" open={activeInRest || undefined}>
+          <summary className={cn(TOGGLE_ROW, "cursor-pointer list-none text-muted hover:bg-secondary-bg [&::-webkit-details-marker]:hidden")}>
+            <span>
+              <span className="group-open/more:hidden">{rest.length} more states</span>
+              <span className="hidden group-open/more:inline">Fewer states</span>
+            </span>
+          </summary>
+          <div className="mt-1 flex flex-col gap-1">{rest.map(row)}</div>
+        </details>
+      )}
+    </div>
+  );
+}
+
 export function CategorySidebar({
   categoryCounts,
   totalCount,
+  stateCounts = {},
 }: {
   categoryCounts: Record<string, number>;
   totalCount: number;
+  stateCounts?: Record<string, number>;
 }) {
+  const hasStates = Object.values(stateCounts).some((count) => count > 0);
   return (
     <div className="flex flex-col gap-7">
       <div>
@@ -190,6 +246,12 @@ export function CategorySidebar({
         <Caption className="mb-3 block">Discover</Caption>
         <DiscoveryFilter />
       </div>
+      {hasStates && (
+        <div>
+          <Caption className="mb-3 block">Location</Caption>
+          <LocationFilter stateCounts={stateCounts} />
+        </div>
+      )}
       <div className="rounded-lg bg-primary p-5 text-on-primary">
         <p className="text-sm font-semibold">Building something?</p>
         <p className="mt-1.5 mb-3.5 text-xs leading-relaxed text-on-primary/80">

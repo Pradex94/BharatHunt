@@ -19,6 +19,8 @@ import type { Metadata } from "next";
 import { Hero } from "@/components/landing/hero";
 import { TrustStrip } from "@/components/landing/trust-strip";
 import { TodaysHunt } from "@/components/landing/todays-hunt";
+import { Daily5Section } from "@/components/landing/daily5-section";
+import { SavedStrip } from "@/components/landing/saved-strip";
 import { LaunchBoard } from "@/components/landing/launch-board";
 import { CategoryExplorer } from "@/components/landing/category-explorer";
 import { AiSection } from "@/components/landing/ai-section";
@@ -49,6 +51,7 @@ import {
 } from "@/services/products";
 import { getAiFreshness, getTrendingAiStories } from "@/services/ai-news";
 import { getFundingFeed, getFundingInvestors, getFundingLastSync } from "@/services/funding";
+import { getLatestDaily5 } from "@/services/daily-agent";
 
 const TITLE = "Bharat Hunt — Discover India's Next Great Startups & Software";
 const DESCRIPTION =
@@ -138,6 +141,7 @@ export default async function Home() {
     funding,
     fundingSync,
     investorPage,
+    latestDaily5,
   ] = await Promise.all([
     getRecentLaunchPool(),
     getLeadingLaunch(now),
@@ -155,6 +159,7 @@ export default async function Home() {
     getFundingLastSync(),
     // Page one of /funding/investors — again a shared cache entry.
     getFundingInvestors(null, 1),
+    getLatestDaily5(),
   ]);
 
   // ── Discovery: three views of one pool (lib/home-feed.ts) ──────────────
@@ -259,6 +264,11 @@ export default async function Home() {
       />
 
       <TodaysHunt products={todaysHunt} latestLaunch={formatDayMonth(pool[0]?.published_at)} />
+
+      <Daily5Section day={latestDaily5} now={now} />
+
+      {/* Client-only, and empty unless this visitor has saved something. */}
+      <SavedStrip />
 
       <LaunchBoard hunt={hunt} huntDay={leading?.day ?? null} board={board.products} scope={board.scope} />
 

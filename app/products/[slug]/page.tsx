@@ -9,6 +9,7 @@ import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import {
   Briefcase,
+  Building2,
   ExternalLink,
   MapPin,
   Map as RoadmapIcon,
@@ -22,6 +23,12 @@ import { getSimilarProducts } from "@/services/intelligence";
 import { getComparePairsFor } from "@/services/compare-pairs";
 import { ComparisonLinks } from "@/components/discovery/compare-table";
 import { deriveKnowledge } from "@/lib/intelligence/knowledge";
+import { buildCompareRows, PROVENANCE_LABEL } from "@/lib/intelligence/compare";
+import { discoveryReasons } from "@/lib/intelligence/connections";
+import { getDaily5Origin, getProductEngagement, getProductFunding } from "@/services/product-connections";
+import { displayAmount, UNDISCLOSED_LABEL } from "@/lib/funding/format";
+import { formatDate } from "@/lib/format-date";
+import { formatDailyDate } from "@/components/daily5/daily5-view";
 import { splitRelated } from "@/lib/intelligence/related";
 import { compareHref } from "@/lib/compare-links";
 import { SaveButton } from "@/components/discovery/save-button";
@@ -215,7 +222,7 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
   const isAdmin = userId ? await getIsAdmin() : false;
   const canManage = isOwner || isAdmin;
 
-  const [{ data: comments }, { data: upvote }, { data: myRating }, competitors, similarProducts, comparisons] = await Promise.all(
+  const [{ data: comments }, { data: upvote }, { data: myRating }, competitors, similarProducts, comparisons, engagement, daily5] = await Promise.all(
     [
       supabase
         .from("comments")
@@ -251,8 +258,25 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
       getSimilarProducts(product.id, 12),
       // Curated "A vs B" pages that include this product (cached list).
       getComparePairsFor(product.id, 4),
+      // Thirty days of aggregated signals (hourly job), cached — never raw events.
+      getProductEngagement(product.id),
+      curated ? getDaily5Origin(product.id) : Promise.resolve(null),
     ],
   );
+  // Needs the Daily 5 company name, so it follows the batch. Cached for hours,
+  // and null unless the company's name *and* this product's domain agree.
+  const funding = await getProductFunding({
+    id: product.id,
+    name: product.name,
+    website_url: product.website_url,
+    companyName: daily5?.companyName ?? null,
+  });
+  const daily5Label = daily5 ? formatDailyDate(daily5.date) : null;
+  const reasons = discoveryReasons(engagement, {
+    risingScore: product.rising_score,
+    daily5Date: daily5?.date ?? null,
+    daily5Label,
+  });
 
   const baseForComparison = {
     ...product,
@@ -260,12 +284,17 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
     source: curated ? "daily_agent" : "maker",
     platform_links: (product.platform_links as Record<string, string> | null) ?? null,
   };
+  const knowledge = deriveKnowledge(baseForComparison);
   const { alternatives, similar } = similarProducts
-    ? splitRelated(
-        { ...baseForComparison, knowledge: deriveKnowledge(baseForComparison) },
-        similarProducts,
-      )
+    ? splitRelated({ ...baseForComparison, knowledge }, similarProducts)
     : { alternatives: [], similar: [] };
+  // The same rows /compare prints, for one product: every value sourced, no
+  // verdicts. Community counts live in the action row; empty rows are dropped
+  // here because a one-product profile full of "Not stated" reads as broken.
+  const profileRows = buildCompareRows([{ ...baseForComparison, knowledge }])
+    .filter((row) => row.key !== "community" && !row.cells[0].empty)
+    .map((row) => ({ key: row.key, label: row.label, cell: row.cells[0] }));
+  const launchedOn = formatDate(product.published_at ?? null);
   const shownIds = new Set([...alternatives, ...similar].map((entry) => entry.product.id));
   // Before indexing (or with nothing similar enough), the category list is the
   // alternatives section, exactly as the page worked before.
@@ -354,8 +383,8 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
             <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted">
               <span className="rounded-full bg-secondary-bg px-2 py-0.5">{product.category}</span>
               {curated ? (
-                <Link href="/daily-5" className="font-medium text-primary hover:underline">
-                  Discovered by BharatHunt Daily 5
+                <Link href={daily5 ? `/daily-5/${daily5.date}` : "/daily-5"} className="font-medium text-primary hover:underline">
+                  Discovered by BharatHunt Daily 5{daily5Label ? ` · ${daily5Label}` : ""}
                 </Link>
               ) : (
                 product.creator && <span>by {product.creator.display_name}</span>
@@ -398,6 +427,25 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
         />
 
         <div className="flex flex-wrap items-center gap-3">
+          {product.website_url && (
+            // The primary action: most visitors came to find out whether to
+            // use this. Dofollow (no `nofollow`) so the maker earns a real
+            // backlink, and no `noreferrer` so their analytics see us.
+            // `?ref=bharathunt` names us explicitly — browsers strip or coarsen
+            // the Referer header often enough that referral traffic otherwise
+            // lands under "direct".
+            <TrackedExternalLink
+              productId={product.id}
+              surface="product"
+              href={withReferral(product.website_url)}
+              target="_blank"
+              rel="noopener"
+              className={buttonVariants({ size: "sm" })}
+            >
+              Visit website
+              <ExternalLink aria-hidden="true" />
+            </TrackedExternalLink>
+          )}
           <UpvoteButton
             productId={product.id}
             initialCount={product.upvote_count ?? 0}
@@ -416,33 +464,17 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
           />
           <AddToListButton productId={product.id} productName={product.name} />
           {product.cta_url && (
-            // Primary conversion CTA (gradient) — the maker's own call-to-action.
+            // The maker's own call-to-action. Gradient only when there is no
+            // website to lead with — one loud button per view.
             <TrackedExternalLink
               productId={product.id}
               surface="product-cta"
               href={withReferral(product.cta_url)}
               target="_blank"
               rel="noopener"
-              className={buttonVariants({ size: "sm" })}
+              className={buttonVariants({ variant: product.website_url ? "outline" : "default", size: "sm" })}
             >
               {product.cta_text || "Get it"}
-              <ExternalLink aria-hidden="true" />
-            </TrackedExternalLink>
-          )}
-          {product.website_url && (
-            // Dofollow (no `nofollow`) so the maker earns a real backlink, and
-            // no `noreferrer` so their analytics see us. `?ref=bharathunt` names
-            // us explicitly — browsers strip or coarsen the Referer header often
-            // enough that referral traffic otherwise lands under "direct".
-            <TrackedExternalLink
-              productId={product.id}
-              surface="product"
-              href={withReferral(product.website_url)}
-              target="_blank"
-              rel="noopener"
-              className={buttonVariants({ variant: "outline", size: "sm" })}
-            >
-              Visit website
               <ExternalLink aria-hidden="true" />
             </TrackedExternalLink>
           )}
@@ -581,6 +613,59 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
         )}
       </div>
 
+      {/*
+       * The product as structured facts: the rows /compare prints, for this one
+       * listing. Each value names its source — the maker's listing, a fact
+       * BharatHunt verified on the product's site, or text derived from the
+       * listing — and nothing here is a rating or a verdict.
+       */}
+      {profileRows.length > 0 && (
+        <section aria-labelledby="profile" className="flex flex-col gap-4 border-t border-border pt-8">
+          <H2 id="profile" className="text-2xl sm:text-2xl">
+            Product profile
+          </H2>
+          <dl className="grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2">
+            {profileRows.map(({ key, label, cell }) => (
+              <div key={key} className="flex min-w-0 flex-col gap-0.5">
+                <dt className="text-xs font-medium text-muted">{label}</dt>
+                <dd className="text-sm break-words text-ink">
+                  {key === "category" ? (
+                    <Link href={`/categories/${slugForCategory(product.category) ?? ""}`} className="hover:text-primary">
+                      {cell.text}
+                    </Link>
+                  ) : (
+                    cell.text
+                  )}
+                </dd>
+                {cell.provenance && <dd className="text-[11px] text-muted">{PROVENANCE_LABEL[cell.provenance]}</dd>}
+              </div>
+            ))}
+          </dl>
+        </section>
+      )}
+
+      {/* Recorded engagement only, each line with its window; absent when
+          nothing clears its floor (lib/intelligence/connections.ts). */}
+      {reasons.length > 0 && (
+        <section aria-labelledby="discovering" className="flex flex-col gap-3 border-t border-border pt-8">
+          <H2 id="discovering" className="text-2xl sm:text-2xl">
+            Why people are discovering this
+          </H2>
+          <ul className="flex flex-col gap-2">
+            {reasons.map((reason) => (
+              <li key={reason} className="flex gap-2 text-sm text-body">
+                <span aria-hidden="true" className="mt-2 size-1.5 shrink-0 rounded-full bg-primary" />
+                {reason}
+              </li>
+            ))}
+          </ul>
+          {reasons.length > (daily5 ? 1 : 0) && (
+            <p className="text-xs text-muted">From BharatHunt&apos;s own activity records, counted once per visitor per hour.</p>
+          )}
+        </section>
+      )}
+
+
       {/* Owner-only: the page is published by construction, so the campaign exists or is one click away. */}
       {isOwner && <LaunchAgentOwnerCta slug={product.slug} />}
 
@@ -593,38 +678,25 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
       />
 
       {/*
-       * Up into the collections this product belongs to. Computed from the
-       * product's own category, pricing and tags rather than queried, so it
-       * adds no database work to a page that already makes several round
-       * trips — and it is what stops collection pages being reachable only
-       * from the sitemap.
-       */}
-      {productCollections.length > 0 && (
-        <nav
-          aria-label="Collections featuring this product"
-          className="flex flex-col gap-3 border-t border-border pt-8"
-        >
-          <h2 className="text-sm font-semibold text-ink">Featured in</h2>
-          <div className="flex flex-wrap gap-2">
-            {productCollections.map((collection) => (
-              <Link
-                key={collection.slug}
-                href={`/collections/${collection.slug}`}
-                className="rounded-full border border-border bg-card px-3.5 py-1.5 text-sm text-body transition-colors hover:border-primary hover:text-primary"
-              >
-                {collection.title}
-              </Link>
-            ))}
-          </div>
-        </nav>
-      )}
-
-      {/*
        * Alternatives, similar products and the rest of the category. The first
        * two come from the background indexer (lib/intelligence/reindex.ts) —
        * matched on what each listing says it does, never on popularity — and
        * every difference chip is computed from fields both listings carry.
        */}
+      {similar.length > 0 && (
+        <section aria-labelledby="similar" className="flex flex-col gap-4 border-t border-border pt-8">
+          <H2 id="similar" className="text-2xl sm:text-2xl">
+            Similar products
+          </H2>
+          <p className="text-sm text-body">
+            Related work, often from other categories — matched on listing text, not on votes.
+          </p>
+          <RelatedProductList
+            rows={similar.map((entry) => ({ ...entry.product, reason: entry.reason }))}
+          />
+        </section>
+      )}
+
       {(alternatives.length > 0 || fallbackAlternatives.length > 0) && (
         <section
           aria-labelledby="alternatives"
@@ -669,20 +741,6 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
         </nav>
       )}
 
-      {similar.length > 0 && (
-        <section aria-labelledby="similar" className="flex flex-col gap-4 border-t border-border pt-8">
-          <H2 id="similar" className="text-2xl sm:text-2xl">
-            Similar products
-          </H2>
-          <p className="text-sm text-body">
-            Related work, often from other categories — matched on listing text, not on votes.
-          </p>
-          <RelatedProductList
-            rows={similar.map((entry) => ({ ...entry.product, reason: entry.reason }))}
-          />
-        </section>
-      )}
-
       {moreFromCategory.length > 0 && (
         <section aria-labelledby="more-in-category" className="flex flex-col gap-4 border-t border-border pt-8">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -698,6 +756,110 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
           </div>
           <RelatedProductList rows={moreFromCategory} />
         </section>
+      )}
+
+      {/* Who is behind it. A maker's own launch names the maker; a Daily 5
+          pick names the company the agent verified on the product's site. */}
+      {(product.creator || daily5?.companyName || funding) && (
+        <section aria-labelledby="company" className="flex flex-col gap-3 border-t border-border pt-8">
+          <H2 id="company" className="text-2xl sm:text-2xl">
+            {curated ? "Company" : "Maker"}
+          </H2>
+          <div className="flex items-start gap-3 rounded-xl border border-border bg-card p-4">
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+              <Building2 className="size-5" aria-hidden="true" />
+            </span>
+            <div className="flex min-w-0 flex-col gap-1 text-sm">
+              <p className="font-semibold break-words text-ink">
+                {curated
+                  ? (daily5?.companyName ?? funding?.name ?? product.name)
+                  : (product.creator?.display_name ?? funding?.name)}
+              </p>
+              <p className="text-body">
+                {curated
+                  ? `Found and verified by BharatHunt${daily5?.city ? `; based in ${daily5.city}` : launchStateName ? `; based in ${launchStateName}` : ""}.`
+                  : `Launched ${product.name} on BharatHunt${launchedOn ? ` on ${launchedOn}` : ""}${launchStateName ? ` from ${launchStateName}` : ""}.`}
+              </p>
+              {funding && (
+                <Link href={`/funding/${funding.slug}`} className="font-medium text-primary hover:underline">
+                  {funding.name} on Funding Intelligence &rarr;
+                </Link>
+              )}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* Only when the company link is verified (name and website agree) —
+          otherwise there is no funding section, never an empty one. */}
+      {funding && (
+        <section aria-labelledby="funding" className="flex flex-col gap-3 border-t border-border pt-8">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <H2 id="funding" className="text-2xl sm:text-2xl">
+              Funding
+            </H2>
+            <Link href={`/funding/${funding.slug}`} className="text-sm font-semibold text-primary transition-colors hover:text-primary-active">
+              {funding.roundCount > funding.rounds.length ? `All ${funding.roundCount} rounds` : "Funding history"} &rarr;
+            </Link>
+          </div>
+          <ul className="flex flex-col divide-y divide-border rounded-xl border border-border bg-card">
+            {funding.rounds.map((round) => {
+              const investors = round.lead_investor
+                ? [round.lead_investor, ...round.investors.filter((name) => name !== round.lead_investor)]
+                : round.investors;
+              return (
+                <li key={round.id} className="flex flex-col gap-1 p-4 text-sm">
+                  <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                    <span className="font-semibold text-ink">
+                      {round.funding_stage} · {displayAmount(round) ?? UNDISCLOSED_LABEL}
+                    </span>
+                    <span className="text-xs text-muted">{formatDate(round.announcement_date)}</span>
+                  </div>
+                  {investors.length > 0 && (
+                    <p className="text-body">
+                      {investors.slice(0, 4).join(", ")}
+                      {investors.length > 4 ? ` and ${investors.length - 4} more` : ""}
+                    </p>
+                  )}
+                  <a href={round.source_url} target="_blank" rel="noopener nofollow" className="text-xs text-muted hover:text-primary">
+                    Source: {round.source_name}
+                  </a>
+                </li>
+              );
+            })}
+          </ul>
+          <p className="text-xs text-muted">
+            From published funding reports, matched to this product because the company&apos;s name and the product&apos;s website agree.
+          </p>
+        </section>
+      )}
+
+
+      {/*
+       * Up into the collections this product belongs to. Computed from the
+       * product's own category, pricing and tags rather than queried, so it
+       * adds no database work to a page that already makes several round
+       * trips — and it is what stops collection pages being reachable only
+       * from the sitemap.
+       */}
+      {productCollections.length > 0 && (
+        <nav
+          aria-label="Collections featuring this product"
+          className="flex flex-col gap-3 border-t border-border pt-8"
+        >
+          <h2 className="text-sm font-semibold text-ink">Featured in</h2>
+          <div className="flex flex-wrap gap-2">
+            {productCollections.map((collection) => (
+              <Link
+                key={collection.slug}
+                href={`/collections/${collection.slug}`}
+                className="rounded-full border border-border bg-card px-3.5 py-1.5 text-sm text-body transition-colors hover:border-primary hover:text-primary"
+              >
+                {collection.title}
+              </Link>
+            ))}
+          </div>
+        </nav>
       )}
 
       <div id="comments" className="flex scroll-mt-24 flex-col gap-4 border-t border-border pt-8">

@@ -13,6 +13,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { Container } from "@/components/ui/container";
 import { authorizeCampaignAccess } from "@/lib/launch-agent/ownership";
 import { buildCampaignView, getOrAnalyzeCampaign, getProductForSession, LaunchAgentNotConfiguredError } from "@/services/launch-agent";
+import { getLaunchPerformance, type LaunchPerformance } from "@/services/product-connections";
 
 export const metadata: Metadata = {
   title: "Launch Agent",
@@ -58,8 +59,11 @@ export default async function LaunchCampaignPage({ params }: { params: Promise<{
   }
 
   let view: Awaited<ReturnType<typeof buildCampaignView>> | null = null;
+  let performance: LaunchPerformance | null = null;
   try {
-    const campaign = await getOrAnalyzeCampaign(product!);
+    // Authorised above (the maker's own published product); fail-soft reads.
+    const [campaign, measured] = await Promise.all([getOrAnalyzeCampaign(product!), getLaunchPerformance(product!.id)]);
+    performance = measured;
     view = await buildCampaignView(product!, campaign);
   } catch (error) {
     // Anything else reaches error.tsx: "Your BharatHunt product is safe. Try Again".
@@ -78,7 +82,7 @@ export default async function LaunchCampaignPage({ params }: { params: Promise<{
 
   return (
     <Shell>
-      <CampaignDashboard view={view} />
+      <CampaignDashboard view={view} performance={performance} />
     </Shell>
   );
 }

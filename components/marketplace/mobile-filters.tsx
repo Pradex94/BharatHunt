@@ -16,9 +16,11 @@ import { CategorySidebar } from "@/components/marketplace/category-sidebar";
 export function MobileFilters({
   categoryCounts,
   totalCount,
+  stateCounts,
 }: {
   categoryCounts: Record<string, number>;
   totalCount: number;
+  stateCounts?: Record<string, number>;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -35,7 +37,7 @@ export function MobileFilters({
           <SheetTitle>Filters</SheetTitle>
         </SheetHeader>
         <div className="px-4">
-          <CategorySidebar categoryCounts={categoryCounts} totalCount={totalCount} />
+          <CategorySidebar categoryCounts={categoryCounts} totalCount={totalCount} stateCounts={stateCounts} />
         </div>
       </SheetContent>
     </Sheet>

@@ -30,9 +30,10 @@ export type CommunitySectionProps = {
  * so the section filters products instead of only illustrating them.
  *
  * Locations are what makers confirmed at launch, never inferred from an IP, and
- * the section does not render until at least one launch carries one. A state is
- * a link only once its collection clears the index threshold — a link from the
- * homepage into a `noindex` page spends authority on a dead end.
+ * the section does not render until at least one launch carries one. A state
+ * links to its collection once that clears the index threshold — a link from
+ * the homepage into a `noindex` page spends authority on a dead end — and to
+ * the marketplace's location filter before then, so every state is clickable.
  */
 export function CommunitySection({ launchCounts }: CommunitySectionProps) {
   const states = Object.entries(launchCounts ?? {})
@@ -74,43 +75,32 @@ export function CommunitySection({ launchCounts }: CommunitySectionProps) {
             <ol className="flex flex-col gap-2.5">
               {top.map((state) => {
                 const slug = STATE_COLLECTION.get(state.code);
-                const linked = slug && state.count >= MIN_PRODUCTS_TO_INDEX;
-                const row = (
-                  <>
-                    <span className="flex items-center justify-between gap-3 text-sm">
-                      <span className="flex items-center gap-1 font-medium text-on-dark">
-                        {state.name}
-                        {linked && (
+                const href =
+                  slug && state.count >= MIN_PRODUCTS_TO_INDEX
+                    ? `/collections/${slug}`
+                    : `/marketplace?state=${encodeURIComponent(state.code)}`;
+                return (
+                  <li key={state.code}>
+                    <Link href={href} className="group flex flex-col gap-1.5 rounded-lg transition-colors">
+                      <span className="flex items-center justify-between gap-3 text-sm">
+                        <span className="flex items-center gap-1 font-medium text-on-dark">
+                          {state.name}
                           <ArrowUpRight
                             className="size-3.5 text-primary opacity-0 transition-opacity group-hover:opacity-100"
                             aria-hidden="true"
                           />
-                        )}
+                        </span>
+                        <span className="text-on-dark-soft">
+                          <Numeric>{state.count}</Numeric> {state.count === 1 ? "launch" : "launches"}
+                        </span>
                       </span>
-                      <span className="text-on-dark-soft">
-                        <Numeric>{state.count}</Numeric> {state.count === 1 ? "launch" : "launches"}
+                      <span aria-hidden className="block h-1.5 overflow-hidden rounded-full bg-white/10">
+                        <span
+                          className="block h-full rounded-full bg-[linear-gradient(90deg,#ff6b1a,#ff8a3d)]"
+                          style={{ width: `${Math.max(6, (state.count / max) * 100)}%` }}
+                        />
                       </span>
-                    </span>
-                    <span aria-hidden className="block h-1.5 overflow-hidden rounded-full bg-white/10">
-                      <span
-                        className="block h-full rounded-full bg-[linear-gradient(90deg,#ff6b1a,#ff8a3d)]"
-                        style={{ width: `${Math.max(6, (state.count / max) * 100)}%` }}
-                      />
-                    </span>
-                  </>
-                );
-                return (
-                  <li key={state.code}>
-                    {linked ? (
-                      <Link
-                        href={`/collections/${slug}`}
-                        className="group flex flex-col gap-1.5 rounded-lg transition-colors"
-                      >
-                        {row}
-                      </Link>
-                    ) : (
-                      <div className="flex flex-col gap-1.5">{row}</div>
-                    )}
+                    </Link>
                   </li>
                 );
               })}

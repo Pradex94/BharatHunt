@@ -1,7 +1,8 @@
 import Link from "next/link";
-import { Code2, Globe, MessageSquare, TrendingUp } from "lucide-react";
+import { Code2, Globe, MapPin, MessageSquare, TrendingUp } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { absoluteUrl } from "@/lib/seo";
+import { indiaStateName } from "@/lib/india-states";
 import { UpvoteButton } from "@/components/products/upvote-button";
 import { ShareMenu } from "@/components/products/share-menu";
 import { ProductLogo } from "@/components/products/product-logo";
@@ -41,6 +42,8 @@ export type ProductCardProduct = {
   /** Present on marketplace browse results; drives the one status badge. */
   published_at?: string | null;
   rising_score?: number | null;
+  /** ISO 3166-2:IN code, when the maker confirmed or BharatHunt verified one. */
+  launch_state?: string | null;
 };
 
 /** Rising beats New: acceleration is the rarer, more useful thing to point out. */
@@ -72,6 +75,7 @@ export function ProductCard({
   const tags = (product.tags ?? []).filter(Boolean).slice(0, 3);
   const makerInitial = product.creator?.display_name?.slice(0, 1).toUpperCase() ?? "?";
   const badge = statusBadge(product);
+  const stateName = indiaStateName(product.launch_state);
 
   return (
     <article
@@ -195,6 +199,12 @@ export function ProductCard({
             <MessageSquare className="size-3.5" aria-hidden="true" />
             <Numeric>{product.comment_count ?? 0}</Numeric> comments
           </Link>
+          {stateName && (
+            <span className="flex min-w-0 items-center gap-1">
+              <MapPin className="size-3.5 shrink-0" aria-hidden="true" />
+              <span className="truncate">{stateName}</span>
+            </span>
+          )}
           <div className="ml-auto flex items-center gap-0.5">
             <SaveButton productId={product.id} productName={product.name} />
             <CompareButton

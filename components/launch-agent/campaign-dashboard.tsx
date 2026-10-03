@@ -25,12 +25,13 @@ import { LaunchTimeline } from "./launch-timeline";
 import { PlatformCard } from "./platform-card";
 import { PlatformSheet } from "./platform-sheet";
 import { useLaunchAction } from "./use-launch-action";
+import type { LaunchPerformance } from "@/services/product-connections";
 
 function Card({ className, ...props }: React.ComponentProps<"section">) {
   return <section className={cn("rounded-3xl border border-border bg-card p-5 shadow-soft sm:p-6", className)} {...props} />;
 }
 
-export function CampaignDashboard({ view }: { view: CampaignView }) {
+export function CampaignDashboard({ view, performance }: { view: CampaignView; performance?: LaunchPerformance | null }) {
   const runner = useLaunchAction();
   const [openSlug, setOpenSlug] = useState<string | null>(null);
   const [showOthers, setShowOthers] = useState(false);
@@ -288,7 +289,34 @@ export function CampaignDashboard({ view }: { view: CampaignView }) {
       <div className="grid items-start gap-6 xl:grid-cols-2">
         <Card>
           <h2 className="text-lg font-bold text-ink">Launch performance</h2>
-          <dl className="mt-4 grid grid-cols-3 gap-3">
+          {performance && (
+            <>
+              <h3 className="mt-4 text-sm font-bold text-ink">On BharatHunt</h3>
+              <dl className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-3">
+                {[
+                  { label: `Visitors, last ${performance.days} days`, value: performance.visitors },
+                  { label: `Website clicks, last ${performance.days} days`, value: performance.websiteClicks },
+                  { label: `Saves, last ${performance.days} days`, value: performance.saves },
+                  { label: "Upvotes, all time", value: performance.upvotes },
+                  { label: "Comments, all time", value: performance.comments },
+                  { label: "Page views, all time", value: performance.views },
+                ].map((item) => (
+                  <div key={item.label} className="rounded-2xl bg-secondary-bg/70 p-3">
+                    <dd className="text-2xl font-bold text-ink">
+                      <Numeric>{item.value}</Numeric>
+                    </dd>
+                    <dt className="mt-0.5 text-xs leading-tight text-muted">{item.label}</dt>
+                  </div>
+                ))}
+              </dl>
+              <p className="mt-2 text-xs text-muted">
+                Measured by BharatHunt, once per visitor per hour; refreshed hourly. Search and Product Match sent{" "}
+                <Numeric>{performance.discoveryClicks}</Numeric> of the visits in the last {performance.days} days.
+              </p>
+              <h3 className="mt-5 text-sm font-bold text-ink">Other platforms</h3>
+            </>
+          )}
+          <dl className={performance ? "mt-2 grid grid-cols-3 gap-3" : "mt-4 grid grid-cols-3 gap-3"}>
             {[
               { label: "Platforms prepared", value: stats.prepared },
               { label: "Submissions completed", value: stats.submitted },
