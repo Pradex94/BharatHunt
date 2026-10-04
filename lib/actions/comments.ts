@@ -67,13 +67,6 @@ export async function addComment(
   }
 
   // comment_count is kept by a trigger on `comments` (20261005000000).
-  // Transitional: before that migration this RPC does the counting; after
-  // it, it is a no-op. Remove once the migration is applied.
-  await supabase.rpc("increment_product_counter", {
-    target_product_id: productId,
-    counter_column: "comment_count",
-    delta: 1,
-  });
   revalidatePath(`/products/${productSlug}`);
 }
 
@@ -123,11 +116,6 @@ export async function deleteComment(
   }
 
   // comment_count follows the delete through a trigger (20261005000000),
-  // replies removed by the cascade included. Transitional no-op afterwards.
-  await db.rpc("increment_product_counter", {
-    target_product_id: productId,
-    counter_column: "comment_count",
-    delta: -1,
-  });
+  // replies removed by the cascade included.
   revalidatePath(`/products/${productSlug}`);
 }
