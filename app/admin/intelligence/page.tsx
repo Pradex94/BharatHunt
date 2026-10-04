@@ -53,7 +53,7 @@ function RankList({ items, unit, empty }: { items: { slug: string; name: string;
       {items.length === 0 && <li className="p-3 text-sm text-muted">{empty}</li>}
       {items.map((item) => (
         <li key={item.slug} className="flex justify-between gap-3 p-3 text-sm">
-          <Link href={`/products/${item.slug}`} className="truncate text-ink hover:text-primary">
+          <Link prefetch={false} href={`/products/${item.slug}`} className="truncate text-ink hover:text-primary">
             {item.name}
           </Link>
           <span className="shrink-0 text-muted">
@@ -111,7 +111,7 @@ export default async function IntelligenceAdminPage() {
   return (
     <Container className="flex flex-col gap-10 py-10">
       <div className="flex flex-col gap-2">
-        <Link href="/admin" className="text-sm text-primary hover:underline">
+        <Link prefetch={false} href="/admin" className="text-sm text-primary hover:underline">
           &larr; Admin
         </Link>
         <h1 className="text-3xl">Product Intelligence</h1>
@@ -252,7 +252,7 @@ export default async function IntelligenceAdminPage() {
               {status.classification.items.map((item) => (
                 <tr key={item.slug}>
                   <td className="p-3">
-                    <Link href={`/products/${item.slug}/edit`} className="text-ink hover:text-primary">
+                    <Link prefetch={false} href={`/products/${item.slug}/edit`} className="text-ink hover:text-primary">
                       {item.name}
                     </Link>
                   </td>

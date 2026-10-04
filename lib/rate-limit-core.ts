@@ -54,6 +54,20 @@ export const RATE_LIMITS = {
     windowSeconds: envInt("RATE_LIMIT_GLOBAL_IP_WINDOW", 60),
     message: "Too many requests. Please try again shortly.",
   },
+  /**
+   * A browser's background requests for the app — router prefetches, client
+   * navigations, Server Actions, API calls (`isBackgroundRequest` in
+   * lib/edge-policy.ts) — in their own budget. A page full of links prefetches
+   * every visible one, and on 2026-10-04 that alone pushed an admin past
+   * `globalIp` and locked them out of page loads. Background work now never
+   * spends the page-load budget, and when it is refused the router falls back
+   * to a full page load, which `globalIp` still allows.
+   */
+  globalIpBackground: {
+    limit: envInt("RATE_LIMIT_GLOBAL_BACKGROUND_MAX", 600),
+    windowSeconds: envInt("RATE_LIMIT_GLOBAL_IP_WINDOW", 60),
+    message: "Too many requests. Please try again shortly.",
+  },
 
   /** Public, cached, cheap — generous so real browsing is never touched. */
   search: { limit: 60, windowSeconds: 60, message: "Too many searches. Please slow down." },

@@ -47,7 +47,7 @@ export default async function AdminInvestorsPage() {
       <Container>
         <div className="mx-auto flex w-full max-w-5xl flex-col gap-8">
           <div>
-            <Link
+            <Link prefetch={false}
               href="/admin"
               className="inline-flex items-center gap-1.5 text-sm text-muted transition-colors hover:text-primary"
             >
@@ -63,7 +63,7 @@ export default async function AdminInvestorsPage() {
                 <h1 className="text-2xl font-bold tracking-tight text-ink">Investor management</h1>
                 <p className="text-sm text-muted">
                   Add, edit and publish the investors behind{" "}
-                  <Link href="/investors" className="text-primary hover:underline">
+                  <Link prefetch={false} href="/investors" className="text-primary hover:underline">
                     the directory
                   </Link>
                   .

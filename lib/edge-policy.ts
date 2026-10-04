@@ -351,3 +351,36 @@ export function isLikelyBot(userAgent: string | null): boolean {
   if (!userAgent) return true;
   return /bot|crawl|spider|slurp|facebookexternalhit|embedly|preview|curl|wget|python-requests|go-http-client|httpclient|headless/i.test(userAgent);
 }
+
+/**
+ * A request the browser made in the background for the app — a router
+ * prefetch, a client-side navigation's RSC payload, a Server Action, an API
+ * call — as opposed to a page load the visitor asked for.
+ *
+ * Read from `Sec-Fetch-Dest`, because it is all proxy.ts can see: Next.js
+ * strips its own router headers (`RSC`, `Next-Router-Prefetch`) from the
+ * request before middleware runs (next/dist/server/web/adapter.js,
+ * FLIGHT_HEADERS). Browsers send `document` for a page load and `empty` for
+ * `fetch()`. A client that sends no such header (curl, most bots) is not a
+ * browser doing background work, so it is treated as page loads — the
+ * stricter budget. The browser's own speculation rules (`Sec-Purpose:
+ * prefetch`) count as background too.
+ *
+ * Rate limiting gives these their own budget (`globalIpBackground`): a page
+ * full of links prefetches every visible one, and on 2026-10-04 that alone
+ * pushed an admin past the page-load limit and locked them out.
+ */
+export function isBackgroundRequest(header: (name: string) => string | null): boolean {
+  const purpose = `${header("sec-purpose") ?? ""} ${header("purpose") ?? ""}`.toLowerCase();
+  if (purpose.includes("prefetch")) return true;
+  const destination = header("sec-fetch-dest");
+  return destination !== null && destination !== "" && destination !== "document" && destination !== "iframe";
+}
+
+/** A top-level page load: a browser asking for HTML, or a client asking for it without fetch metadata. */
+export function isDocumentRequest(method: string, header: (name: string) => string | null): boolean {
+  if (method !== "GET") return false;
+  const destination = header("sec-fetch-dest");
+  if (destination) return destination === "document";
+  return (header("accept") ?? "").includes("text/html");
+}

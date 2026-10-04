@@ -113,7 +113,7 @@ export function AdminProductsPanel({
           {filters.map((filter) => {
             const active = filter.value === status;
             return (
-              <Link
+              <Link prefetch={false}
                 key={filter.label}
                 href={adminProductsHref(filter.value, q)}
                 aria-current={active ? "page" : undefined}
@@ -129,7 +129,7 @@ export function AdminProductsPanel({
             );
           })}
           {q && (
-            <Link
+            <Link prefetch={false}
               href={adminProductsHref(status, "")}
               className="text-xs font-medium text-primary hover:underline"
             >
@@ -163,7 +163,7 @@ export function AdminProductsPanel({
                       every status, so a row in review linked straight at
                       /products/[slug] sent the reviewer to a 404 instead of to
                       the decision. */}
-                  <Link
+                  <Link prefetch={false}
                     href={productRowHref(product, "admin")}
                     className="font-medium text-ink hover:text-primary"
                   >
@@ -189,7 +189,7 @@ export function AdminProductsPanel({
                 </td>
                 <td className="px-4 py-2.5">
                   <div className="flex items-center justify-end gap-3">
-                    <Link
+                    <Link prefetch={false}
                       href={`/products/${product.slug}/edit`}
                       className="text-primary hover:underline"
                     >
@@ -212,7 +212,7 @@ export function AdminProductsPanel({
                   {filtering ? (
                     <>
                       Nothing matches that filter.{" "}
-                      <Link href="/admin" className="text-primary hover:underline">
+                      <Link prefetch={false} href="/admin" className="text-primary hover:underline">
                         Show every product
                       </Link>
                     </>

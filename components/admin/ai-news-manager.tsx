@@ -327,7 +327,7 @@ export function AiNewsManager({ stats, sources, pending, stories, articles, runs
               {stories.map((story) => (
                 <tr key={story.id} className="border-b border-border/60 last:border-0">
                   <td className="max-w-md px-4 py-2.5">
-                    <Link
+                    <Link prefetch={false}
                       href={`/ai/${story.slug}`}
                       className="line-clamp-2 font-medium text-ink hover:text-primary"
                     >
@@ -716,7 +716,7 @@ function SuggestedMerges({
               <p className="text-sm text-ink">
                 <span className="text-xs font-semibold text-muted uppercase">Keep · {suggestion.keep.source_count} sources</span>
                 <br />
-                <Link href={`/ai/${suggestion.keep.slug}`} className="font-medium hover:text-primary">
+                <Link prefetch={false} href={`/ai/${suggestion.keep.slug}`} className="font-medium hover:text-primary">
                   {suggestion.keep.title}
                 </Link>
               </p>

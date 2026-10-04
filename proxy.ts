@@ -1,7 +1,7 @@
 import { clerkMiddleware } from "@clerk/nextjs/server";
 import type { NextRequest } from "next/server";
 
-import { isProbePath } from "@/lib/edge-policy";
+import { isBackgroundRequest, isDocumentRequest, isProbePath } from "@/lib/edge-policy";
 import { anonymizeIp, checkRateLimit, clientIpFrom } from "@/lib/rate-limit";
 
 /**
@@ -26,8 +26,15 @@ import { anonymizeIp, checkRateLimit, clientIpFrom } from "@/lib/rate-limit";
  * legitimate users behind one address.
  */
 async function enforceGlobalIpLimit(request: NextRequest): Promise<Response | null> {
-  const ip = clientIpFrom((name) => request.headers.get(name));
-  const result = await checkRateLimit("globalIp", `ip:${ip}`);
+  const header = (name: string) => request.headers.get(name);
+  const ip = clientIpFrom(header);
+  // Background requests (prefetches, client navigations, actions) have their
+  // own budget. A page of links prefetches each one in view; counting those as
+  // page loads once locked an admin out of the site after a few visits to the
+  // product tables (2026-10-04). A refused background request makes the router
+  // fall back to a full page load, which is counted — and allowed — separately.
+  const scope = isBackgroundRequest(header) ? "globalIpBackground" : "globalIp";
+  const result = await checkRateLimit(scope, `ip:${ip}`);
 
   if (result.ok) return null;
 
@@ -36,7 +43,7 @@ async function enforceGlobalIpLimit(request: NextRequest): Promise<Response | nu
   console.warn(
     JSON.stringify({
       event: "rate_limit_exceeded",
-      scope: "globalIp",
+      scope,
       ip: anonymizeIp(ip),
       path: request.nextUrl.pathname,
       method: request.method,
@@ -46,20 +53,32 @@ async function enforceGlobalIpLimit(request: NextRequest): Promise<Response | nu
     }),
   );
 
-  return new Response(
-    JSON.stringify({ error: "Too many requests. Please try again later." }),
-    {
+  const headers = {
+    "retry-after": String(result.retryAfter),
+    "x-ratelimit-limit": String(result.limit),
+    "x-ratelimit-remaining": "0",
+    // Never cache a 429 — the next window must be able to succeed.
+    "cache-control": "no-store",
+  };
+
+  // A person loading a page gets a page, not a JSON string.
+  if (isDocumentRequest(request.method, header)) {
+    return new Response(rateLimitPage(result.retryAfter), {
       status: 429,
-      headers: {
-        "content-type": "application/json",
-        "retry-after": String(result.retryAfter),
-        "x-ratelimit-limit": String(result.limit),
-        "x-ratelimit-remaining": "0",
-        // Never cache a 429 — the next window must be able to succeed.
-        "cache-control": "no-store",
-      },
-    },
-  );
+      headers: { ...headers, "content-type": "text/html; charset=utf-8" },
+    });
+  }
+
+  return new Response(JSON.stringify({ error: "Too many requests. Please try again later." }), {
+    status: 429,
+    headers: { ...headers, "content-type": "application/json" },
+  });
+}
+
+/** Self-contained (no app assets — those would be limited too), refreshes itself when the window passes. */
+function rateLimitPage(retryAfter: number): string {
+  const seconds = Math.max(1, Math.min(retryAfter, 120));
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="refresh" content="${seconds}"><meta name="robots" content="noindex"><title>Slow down a moment · Bharat Hunt</title><style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#fff9f5;color:#17140f;font:16px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;padding:16px}main{max-width:28rem;text-align:center}h1{font-size:1.5rem;margin:0 0 .5rem}p{color:#4b5563;margin:0 0 1rem}a{color:#ff6b1a;font-weight:600}</style></head><body><main><h1>Too many requests from your connection</h1><p>Bharat Hunt limits how fast one address can load pages. This page will reload by itself in about ${seconds} seconds.</p><p><a href="/">Back to Bharat Hunt</a></p></main></body></html>`;
 }
 
 export default clerkMiddleware(async (_auth, request) => {

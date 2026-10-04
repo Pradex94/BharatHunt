@@ -178,7 +178,7 @@ export function DailyCandidateCard({
           </a>
         )}
         {candidate.productSlug && (
-          <Link href={`/products/${candidate.productSlug}`} className={outline}>
+          <Link prefetch={false} href={`/products/${candidate.productSlug}`} className={outline}>
             <ExternalLink className="size-3.5" aria-hidden="true" /> View product
           </Link>
         )}

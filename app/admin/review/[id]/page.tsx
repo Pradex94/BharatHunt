@@ -59,7 +59,7 @@ export default async function ReviewLandingPage({
           It may have expired — review links last seven days — or it was already used from another
           device. Sign in as an admin and the queue will still have it.
         </p>
-        <Link href="/admin" className="inline-flex items-center gap-1 text-sm font-semibold text-primary hover:underline">
+        <Link prefetch={false} href="/admin" className="inline-flex items-center gap-1 text-sm font-semibold text-primary hover:underline">
           Open the review queue
           <ArrowRight className="size-3.5" aria-hidden="true" />
         </Link>
@@ -73,7 +73,7 @@ export default async function ReviewLandingPage({
     return (
       <Shell heading="That product no longer exists">
         <p className="text-sm text-body">It was deleted after the review email went out.</p>
-        <Link href="/admin" className="inline-flex items-center gap-1 text-sm font-semibold text-primary hover:underline">
+        <Link prefetch={false} href="/admin" className="inline-flex items-center gap-1 text-sm font-semibold text-primary hover:underline">
           Open the review queue
           <ArrowRight className="size-3.5" aria-hidden="true" />
         </Link>
@@ -88,7 +88,7 @@ export default async function ReviewLandingPage({
         <p className="text-sm text-body">
           Someone has reviewed this one — possibly you, from another device. Nothing to do here.
         </p>
-        <Link href="/admin" className="inline-flex items-center gap-1 text-sm font-semibold text-primary hover:underline">
+        <Link prefetch={false} href="/admin" className="inline-flex items-center gap-1 text-sm font-semibold text-primary hover:underline">
           Open the review queue
           <ArrowRight className="size-3.5" aria-hidden="true" />
         </Link>
@@ -155,7 +155,7 @@ export default async function ReviewLandingPage({
         size="lg"
       />
 
-      <Link
+      <Link prefetch={false}
         href={`/products/${product.slug}/edit`}
         className="inline-flex items-center gap-1 text-sm text-muted hover:text-primary"
       >

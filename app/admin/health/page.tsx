@@ -78,7 +78,7 @@ function SystemCard({
         <p className="rounded-lg bg-error/10 px-3 py-2 font-mono text-xs break-words text-error">{error}</p>
       )}
       {href && (
-        <Link href={href} className="mt-auto text-sm font-semibold text-primary hover:text-primary-active">
+        <Link prefetch={false} href={href} className="mt-auto text-sm font-semibold text-primary hover:text-primary-active">
           Open &rarr;
         </Link>
       )}
@@ -119,7 +119,7 @@ function DataQualityPanel({ quality }: { quality: PlatformHealth["quality"] }) {
             </dd>
             <dt className="text-xs text-muted">
               {stat.href ? (
-                <Link href={stat.href} className="hover:text-primary">
+                <Link prefetch={false} href={stat.href} className="hover:text-primary">
                   {stat.label} &rarr;
                 </Link>
               ) : (
@@ -144,7 +144,7 @@ function DataQualityPanel({ quality }: { quality: PlatformHealth["quality"] }) {
                 {group.products.map((product, index) => (
                   <span key={product.slug}>
                     {index > 0 && ", "}
-                    <Link href={`/products/${product.slug}`} className="text-ink hover:text-primary">
+                    <Link prefetch={false} href={`/products/${product.slug}`} className="text-ink hover:text-primary">
                       {product.name}
                     </Link>
                   </span>
@@ -164,7 +164,7 @@ function DataQualityPanel({ quality }: { quality: PlatformHealth["quality"] }) {
           <ul className="flex flex-col gap-1 text-sm text-body">
             {q.unverifiedCompanyNames.map((item) => (
               <li key={item.slug}>
-                <Link href={`/products/${item.slug}/edit`} className="text-ink hover:text-primary">
+                <Link prefetch={false} href={`/products/${item.slug}/edit`} className="text-ink hover:text-primary">
                   {item.name}
                 </Link>{" "}
                 — stored as &ldquo;{item.stored}&rdquo;
@@ -179,7 +179,7 @@ function DataQualityPanel({ quality }: { quality: PlatformHealth["quality"] }) {
           <ul className="flex flex-col gap-1 text-sm text-body">
             {q.suspiciousInvestors.map((name) => (
               <li key={name}>
-                <Link href="/admin/funding" className="hover:text-primary">
+                <Link prefetch={false} href="/admin/funding" className="hover:text-primary">
                   {name}
                 </Link>
               </li>
@@ -259,7 +259,7 @@ export default async function PlatformHealthPage() {
   return (
     <Container className="flex flex-col gap-8 py-10">
       <div className="flex flex-col gap-2">
-        <Link href="/admin" className="text-sm text-primary hover:underline">
+        <Link prefetch={false} href="/admin" className="text-sm text-primary hover:underline">
           &larr; Admin
         </Link>
         <div className="flex flex-wrap items-center justify-between gap-3">

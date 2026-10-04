@@ -64,7 +64,7 @@ export default async function AdminAiNewsPage() {
               <h1 className="text-2xl font-bold tracking-tight text-ink">AI news</h1>
               <p className="text-sm text-muted">
                 Sources, ingestion, the review queue and the trend ranking behind{" "}
-                <Link href="/ai" className="text-primary hover:underline">
+                <Link prefetch={false} href="/ai" className="text-primary hover:underline">
                   /ai
                 </Link>
                 .
@@ -72,7 +72,7 @@ export default async function AdminAiNewsPage() {
             </div>
           </div>
 
-          <Link
+          <Link prefetch={false}
             href="/admin"
             className="inline-flex min-h-11 items-center gap-2 rounded-md border border-border bg-card px-4 text-sm font-semibold text-ink transition-colors hover:border-primary/30 hover:bg-secondary-bg"
           >

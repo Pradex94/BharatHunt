@@ -164,10 +164,10 @@ export default async function DailyAgentAdminPage({ searchParams }: { searchPara
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
-              <Link href="/daily-5" className="inline-flex min-h-11 items-center rounded-md border border-border bg-card px-4 text-sm font-semibold text-ink hover:bg-secondary-bg">
+              <Link prefetch={false} href="/daily-5" className="inline-flex min-h-11 items-center rounded-md border border-border bg-card px-4 text-sm font-semibold text-ink hover:bg-secondary-bg">
                 Public page
               </Link>
-              <Link href="/admin" className="inline-flex min-h-11 items-center gap-2 rounded-md border border-border bg-card px-4 text-sm font-semibold text-ink hover:bg-secondary-bg">
+              <Link prefetch={false} href="/admin" className="inline-flex min-h-11 items-center gap-2 rounded-md border border-border bg-card px-4 text-sm font-semibold text-ink hover:bg-secondary-bg">
                 <ArrowLeft className="size-4" aria-hidden="true" />
                 Admin
               </Link>
@@ -322,7 +322,7 @@ export default async function DailyAgentAdminPage({ searchParams }: { searchPara
                     {batches.map((row) => (
                       <tr key={row.id} className={`border-t border-border ${row.id === batch?.id ? "bg-secondary-bg/60" : ""}`}>
                         <td className="px-2 py-1.5">
-                          <Link href={`/admin/daily-agent?batch=${row.id}`} className="font-semibold text-ink hover:text-primary">
+                          <Link prefetch={false} href={`/admin/daily-agent?batch=${row.id}`} className="font-semibold text-ink hover:text-primary">
                             {row.batch_date}
                           </Link>
                         </td>

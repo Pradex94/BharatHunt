@@ -119,7 +119,7 @@ export default async function AdminPage({
                 ingestion controls, do not belong beside a launch queue. */}
             <div className="flex flex-wrap items-center gap-2">
               {TOOLS.map((tool) => (
-                <Link
+                <Link prefetch={false}
                   key={tool.href}
                   href={tool.href}
                   className="inline-flex min-h-11 items-center gap-2 rounded-md border border-border bg-card px-4 text-sm font-semibold text-ink transition-colors hover:border-primary/30 hover:bg-secondary-bg"
@@ -146,7 +146,7 @@ export default async function AdminPage({
                 </>
               );
               return card.href ? (
-                <Link
+                <Link prefetch={false}
                   key={card.label}
                   href={card.href}
                   className="rounded-xl border border-border bg-card p-4 transition-colors hover:border-primary/30 hover:bg-secondary-bg"
@@ -230,7 +230,7 @@ function ReviewQueue({ pending }: { pending: PendingProductRow[] }) {
               <p className="text-sm text-body">{product.tagline}</p>
 
               <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
-                <Link
+                <Link prefetch={false}
                   href={`/products/${product.slug}/edit`}
                   className="text-primary hover:underline"
                 >

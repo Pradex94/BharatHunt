@@ -17,7 +17,9 @@ import {
   edgeCacheRuleFor,
   freshnessOf,
   isAnonymousRequest,
+  isBackgroundRequest,
   isCacheableRequestShape,
+  isDocumentRequest,
   isProbePath,
   isStorableResponse,
   productSlugFromPath,
@@ -262,5 +264,30 @@ describe("labels", () => {
     assert.equal(subrequestKind("api.clerk.com"), "auth");
     assert.equal(subrequestKind("api.anthropic.com"), "ai");
     assert.equal(subrequestKind("techcrunch.com"), "external");
+  });
+});
+
+describe("isBackgroundRequest / isDocumentRequest", () => {
+  const headers = (pairs: Record<string, string>) => (name: string) => pairs[name] ?? null;
+
+  it("treats a browser fetch as background work — prefetch, client navigation, action", () => {
+    // What proxy.ts actually receives: Next strips RSC and Next-Router-Prefetch first.
+    assert.equal(isBackgroundRequest(headers({ "sec-fetch-dest": "empty", "sec-fetch-mode": "cors" })), true);
+    assert.equal(isBackgroundRequest(headers({ "sec-purpose": "prefetch;prerender", "sec-fetch-dest": "document" })), true);
+  });
+
+  it("counts page loads and header-less clients against the page-load budget", () => {
+    assert.equal(isBackgroundRequest(headers({ "sec-fetch-dest": "document" })), false);
+    assert.equal(isBackgroundRequest(headers({ "sec-fetch-dest": "iframe" })), false);
+    // curl and most bots send no fetch metadata: the stricter budget applies.
+    assert.equal(isBackgroundRequest(headers({ accept: "*/*" })), false);
+  });
+
+  it("tells a page load from RSC, actions and API calls", () => {
+    assert.equal(isDocumentRequest("GET", headers({ "sec-fetch-dest": "document", accept: "text/html" })), true);
+    assert.equal(isDocumentRequest("GET", headers({ accept: "text/html,application/xhtml+xml" })), true);
+    assert.equal(isDocumentRequest("GET", headers({ accept: "*/*" })), false);
+    assert.equal(isDocumentRequest("POST", headers({ "sec-fetch-dest": "empty", accept: "text/x-component" })), false);
+    assert.equal(isDocumentRequest("GET", headers({ "sec-fetch-dest": "empty", accept: "application/json" })), false);
   });
 });
