@@ -8,7 +8,7 @@ import { INTELLIGENCE_CACHE_PREFIX } from "@/lib/intelligence/cache-keys";
 import {
   EMPTY_ENGAGEMENT,
   fundingLinkVerified,
-  plausibleCompanyName,
+  verifiedCompanyName,
   type ProductEngagement,
 } from "@/lib/intelligence/connections";
 import { normalizeSite } from "@/lib/daily-agent/domain";
@@ -34,8 +34,13 @@ export type Daily5Origin = {
 };
 
 /** The Daily 5 day that published this product, with the company facts the agent verified. */
-export async function getDaily5Origin(productId: string): Promise<Daily5Origin | null> {
-  return cacheRemember(`${INTELLIGENCE_CACHE_PREFIX}daily5-origin:${productId}`, HOUR, async () => {
+export async function getDaily5Origin(product: {
+  id: string;
+  name: string;
+  website_url: string | null;
+}): Promise<Daily5Origin | null> {
+  const productId = product.id;
+  return cacheRemember(`${INTELLIGENCE_CACHE_PREFIX}daily5-origin:v2:${productId}`, HOUR, async () => {
     try {
       const supabase = createServiceClient();
       const { data, error } = await supabase
@@ -50,7 +55,7 @@ export async function getDaily5Origin(productId: string): Promise<Daily5Origin |
         | null;
       if (!batch || batch.is_dry_run) return null;
       const facts = (data.facts ?? {}) as { companyName?: string | null; city?: string | null };
-      return { date: batch.batch_date, companyName: plausibleCompanyName(facts.companyName), city: facts.city ?? null };
+      return { date: batch.batch_date, companyName: verifiedCompanyName(facts.companyName, product), city: facts.city ?? null };
     } catch {
       return null;
     }

@@ -370,6 +370,17 @@ export const DUPLICATE_TITLE_THRESHOLD = 0.42;
 export const STORY_WINDOW_HOURS = 72;
 
 /**
+ * The content-word duplicate test (`sameEventByContent` in grouping.ts): same
+ * or cross-named entity, published within 48 hours, sharing at least two
+ * event-naming words with a Jaccard of at least 0.2 over them. Tuned on a week
+ * of production headlines (2026-09-25 → 10-02); see the fixtures in
+ * tests/ai-news-grouping.test.ts before changing any of the three.
+ */
+export const CONTENT_MATCH_WINDOW_HOURS = 48;
+export const CONTENT_MATCH_MIN_SHARED = 2;
+export const CONTENT_MATCH_MIN_OVERLAP = 0.2;
+
+/**
  * How old the last successful ingestion may be before the page stops claiming
  * to be up to date and shows the "ingestion temporarily unavailable" state.
  *

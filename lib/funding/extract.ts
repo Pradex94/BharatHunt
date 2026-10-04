@@ -636,8 +636,21 @@ function trimTrailingClause(name: string): string {
 const INVESTOR_DESCRIPTOR =
   /^(?:the\s+)?(?:[A-Za-z-]+\s+){0,4}?(?:venture\s+capital|vc|private\s+equity|investment|angel|deep-?tech|growth|impact)\s+(?:firm|fund|major|platform|company|house|arm)\s+/i;
 
+/**
+ * A person introduced by their past role, kept as the person: "former RBL Bank
+ * executive director Rajeev Ahuja" → "Rajeev Ahuja". Both were stored whole in
+ * production (2026-10), and the investor directory listed the sentence.
+ */
+const PERSON_BY_ROLE =
+  /^(?:former|ex-?)\s+.*?\b(?:executive director|managing director|director|ceo|cto|cfo|coo|chairman|chairperson|co-?founder|founder|partner|president|head)\s+(?=[A-Z])/i;
+
+/** "Srinath Setty through his family office Trasa Ventures" → "Srinath Setty". */
+const THROUGH_VEHICLE = /^(.+?)\s+(?:through|via)\s+(?:his|her|their|its)\s+(?:family\s+office|fund|investment\s+arm|vehicle)\b.*$/i;
+
 function trimInvestorFraming(name: string): string {
   return name
+    .replace(PERSON_BY_ROLE, "")
+    .replace(THROUGH_VEHICLE, "$1")
     .replace(/^(?:the\s+)?(?:existing|new|returning|current|other|lead)\s+(?:backer|investor|investors|participant)s?\s+/i, "")
     .replace(INVESTOR_DESCRIPTOR, "")
     .replace(/\s+(?:also\s+)?(?:participating|participated|among others|and others|amongst others)\.?$/i, "")

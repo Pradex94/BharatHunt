@@ -333,6 +333,17 @@ describe("extractInvestors — named, or empty", () => {
     assert.ok(result.investors.includes("3one4 Capital"));
   });
 
+  it("keeps the person, not the description of them (production, 2026-10)", () => {
+    const result = extractInvestors(
+      "Acme raises Rs 10 crore",
+      "has raised Rs 10 crore in a seed round led by Blume Ventures, with participation from former RBL Bank executive director Rajeev Ahuja and Srinath Setty through his family office Trasa Ventures.",
+    );
+    assert.equal(result.leadInvestor, "Blume Ventures");
+    assert.ok(result.investors.includes("Rajeev Ahuja"), JSON.stringify(result.investors));
+    assert.ok(result.investors.includes("Srinath Setty"), JSON.stringify(result.investors));
+    assert.ok(!result.investors.some((name) => /former|through/i.test(name)));
+  });
+
   it("reads two co-leads", () => {
     const result = extractInvestors(
       "TrueFan AI raises $10 million",

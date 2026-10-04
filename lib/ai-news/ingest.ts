@@ -454,6 +454,7 @@ async function processSource(
           storyKey: entry.storyKey,
           primaryEntity: entry.classification.primaryEntity?.name ?? null,
           publishedAt: entry.fetched.publishedAt,
+          category: entry.classification.category,
         },
         now,
       )?.id ??

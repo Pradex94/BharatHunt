@@ -17,7 +17,7 @@ import { getIsAdmin } from "@/lib/admin";
 import { formatIstDateTime, relativeTime } from "@/lib/funding/format";
 import { cn } from "@/lib/utils";
 import { assessJob, JOB_SCHEDULES, nextCronRun, worstHealth, type Health, type JobAssessment } from "@/lib/platform-health";
-import { getPlatformHealth } from "@/services/platform-health";
+import { getPlatformHealth, type PlatformHealth } from "@/services/platform-health";
 
 export const metadata = {
   title: "Platform health",
@@ -81,6 +81,111 @@ function SystemCard({
         <Link href={href} className="mt-auto text-sm font-semibold text-primary hover:text-primary-active">
           Open &rarr;
         </Link>
+      )}
+    </section>
+  );
+}
+
+/**
+ * What is wrong in the data rather than in the jobs: duplicates, gaps and
+ * extraction mistakes, each linked to where it is fixed. Nothing here changes
+ * data — it only shows it.
+ */
+function DataQualityPanel({ quality }: { quality: PlatformHealth["quality"] }) {
+  if (!quality.ok) {
+    return <p className="rounded-lg bg-error/10 px-4 py-3 text-sm text-error">Data quality unavailable: {quality.error}</p>;
+  }
+  const q = quality.data;
+  const issues = q.duplicateListings.length + q.suspiciousInvestors.length + q.unverifiedCompanyNames.length;
+  return (
+    <section className="flex flex-col gap-4 rounded-2xl border border-border bg-card p-5">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className="font-sans text-base font-semibold tracking-normal text-ink">Data quality</h2>
+          <p className="text-xs text-muted">Problems in the records themselves. Each links to where it is fixed.</p>
+        </div>
+        <Status health={issues > 0 ? "warn" : "ok"} />
+      </div>
+      <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {[
+          { label: "In “Other”", value: q.uncategorised, href: "/admin/intelligence" },
+          { label: "No logo", value: q.missingLogo },
+          { label: "Description under 40 characters", value: q.thinDescription },
+          { label: "No state recorded", value: q.missingState },
+        ].map((stat) => (
+          <div key={stat.label} className="rounded-xl bg-secondary-bg/60 p-3">
+            <dd className="text-xl font-bold text-ink">
+              <Numeric>{stat.value}</Numeric>
+            </dd>
+            <dt className="text-xs text-muted">
+              {stat.href ? (
+                <Link href={stat.href} className="hover:text-primary">
+                  {stat.label} &rarr;
+                </Link>
+              ) : (
+                stat.label
+              )}
+            </dt>
+          </div>
+        ))}
+      </dl>
+      <dl className="flex flex-col gap-1.5">
+        <Row label={`Funding rounds missing a stage (of ${q.roundsMissing.total})`}>{q.roundsMissing.stage}</Row>
+        <Row label="…missing a location">{q.roundsMissing.location}</Row>
+        <Row label="…with no investors named">{q.roundsMissing.investors}</Row>
+      </dl>
+      {q.duplicateListings.length > 0 && (
+        <div className="flex flex-col gap-1.5">
+          <h3 className="text-sm font-semibold text-ink">Same website listed more than once</h3>
+          <ul className="flex flex-col gap-1 text-sm text-body">
+            {q.duplicateListings.map((group) => (
+              <li key={group.key}>
+                <span className="font-mono text-xs text-muted">{group.key}</span>:{" "}
+                {group.products.map((product, index) => (
+                  <span key={product.slug}>
+                    {index > 0 && ", "}
+                    <Link href={`/products/${product.slug}`} className="text-ink hover:text-primary">
+                      {product.name}
+                    </Link>
+                  </span>
+                ))}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {q.unverifiedCompanyNames.length > 0 && (
+        <div className="flex flex-col gap-1.5">
+          <h3 className="text-sm font-semibold text-ink">Daily 5 company names that don&apos;t match the product</h3>
+          <p className="text-xs text-muted">
+            Hidden on the site already. The product description may still say &ldquo;built by&rdquo; them — see
+            scripts/daily-agent-fix-company-claims.mjs.
+          </p>
+          <ul className="flex flex-col gap-1 text-sm text-body">
+            {q.unverifiedCompanyNames.map((item) => (
+              <li key={item.slug}>
+                <Link href={`/products/${item.slug}/edit`} className="text-ink hover:text-primary">
+                  {item.name}
+                </Link>{" "}
+                — stored as &ldquo;{item.stored}&rdquo;
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {q.suspiciousInvestors.length > 0 && (
+        <div className="flex flex-col gap-1.5">
+          <h3 className="text-sm font-semibold text-ink">Investor names that read like descriptions</h3>
+          <ul className="flex flex-col gap-1 text-sm text-body">
+            {q.suspiciousInvestors.map((name) => (
+              <li key={name}>
+                <Link href="/admin/funding" className="hover:text-primary">
+                  {name}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
     </section>
   );
@@ -185,6 +290,8 @@ export default async function PlatformHealthPage() {
       ) : (
         <p className="rounded-lg bg-error/10 px-4 py-3 text-sm text-error">Catalogue counts unavailable: {health.catalogue.error}</p>
       )}
+
+      <DataQualityPanel quality={health.quality} />
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
         <SystemCard

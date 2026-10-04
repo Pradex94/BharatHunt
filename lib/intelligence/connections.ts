@@ -17,7 +17,7 @@
  * Framework-agnostic, relative `.ts` imports only.
  */
 
-import { isNotAProductSite, nameKey, normalizeSite } from "../daily-agent/domain.ts";
+import { cleanLegalName, companyNameFits, isNotAProductSite, nameKey, normalizeSite } from "../daily-agent/domain.ts";
 
 export type LinkableProduct = { name: string; website_url: string | null; companyName?: string | null };
 export type LinkableStartup = { name: string; website: string | null };
@@ -89,6 +89,20 @@ export function plausibleCompanyName(raw: string | null | undefined): string | n
   if (!name || name.length > 60 || name.split(" ").length > 7) return null;
   if (/\b(reach|contact|email|write to|the team|team at|click|visit)\b/i.test(name)) return null;
   return name;
+}
+
+/**
+ * A stored Daily 5 company name, or null unless it reads as a name *and*
+ * visibly belongs to this product (companyNameFits). Rows extracted before
+ * that check existed carry auditors and parent groups; this keeps them off
+ * the page without rewriting history.
+ */
+export function verifiedCompanyName(
+  raw: string | null | undefined,
+  product: { name: string; website_url: string | null },
+): string | null {
+  const name = plausibleCompanyName(cleanLegalName(raw));
+  return name && companyNameFits(name, { name: product.name, website: product.website_url }) ? name : null;
 }
 
 /** BharatHunt's own engagement totals for one product over a window. */

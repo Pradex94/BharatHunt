@@ -68,6 +68,7 @@ export type IntelligenceStatus = {
     counts: Record<ReviewFlag, number>;
     otherTotal: number;
     items: {
+      id: string;
       slug: string;
       name: string;
       flag: ReviewFlag;
@@ -258,6 +259,7 @@ function classificationReview(rows: (KnowledgeInput & { slug: string })[]): Inte
     if (!review) continue;
     counts[review.flag] += 1;
     items.push({
+      id: row.id,
       slug: row.slug,
       name: row.name,
       flag: review.flag,

@@ -9,7 +9,7 @@ import type { ExistingProduct } from "@/lib/daily-agent/domain";
 import type { StoredArticle, StoredRound } from "@/lib/daily-agent/sources";
 import type { CandidateStatus } from "@/lib/daily-agent/types";
 import type { Database, Json } from "@/types/database";
-import { plausibleCompanyName } from "@/lib/intelligence/connections";
+import { verifiedCompanyName } from "@/lib/intelligence/connections";
 
 /**
  * Every database read and write the Daily 5 agent makes.
@@ -478,8 +478,8 @@ export const getDaily5Day = cache(async (date: string): Promise<Daily5Day | null
       upvote_count: product.upvote_count ?? 0,
       rank: products.length + 1,
       candidateId: row.id,
-      // The extractor occasionally keeps a sentence; never print one as a company.
-      companyName: plausibleCompanyName(facts.companyName),
+      // Older rows can name an auditor or parent group; only a verified fit is shown.
+      companyName: verifiedCompanyName(facts.companyName, product),
       city: facts.city ?? null,
       whyInteresting: content.whyInteresting ?? null,
     });

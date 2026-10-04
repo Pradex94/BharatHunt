@@ -9,6 +9,10 @@ import { INTELLIGENCE_CACHE_PREFIX } from "@/lib/intelligence/cache-keys";
 import { reindexProductIntelligence } from "@/lib/intelligence/reindex";
 import { refreshDiscoverySignals } from "@/lib/intelligence/trending";
 import { checkRateLimitByUser } from "@/lib/rate-limit";
+import { createServiceClient } from "@/lib/supabase/service";
+import { PRODUCT_CATEGORIES, type ProductCategory } from "@/lib/constants";
+import { PRODUCTS_CACHE_PREFIX } from "@/services/products";
+import { scheduleIntelligenceRefresh } from "@/lib/intelligence/schedule";
 
 /**
  * Admin controls on /admin/intelligence. Gated by `getIsAdmin()` (the real
@@ -18,14 +22,16 @@ import { checkRateLimitByUser } from "@/lib/rate-limit";
 
 export type IntelligenceAdminResult = { ok: true; message: string } | { ok: false; error: string };
 
-async function guard(): Promise<{ ok: true; userId: string } | { ok: false; error: string }> {
+async function guard(
+  scope: "intelligenceAdmin" | "categoryApply" = "intelligenceAdmin",
+): Promise<{ ok: true; userId: string } | { ok: false; error: string }> {
   const { userId } = await auth();
   if (!userId) return { ok: false, error: "Please log in." };
   if (!(await getIsAdmin())) {
     console.warn(JSON.stringify({ event: "intelligence_admin_denied", userId, at: new Date().toISOString() }));
     return { ok: false, error: "Admins only." };
   }
-  const limit = await checkRateLimitByUser("intelligenceAdmin", userId);
+  const limit = await checkRateLimitByUser(scope, userId);
   if (!limit.ok) return { ok: false, error: limit.message };
   return { ok: true, userId };
 }
@@ -64,4 +70,36 @@ export async function clearIntelligenceCache(): Promise<IntelligenceAdminResult>
   if (!access.ok) return access;
   await cacheInvalidatePrefix(INTELLIGENCE_CACHE_PREFIX);
   return { ok: true, message: "Intelligence cache cleared." };
+}
+
+/**
+ * Move one product to the category its listing describes — the "apply" on a
+ * Category review suggestion. Only an admin, only to a stored category, and
+ * only by explicit click: the review list never recategorises on its own.
+ */
+export async function applyCategorySuggestion(productId: string, category: string): Promise<IntelligenceAdminResult> {
+  const access = await guard("categoryApply");
+  if (!access.ok) return access;
+  if (!(PRODUCT_CATEGORIES as readonly string[]).includes(category)) {
+    return { ok: false, error: "Not a BharatHunt category." };
+  }
+
+  const db = createServiceClient();
+  const { data, error } = await db
+    .from("products")
+    .update({ category: category as ProductCategory })
+    .eq("id", productId)
+    .eq("status", "published")
+    .select("slug, name, category")
+    .maybeSingle();
+  if (error) return { ok: false, error: error.message };
+  if (!data) return { ok: false, error: "That product is not published." };
+
+  console.log(JSON.stringify({ event: "category_applied", by: access.userId, productId, category, at: new Date().toISOString() }));
+  await Promise.all([cacheInvalidatePrefix(PRODUCTS_CACHE_PREFIX), cacheInvalidatePrefix(INTELLIGENCE_CACHE_PREFIX)]);
+  scheduleIntelligenceRefresh("category-applied");
+  revalidatePath(`/products/${data.slug}`);
+  revalidatePath("/admin/intelligence");
+  revalidatePath("/marketplace");
+  return { ok: true, message: `${data.name} is now in ${category}.` };
 }

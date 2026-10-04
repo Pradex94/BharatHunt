@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 
 import { Button } from "@/components/ui/button";
 import {
+  applyCategorySuggestion,
   clearIntelligenceCache,
   rebuildIntelligence,
   recalculateTrending,
@@ -39,5 +40,30 @@ export function IntelligenceActions() {
         </p>
       )}
     </div>
+  );
+}
+
+/**
+ * "Apply" on one Category review row: moves the product to the suggested
+ * category. One explicit click per product; the server action re-checks admin
+ * rights and that the category is a stored one.
+ */
+export function ApplyCategoryButton({ productId, category }: { productId: string; category: string }) {
+  const [result, setResult] = useState<IntelligenceAdminResult | null>(null);
+  const [isPending, startTransition] = useTransition();
+
+  if (result?.ok) return <span className="text-xs text-muted">Moved</span>;
+  return (
+    <span className="flex flex-col items-start gap-1">
+      <Button
+        size="sm"
+        variant="outline"
+        disabled={isPending}
+        onClick={() => startTransition(async () => setResult(await applyCategorySuggestion(productId, category)))}
+      >
+        {isPending ? "Moving…" : `Move to ${category}`}
+      </Button>
+      {result && !result.ok && <span className="text-xs text-destructive">{result.error}</span>}
+    </span>
   );
 }

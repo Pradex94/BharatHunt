@@ -85,3 +85,39 @@ export const JOB_SCHEDULES = {
   daily5: { cron: "23 * * * *", label: "Hourly tick; runs at the time set in admin", expectedHours: 24 },
   intelligence: { cron: "41 * * * *", label: "Hourly", expectedHours: 1 },
 } as const;
+
+// ── Data quality ─────────────────────────────────────────────────────────
+
+/**
+ * Published listings that share a website — the same product launched twice,
+ * which splits its votes and comments. Keyed by registrable domain, except on
+ * shared hosting where each subdomain is its own product (normalizeSite).
+ */
+export function duplicateListings<T extends { id: string; slug: string; name: string; website_url: string | null }>(
+  products: T[],
+  siteKey: (url: string | null) => string | null,
+): { key: string; products: T[] }[] {
+  const groups = new Map<string, T[]>();
+  for (const product of products) {
+    const key = siteKey(product.website_url);
+    if (!key) continue;
+    groups.set(key, [...(groups.get(key) ?? []), product]);
+  }
+  return [...groups].filter(([, list]) => list.length > 1).map(([key, list]) => ({ key, products: list }));
+}
+
+/**
+ * An investor "name" that is really a description the extractor kept
+ * ("former RBL Bank executive director Rajeev Ahuja"): a lowercase descriptor
+ * word, a phrase like "through his family office", or simply too many words
+ * for a name.
+ */
+export function suspiciousInvestorName(name: string): boolean {
+  const words = name.trim().split(/\s+/);
+  if (words.length > 6) return true;
+  if (/\b(former|ex-|executive|director|through|family office|founder of|co-founder of|ceo of|partner at|along with|and others|led by)\b/i.test(name)) {
+    return true;
+  }
+  // A name is capitalised; a description starts with a lowercase word.
+  return /^[a-z]/.test(name.trim());
+}

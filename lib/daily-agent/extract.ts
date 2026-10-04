@@ -15,7 +15,7 @@
  */
 
 import { decodeEntities, extractMetadata, parseAttributes, toAbsolute } from "../metadata-extract.ts";
-import { normalizeSite } from "./domain.ts";
+import { cleanLegalName, companyNameFits, normalizeSite } from "./domain.ts";
 import type { Facts, PricingType } from "./types.ts";
 
 /** One page as the fetcher returned it. */
@@ -189,7 +189,10 @@ export function extractSite(pagesIn: FetchedPage[]): SiteExtraction {
     .filter((name) => name.split(" ").length >= 2)
     .slice(0, 4) ?? [];
 
-  const legal = LEGAL_NAME.exec(allText)?.[1]?.replace(/\s+/g, " ").trim() ?? null;
+  // A registered name on the page is only the maker's when it visibly names
+  // the product; a footer can as easily name an auditor or a parent group.
+  const legalName = cleanLegalName(LEGAL_NAME.exec(allText)?.[1]);
+  const legal = companyNameFits(legalName, { name: meta.name, website: home.url }) ? legalName : null;
   const pricing = detectPricing(allText);
   const description = meta.description?.trim() || null;
   const aboutText = pages.map((page) => firstProse(page.text)).find(Boolean) ?? null;

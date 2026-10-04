@@ -72,6 +72,16 @@ those through the PowerShell tool instead.
   own website domain agree (tested). No match → no funding section. The same
   file owns the "why people are discovering this" floors; product-page reads
   live in `services/product-connections.ts` (cached, fail-soft, no model calls).
+- **Daily 5 never states a company it cannot tie to the product.**
+  `companyNameFits` (lib/daily-agent/domain.ts) gates extraction;
+  `verifiedCompanyName` gates display. Footers name auditors and parent groups.
+- **AI story grouping has a content-word test** (`sameEventByContent`,
+  lib/ai-news/grouping.ts) tuned on production headlines in
+  `tests/ai-news-grouping.test.ts` — strict at ingestion (auto-merge), lenient
+  for the admin "Suggested merges" list. Re-run the fixtures before touching
+  its thresholds; a false merge hides a story.
+- **Platform audit:** `docs/platform-audit-2026-10.md` holds the feature
+  inventory and P0–P3 list; update it rather than re-auditing from scratch.
 - **Admin → Platform Health (`/admin/health`)** reads the run tables each
   pipeline already writes; thresholds and the workflow cron mirror are in
   `lib/platform-health.ts` (a test fails if `.github/workflows` crons drift).
