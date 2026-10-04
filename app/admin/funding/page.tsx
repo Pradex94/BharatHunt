@@ -62,7 +62,7 @@ export default async function AdminFundingPage() {
               </div>
             </div>
 
-            <Link
+            <Link prefetch={false}
               href="/admin"
               className="inline-flex min-h-11 items-center gap-2 rounded-md border border-border bg-card px-4 text-sm font-semibold text-ink transition-colors hover:border-primary/30 hover:bg-secondary-bg"
             >

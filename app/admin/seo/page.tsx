@@ -179,7 +179,7 @@ export default async function SeoAuditPage() {
           <p className="text-xs text-muted">
             Counts describe what this site declares, not what any search engine has done with it.
             Whether a page is actually indexed is only visible in{" "}
-            <Link
+            <Link prefetch={false}
               href="https://search.google.com/search-console"
               className="text-primary hover:underline"
               target="_blank"

@@ -72,7 +72,7 @@ function getLimiter(name: RateLimitName): Ratelimit | null {
     // prefetch and Server Action — including each of the 21k scanner requests
     // on 2026-09-18. Its rejections are logged as `rate_limit_exceeded` in
     // proxy.ts instead. The endpoint limiters fire only on real actions.
-    analytics: name !== "globalIp",
+    analytics: name !== "globalIp" && name !== "globalIpBackground",
     ephemeralCache,
   });
   limiters.set(name, limiter);

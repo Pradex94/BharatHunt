@@ -183,7 +183,7 @@ export function PipelineRunner({
                 </div>
 
                 <div className="flex shrink-0 items-center gap-2">
-                  <Link
+                  <Link prefetch={false}
                     href={pipeline.manageHref}
                     className="text-xs font-medium text-primary hover:underline"
                   >
