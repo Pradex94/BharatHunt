@@ -1,6 +1,7 @@
 import "server-only";
 
 import { createServiceClient } from "@/lib/supabase/service";
+import { suggestStoryMerges, type MergeSuggestion } from "@/lib/ai-news/grouping";
 
 /**
  * The reads behind /admin/ai-news.
@@ -150,6 +151,26 @@ export async function getRecentAiStoriesAdmin(limit = 60): Promise<AdminAiStory[
 
   if (error) throw new Error(`Failed to load AI stories: ${error.message}`);
   return (data ?? []) as AdminAiStory[];
+}
+
+/**
+ * Separately published stories that read as one event (lib/ai-news/grouping.ts
+ * `suggestStoryMerges`), from the last seven days of live and pending
+ * stories. Suggestions only: the admin merges with the existing action.
+ */
+export async function getStoryMergeSuggestions(): Promise<MergeSuggestion<AdminAiStory>[]> {
+  const supabase = createServiceClient();
+  const since = new Date(Date.now() - 7 * 86_400_000).toISOString();
+  const { data, error } = await supabase
+    .from("ai_stories")
+    .select(ADMIN_STORY_COLUMNS)
+    .in("status", ["published", "pending"])
+    .gte("last_seen_at", since)
+    .order("last_seen_at", { ascending: false })
+    .limit(1500);
+
+  if (error) throw new Error(`Failed to load AI stories for merge suggestions: ${error.message}`);
+  return suggestStoryMerges((data ?? []) as AdminAiStory[]);
 }
 
 export type AdminAiArticle = {

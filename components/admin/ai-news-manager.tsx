@@ -32,6 +32,7 @@ import {
   updateAiStoryMeta,
 } from "@/lib/actions/ai-news";
 import type { IngestionSummary } from "@/lib/ai-news/ingest";
+import type { MergeSuggestion } from "@/lib/ai-news/grouping";
 import type {
   AdminAiArticle,
   AdminAiRun,
@@ -62,6 +63,7 @@ type Props = {
   stories: AdminAiStory[];
   articles: AdminAiArticle[];
   runs: AdminAiRun[];
+  mergeSuggestions: MergeSuggestion<AdminAiStory>[];
 };
 
 const STATUS_BADGE: Record<string, string> = {
@@ -115,7 +117,7 @@ function Panel({
   );
 }
 
-export function AiNewsManager({ stats, sources, pending, stories, articles, runs }: Props) {
+export function AiNewsManager({ stats, sources, pending, stories, articles, runs, mergeSuggestions }: Props) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -446,6 +448,7 @@ export function AiNewsManager({ stats, sources, pending, stories, articles, runs
       </Panel>
 
       {/* ── Merge ──────────────────────────────────────────────────────── */}
+      <SuggestedMerges suggestions={mergeSuggestions} disabled={isPending} onMerge={run} />
       <MergePanel stories={stories} disabled={isPending} onMerge={run} />
 
       {/* ── Sources ────────────────────────────────────────────────────── */}
@@ -683,6 +686,69 @@ export function AiNewsManager({ stats, sources, pending, stories, articles, runs
  * the same company in the same week, and a wrong merge destroys a story while a
  * missed one merely shows it twice. So the misses land here.
  */
+/**
+ * Stories published separately that read as one event — the same rule new
+ * ingestion now applies (lib/ai-news/grouping.ts), run over the last week so
+ * the duplicates already live can be folded in. One click per duplicate; the
+ * kept story is the one with the most sources.
+ */
+function SuggestedMerges({
+  suggestions,
+  disabled,
+  onMerge,
+}: {
+  suggestions: MergeSuggestion<AdminAiStory>[];
+  disabled: boolean;
+  onMerge: (task: () => Promise<{ ok: true } | { ok: false; error: string }>) => void;
+}) {
+  const duplicates = suggestions.reduce((sum, suggestion) => sum + suggestion.duplicates.length, 0);
+  return (
+    <Panel
+      title={`Suggested merges (${duplicates})`}
+      description="Separately published stories about the same event, from the last 7 days. Review each: merging moves the duplicate's articles onto the kept story."
+    >
+      {suggestions.length === 0 ? (
+        <p className="p-4 text-sm text-muted">No duplicate events in the last 7 days.</p>
+      ) : (
+        <ul className="divide-y divide-border">
+          {suggestions.map((suggestion) => (
+            <li key={suggestion.keep.id} className="flex flex-col gap-2 p-4">
+              <p className="text-sm text-ink">
+                <span className="text-xs font-semibold text-muted uppercase">Keep · {suggestion.keep.source_count} sources</span>
+                <br />
+                <Link href={`/ai/${suggestion.keep.slug}`} className="font-medium hover:text-primary">
+                  {suggestion.keep.title}
+                </Link>
+              </p>
+              {suggestion.duplicates.map((duplicate) => (
+                <div key={duplicate.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-secondary-bg/60 px-3 py-2">
+                  <span className="min-w-0 flex-1 text-sm text-body">
+                    {duplicate.title}{" "}
+                    <span className="text-xs text-muted">
+                      · {duplicate.status} · {duplicate.source_count} source{duplicate.source_count === 1 ? "" : "s"}
+                    </span>
+                  </span>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={disabled}
+                    onClick={() => onMerge(() => mergeAiStories(duplicate.id, suggestion.keep.id))}
+                    className="gap-1.5"
+                  >
+                    <Merge aria-hidden="true" className="size-3.5" />
+                    Merge into kept
+                  </Button>
+                </div>
+              ))}
+            </li>
+          ))}
+        </ul>
+      )}
+    </Panel>
+  );
+}
+
 function MergePanel({
   stories,
   disabled,

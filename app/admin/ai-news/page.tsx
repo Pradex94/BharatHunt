@@ -13,6 +13,7 @@ import {
   getPendingAiStoriesAdmin,
   getRecentAiArticlesAdmin,
   getRecentAiStoriesAdmin,
+  getStoryMergeSuggestions,
 } from "@/services/ai-news-admin";
 
 export const metadata = {
@@ -41,13 +42,14 @@ export default async function AdminAiNewsPage() {
   if (!userId) redirect("/login");
   if (!(await getIsAdmin())) redirect("/");
 
-  const [stats, sources, pending, stories, articles, runs] = await Promise.all([
+  const [stats, sources, pending, stories, articles, runs, mergeSuggestions] = await Promise.all([
     getAiAdminStats(),
     getAiSourcesAdmin(),
     getPendingAiStoriesAdmin(),
     getRecentAiStoriesAdmin(),
     getRecentAiArticlesAdmin(),
     getAiIngestionRunsAdmin(),
+    getStoryMergeSuggestions(),
   ]);
 
   return (
@@ -86,6 +88,7 @@ export default async function AdminAiNewsPage() {
           stories={stories}
           articles={articles}
           runs={runs}
+          mergeSuggestions={mergeSuggestions}
         />
       </Container>
     </main>

@@ -13,7 +13,7 @@ import { auth } from "@clerk/nextjs/server";
 
 import { Container } from "@/components/ui/container";
 import { Numeric } from "@/components/ui/typography";
-import { IntelligenceActions } from "@/components/admin/intelligence-actions";
+import { ApplyCategoryButton, IntelligenceActions } from "@/components/admin/intelligence-actions";
 import { getIsAdmin } from "@/lib/admin";
 import { formatDate } from "@/lib/format-date";
 import { getIntelligenceStatus, type SignalTotals } from "@/services/intelligence-admin";
@@ -228,7 +228,7 @@ export default async function IntelligenceAdminPage() {
           <Stat label="Too little detail" value={status.classification.counts["too-little-detail"]} note="Thin listing, not a wrong one" />
         </div>
         <div className="overflow-x-auto rounded-xl border border-border bg-card">
-          <table className="w-full min-w-[40rem] text-left text-sm">
+          <table className="w-full min-w-[48rem] text-left text-sm">
             <thead>
               <tr className="border-b border-border text-xs text-muted">
                 <th className="p-3 font-medium">Product</th>
@@ -236,12 +236,15 @@ export default async function IntelligenceAdminPage() {
                 <th className="p-3 font-medium">Listing describes</th>
                 <th className="p-3 font-medium">Confidence</th>
                 <th className="p-3 font-medium">Evidence</th>
+                <th className="p-3 font-medium">
+                  <span className="sr-only">Action</span>
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
               {status.classification.items.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="p-3 text-muted">
+                  <td colSpan={6} className="p-3 text-muted">
                     Every category is supported by its listing.
                   </td>
                 </tr>
@@ -259,6 +262,11 @@ export default async function IntelligenceAdminPage() {
                     {item.suggested ? <Numeric>{`${Math.round(item.confidence * 100)}%`}</Numeric> : "—"}
                   </td>
                   <td className="p-3 text-xs text-muted">{item.evidence.join(", ") || "No mappable terms"}</td>
+                  <td className="p-3">
+                    {item.suggested && item.flag !== "too-little-detail" && (
+                      <ApplyCategoryButton productId={item.id} category={item.suggested} />
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>

@@ -260,7 +260,7 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
       getComparePairsFor(product.id, 4),
       // Thirty days of aggregated signals (hourly job), cached — never raw events.
       getProductEngagement(product.id),
-      curated ? getDaily5Origin(product.id) : Promise.resolve(null),
+      curated ? getDaily5Origin(product) : Promise.resolve(null),
     ],
   );
   // Needs the Daily 5 company name, so it follows the batch. Cached for hours,
@@ -770,9 +770,12 @@ export default async function ProductPage({ params }: { params: Promise<{ slug: 
               <Building2 className="size-5" aria-hidden="true" />
             </span>
             <div className="flex min-w-0 flex-col gap-1 text-sm">
-              <p className="font-semibold break-words text-ink">
+              {/* A curated pick names its company only when verified (the
+                  registered name fits the product, or a funding record's name
+                  and domain agree); otherwise it says so rather than guessing. */}
+              <p className={cn("break-words", curated && !(daily5?.companyName ?? funding?.name) ? "text-muted" : "font-semibold text-ink")}>
                 {curated
-                  ? (daily5?.companyName ?? funding?.name ?? product.name)
+                  ? (daily5?.companyName ?? funding?.name ?? "Company not confirmed")
                   : (product.creator?.display_name ?? funding?.name)}
               </p>
               <p className="text-body">

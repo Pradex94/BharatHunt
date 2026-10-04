@@ -22,6 +22,7 @@ import { recordSearch } from "@/lib/search-analytics";
 import { findMatches, normalizeMatchRequest, type MatchResponse } from "@/services/match";
 import { getRecentlyDiscovered } from "@/services/intelligence";
 import { getUpvotedProductIds } from "@/services/products";
+import { compareHref } from "@/lib/compare-links";
 
 type DiscoverSearchParams = Promise<{ q?: string; budget?: string; for?: string; category?: string }>;
 
@@ -133,6 +134,16 @@ export default async function DiscoverPage({ searchParams }: { searchParams: Dis
                   <MatchResultCard key={result.product.id} result={result} />
                 ))}
               </div>
+              {/* The next step after a shortlist: the same facts side by side.
+                  No verdict — the compare page lines up what each listing says. */}
+              {results.length >= 2 && (
+                <Link
+                  href={compareHref(results.slice(0, 3).map((result) => result.product.slug))}
+                  className={buttonVariants({ variant: "outline", size: "sm", className: "self-start" })}
+                >
+                  Compare the top {Math.min(3, results.length)} side by side
+                </Link>
+              )}
             </>
           ) : (
             <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-border bg-card px-6 py-12 text-center">

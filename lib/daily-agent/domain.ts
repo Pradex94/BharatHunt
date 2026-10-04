@@ -216,3 +216,67 @@ export function checkDuplicate(
   }
   return { kind: "unique" };
 }
+
+/** Legal suffixes a company drops from its brand but keeps in its registered name. */
+const LEGAL_SUFFIX = /\b(private|pvt|p|limited|ltd|llp|inc|llc|corp|co|corporation|company)\b\.?/gi;
+/** Words too common in company names to identify one ("Acme Labs" vs "Other Labs"). */
+const GENERIC_NAME_WORDS = new Set([
+  "labs", "tech", "technologies", "technology", "solutions", "systems", "software", "digital", "designs",
+  "services", "india", "global", "ventures", "group", "studio", "cloud", "app", "apps", "online", "network",
+]);
+
+/**
+ * A registered name pulled out of page text, cut back to the name itself.
+ *
+ * The extractor's pattern captures up to 60 characters before "Private
+ * Limited", which can include the sentence leading into it: "Reach the Traccia
+ * team at Algen AI Private Limited". A registered name is capitalised words
+ * (and "&"), so everything up to the last lowercase word is dropped — leaving
+ * "Algen AI Private Limited". Null when nothing name-shaped is left.
+ */
+export function cleanLegalName(raw: string | null | undefined): string | null {
+  const words = (raw ?? "").replace(/\s+/g, " ").trim().split(" ").filter(Boolean);
+  let start = 0;
+  words.forEach((word, index) => {
+    if (/^[a-z]/.test(word) && word !== "&") start = index + 1;
+  });
+  const name = words.slice(start).join(" ");
+  const core = name.replace(LEGAL_SUFFIX, " ").replace(/[^A-Za-z0-9]+/g, "");
+  return core.length >= 2 && name.split(" ").length <= 8 ? name : null;
+}
+
+/**
+ * Whether a registered company name plausibly belongs to this product.
+ *
+ * A product site's footer names *some* company — often its own, but also an
+ * auditor, a parent group, a hosting partner or a client ("BDO India LLP" on a
+ * chatbot site). BharatHunt only states "built by X" when X visibly is the
+ * product: a distinctive word of the product name or domain appears in the
+ * company name, or the two names are near-identical spellings ("QuNu Labs"
+ * for "QNu Labs"). Anything else is "not confirmed", never a guess.
+ */
+export function companyNameFits(
+  company: string | null | undefined,
+  product: { name?: string | null; website?: string | null },
+): boolean {
+  if (!company) return false;
+  const companyCore = company.toLowerCase().replace(LEGAL_SUFFIX, " ");
+  const companyKey = companyCore.replace(/[^a-z0-9]+/g, "");
+  if (companyKey.length < 3) return false;
+
+  const site = normalizeSite(product.website);
+  const label = site ? site.key.split(".")[0].replace(/[^a-z0-9]/g, "") : "";
+  const productWords = (product.name ?? "")
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((word) => word.length >= 4 && !GENERIC_NAME_WORDS.has(word));
+  const productKey = (product.name ?? "").toLowerCase().replace(/[^a-z0-9]+/g, "");
+
+  const tokens = [...productWords, ...(label.length >= 4 ? [label] : [])];
+  if (tokens.some((token) => companyKey.includes(token))) return true;
+  // The company's first distinctive word inside the domain: "fractal" in fractal.ai.
+  const companyWords = companyCore.split(/[^a-z0-9]+/).filter((word) => word.length >= 4 && !GENERIC_NAME_WORDS.has(word));
+  if (label && companyWords.some((word) => label.includes(word))) return true;
+  // Near-identical spellings of the whole name, legal suffix removed.
+  return [productKey, label].some((key) => key.length >= 4 && nameSimilarity(key, companyKey) >= 0.7);
+}

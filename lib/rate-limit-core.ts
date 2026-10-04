@@ -258,6 +258,12 @@ export const RATE_LIMITS = {
     windowSeconds: 600,
     message: "Rebuilt recently — give it a few minutes.",
   },
+  /** Applying Category review suggestions, one product per click — a queue's worth, not a script's. */
+  categoryApply: {
+    limit: 60,
+    windowSeconds: 600,
+    message: "Many category changes in a row — give it a few minutes.",
+  },
   /**
    * Saving and unsaving a product, keyed per user and IP. One row each, but
    * saves feed the "Most saved" signal, so the button must not be a lever.

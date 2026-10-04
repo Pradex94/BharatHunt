@@ -3,6 +3,9 @@ import "server-only";
 import { createServiceClient } from "@/lib/supabase/service";
 import { getCacheMetrics, isCacheEnabled } from "@/lib/cache";
 import { contentHash, KNOWLEDGE_VERSION, type KnowledgeInput } from "@/lib/intelligence/knowledge";
+import { normalizeSite } from "@/lib/daily-agent/domain";
+import { verifiedCompanyName } from "@/lib/intelligence/connections";
+import { duplicateListings, suspiciousInvestorName } from "@/lib/platform-health";
 
 /**
  * Admin → Platform Health: one read of every background system's last
@@ -72,6 +75,17 @@ export type IndexHealth = {
   lastSignalsAt: string | null;
 };
 
+export type DataQuality = {
+  duplicateListings: { key: string; products: { slug: string; name: string }[] }[];
+  uncategorised: number;
+  missingLogo: number;
+  thinDescription: number;
+  missingState: number;
+  roundsMissing: { stage: number; location: number; investors: number; total: number };
+  suspiciousInvestors: string[];
+  unverifiedCompanyNames: { slug: string; name: string; stored: string }[];
+};
+
 export type PlatformHealth = {
   checkedAt: string;
   catalogue: Block<{ published: number; pending: number; makers: number; curated: number; publicLists: number }>;
@@ -80,6 +94,7 @@ export type PlatformHealth = {
   daily5: Block<Daily5Health>;
   index: Block<IndexHealth>;
   search: Block<{ searches24h: number; zeroResult24h: number; matches24h: number }>;
+  quality: Block<DataQuality>;
   cache: { enabled: boolean; hits: number; misses: number };
   config: { cloudinary: boolean; llmKey: boolean; jobSecret: boolean };
 };
@@ -90,7 +105,7 @@ export async function getPlatformHealth(): Promise<PlatformHealth> {
   const db = createServiceClient();
   const since24h = new Date(Date.now() - 86_400_000).toISOString();
 
-  const [catalogue, ai, funding, daily5, index, search, cacheMetrics] = await Promise.all([
+  const [catalogue, ai, funding, daily5, index, search, quality, cacheMetrics] = await Promise.all([
     block(async () => {
       const [published, pending, makers, curated, publicLists] = await Promise.all([
         db.from("products").select("id", count).eq("status", "published"),
@@ -219,6 +234,52 @@ export async function getPlatformHealth(): Promise<PlatformHealth> {
       };
     }),
 
+    block<DataQuality>(async () => {
+      const [products, rounds, investors, picks] = await Promise.all([
+        db
+          .from("products")
+          .select("id, slug, name, website_url, category, hero_image_url, description, launch_state")
+          .eq("status", "published")
+          .limit(5000),
+        db.from("funding_rounds").select("funding_stage, location, city, investors").eq("status", "published").limit(5000),
+        db.from("funding_investors").select("name").gt("published_deal_count", 0).limit(5000),
+        db
+          .from("daily_agent_candidates")
+          .select("facts, product:products!daily_agent_candidates_product_id_fkey(slug, name, website_url)")
+          .eq("status", "published"),
+      ]);
+      const rows = must(products);
+      const roundRows = must(rounds) as { funding_stage: string | null; location: string | null; city: string | null; investors: string[] | null }[];
+      return {
+        duplicateListings: duplicateListings(rows, (url) => normalizeSite(url)?.key ?? null).map((group) => ({
+          key: group.key,
+          products: group.products.map(({ slug, name }) => ({ slug, name })),
+        })),
+        uncategorised: rows.filter((row) => row.category === "Other").length,
+        missingLogo: rows.filter((row) => !row.hero_image_url).length,
+        thinDescription: rows.filter((row) => (row.description ?? "").trim().length < 40).length,
+        missingState: rows.filter((row) => !row.launch_state).length,
+        roundsMissing: {
+          total: roundRows.length,
+          stage: roundRows.filter((row) => !row.funding_stage || row.funding_stage === "Undisclosed").length,
+          location: roundRows.filter((row) => !row.location && !row.city).length,
+          investors: roundRows.filter((row) => !row.investors?.length).length,
+        },
+        suspiciousInvestors: must(investors)
+          .map((row) => row.name)
+          .filter(suspiciousInvestorName)
+          .slice(0, 20),
+        unverifiedCompanyNames: (picks.error ? [] : (picks.data ?? [])).flatMap((row) => {
+          const product = (Array.isArray(row.product) ? row.product[0] : row.product) as
+            | { slug: string; name: string; website_url: string | null }
+            | null;
+          const stored = (row.facts as { companyName?: string | null } | null)?.companyName ?? null;
+          if (!product || !stored || verifiedCompanyName(stored, product)) return [];
+          return [{ slug: product.slug, name: product.name, stored }];
+        }),
+      };
+    }),
+
     getCacheMetrics().catch(() => null),
   ]);
 
@@ -230,6 +291,7 @@ export async function getPlatformHealth(): Promise<PlatformHealth> {
     daily5,
     index,
     search,
+    quality,
     cache: { enabled: isCacheEnabled(), hits: cacheMetrics?.hits ?? 0, misses: cacheMetrics?.misses ?? 0 },
     config: {
       cloudinary: Boolean(process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME && process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET),

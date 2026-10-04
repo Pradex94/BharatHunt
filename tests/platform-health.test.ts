@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { describe, it } from "node:test";
 
-import { assessJob, JOB_SCHEDULES, nextCronRun, worstHealth } from "../lib/platform-health.ts";
+import { assessJob, duplicateListings, JOB_SCHEDULES, nextCronRun, suspiciousInvestorName, worstHealth } from "../lib/platform-health.ts";
 
 const now = new Date("2026-10-04T12:00:00Z");
 const hoursAgo = (hours: number) => new Date(now.getTime() - hours * 3_600_000).toISOString();
@@ -34,6 +34,30 @@ describe("worstHealth", () => {
     assert.equal(worstHealth(["ok", "warn", "ok"]), "warn");
     assert.equal(worstHealth(["ok", "unknown", "fail"]), "fail");
     assert.equal(worstHealth([]), "unknown");
+  });
+});
+
+describe("data quality checks", () => {
+  it("groups listings that share a website", () => {
+    const products = [
+      { id: "1", slug: "share2me", name: "Share2Me", website_url: "https://share2.me" },
+      { id: "2", slug: "share2me-2", name: "share2me", website_url: "https://www.share2.me/app" },
+      { id: "3", slug: "other", name: "Other", website_url: "https://other.in" },
+      { id: "4", slug: "nosite", name: "No site", website_url: null },
+    ];
+    const key = (url: string | null) => (url ? new URL(url).hostname.replace(/^www\./, "") : null);
+    assert.deepEqual(
+      duplicateListings(products, key).map((group) => [group.key, group.products.map((product) => product.id)]),
+      [["share2.me", ["1", "2"]]],
+    );
+  });
+
+  it("flags investor names that are descriptions (from production)", () => {
+    assert.equal(suspiciousInvestorName("former RBL Bank executive director Rajeev Ahuja"), true);
+    assert.equal(suspiciousInvestorName("Srinath Setty through his family office Trasa Ventures"), true);
+    assert.equal(suspiciousInvestorName("Accel"), false);
+    assert.equal(suspiciousInvestorName("Speciale Invest"), false);
+    assert.equal(suspiciousInvestorName("National Quantum Mission"), false);
   });
 });
 
