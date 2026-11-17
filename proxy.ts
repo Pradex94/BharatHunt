@@ -1,5 +1,5 @@
 import { clerkMiddleware } from "@clerk/nextjs/server";
-import type { NextRequest } from "next/server";
+import type { NextFetchEvent, NextRequest } from "next/server";
 
 import { isBackgroundRequest, isDocumentRequest, isProbePath } from "@/lib/edge-policy";
 import { anonymizeIp, checkRateLimit, clientIpFrom } from "@/lib/rate-limit";
@@ -81,7 +81,28 @@ function rateLimitPage(retryAfter: number): string {
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="refresh" content="${seconds}"><meta name="robots" content="noindex"><title>Slow down a moment · Bharat Hunt</title><style>body{margin:0;min-height:100vh;display:grid;place-items:center;background:#fff9f5;color:#17140f;font:16px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;padding:16px}main{max-width:28rem;text-align:center}h1{font-size:1.5rem;margin:0 0 .5rem}p{color:#4b5563;margin:0 0 1rem}a{color:#ff6b1a;font-weight:600}</style></head><body><main><h1>Too many requests from your connection</h1><p>Bharat Hunt limits how fast one address can load pages. This page will reload by itself in about ${seconds} seconds.</p><p><a href="/">Back to Bharat Hunt</a></p></main></body></html>`;
 }
 
-export default clerkMiddleware(async (_auth, request) => {
+/**
+ * Site-wide kill switch. While true, every matched request (pages, API routes,
+ * Server Actions) gets a bare, unbranded 503 before Clerk or the rate limiter
+ * run. Flip to false and deploy to bring the site back.
+ */
+const SITE_OFFLINE = true;
+
+function offlineResponse(): Response {
+  return new Response(
+    `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>503 Service Unavailable</title></head><body><h1>503 Service Unavailable</h1><p>The server is temporarily unable to service your request. Please try again later.</p></body></html>`,
+    {
+      status: 503,
+      headers: {
+        "content-type": "text/html; charset=utf-8",
+        "retry-after": "3600",
+        "cache-control": "no-store",
+      },
+    },
+  );
+}
+
+const clerk = clerkMiddleware(async (_auth, request) => {
   // Exploit probes (`/.env`, `/wp-admin`, `*.php`, ...) are answered before
   // they cost a rate-limit round trip or a rendered not-found page. On Workers,
   // worker-entry.js already answers these before this file is loaded; this is
@@ -98,6 +119,11 @@ export default clerkMiddleware(async (_auth, request) => {
   const limited = await enforceGlobalIpLimit(request);
   if (limited) return limited;
 });
+
+export default function proxy(request: NextRequest, event: NextFetchEvent) {
+  if (SITE_OFFLINE) return offlineResponse();
+  return clerk(request, event);
+}
 
 /**
  * Clerk's recommended matcher, verbatim from
